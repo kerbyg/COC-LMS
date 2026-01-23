@@ -1,0 +1,19 @@
+# Ignore XAMPP & local environment
+/.vscode
+/.idea
+/.env
+
+# Ignore database dumps
+/database/*.sql
+
+# Ignore logs & cache
+*.log
+/tmp
+/cache
+
+# Ignore uploads
+/uploads
+
+# Ignore composer & node
+/vendor
+/node_modules
