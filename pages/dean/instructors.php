@@ -1,7 +1,7 @@
 <?php
 /**
  * Dean - Instructors
- * View and monitor faculty members
+ * View and monitor faculty members in dean's department (all programs)
  */
 
 require_once __DIR__ . '/../../config/database.php';
@@ -11,38 +11,50 @@ Auth::requireRole('dean');
 
 $pageTitle = 'Instructors';
 $currentPage = 'instructors';
+$userId = Auth::id();
+
+// Get dean's department
+$dean = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [$userId]);
+$deptId = $dean['department_id'] ?? 0;
+
+// Get department info for display
+$department = null;
+if ($deptId) {
+    $department = db()->fetchOne("SELECT department_name, department_code FROM department WHERE department_id = ?", [$deptId]);
+}
 
 $search = $_GET['search'] ?? '';
 $statusFilter = $_GET['status'] ?? '';
 
-// Build query
-$whereClause = "WHERE role = 'instructor'";
-$params = [];
+// Build query - filter by dean's department (all programs under this department)
+$whereClause = "WHERE u.role = 'instructor' AND u.department_id = ?";
+$params = [$deptId];
 
 if ($search) {
-    $whereClause .= " AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR employee_id LIKE ?)";
+    $whereClause .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR u.employee_id LIKE ?)";
     $searchTerm = "%$search%";
     $params = array_merge($params, [$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
 }
 
 if ($statusFilter) {
-    $whereClause .= " AND status = ?";
+    $whereClause .= " AND u.status = ?";
     $params[] = $statusFilter;
 }
 
 // Get instructors with their teaching statistics
+// Note: sections_count and students_count use faculty_subject table (not section.user_instructor_id)
 $instructors = db()->fetchAll(
     "SELECT u.*,
         (SELECT COUNT(DISTINCT fs.faculty_subject_id)
          FROM faculty_subject fs
          WHERE fs.user_teacher_id = u.users_id AND fs.status = 'active') as subjects_count,
-        (SELECT COUNT(DISTINCT sec.section_id)
-         FROM section sec
-         WHERE sec.user_instructor_id = u.users_id AND sec.status = 'active') as sections_count,
+        (SELECT COUNT(DISTINCT fs.section_id)
+         FROM faculty_subject fs
+         WHERE fs.user_teacher_id = u.users_id AND fs.status = 'active' AND fs.section_id IS NOT NULL) as sections_count,
         (SELECT COUNT(*)
          FROM student_subject ss
-         JOIN section sec ON ss.section_id = sec.section_id
-         WHERE sec.user_instructor_id = u.users_id AND ss.status = 'enrolled') as students_count
+         JOIN faculty_subject fs ON ss.section_id = fs.section_id
+         WHERE fs.user_teacher_id = u.users_id AND ss.status = 'enrolled') as students_count
      FROM users u
      $whereClause
      ORDER BY u.last_name, u.first_name",
@@ -61,7 +73,13 @@ include __DIR__ . '/../../includes/sidebar.php';
         <div class="page-header">
             <div>
                 <h2>Faculty Members</h2>
-                <p class="text-muted">View and monitor instructor activities</p>
+                <p class="text-muted">
+                    <?php if ($department): ?>
+                        <?= e($department['department_name'] ?? '') ?>
+                    <?php else: ?>
+                        View and monitor instructor activities
+                    <?php endif; ?>
+                </p>
             </div>
         </div>
 

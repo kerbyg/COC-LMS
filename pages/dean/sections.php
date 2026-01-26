@@ -272,7 +272,7 @@ if ($action === 'students' && $sectionId) {
 
     if ($viewStudents) {
         $sectionStudents = db()->fetchAll(
-            "SELECT u.users_id, u.first_name, u.last_name, u.email, u.student_id, ss.status, ss.enrolled_at
+            "SELECT u.users_id, u.first_name, u.last_name, u.email, u.student_id, ss.status, ss.enrollment_date as enrolled_at
              FROM student_subject ss
              JOIN users u ON ss.user_student_id = u.users_id
              WHERE ss.section_id = ?
