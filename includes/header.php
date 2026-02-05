@@ -44,7 +44,8 @@ $appDesc = defined('APP_DESCRIPTION') ? APP_DESCRIPTION : 'Learning Management S
     <?php endif; ?>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+    <link rel="icon" type="image/png" href="<?= BASE_URL ?>/assets/images/phinma_logo1.png">
+    <link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/images/phinma_logo1.png">
     
     <!-- Google Fonts - Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

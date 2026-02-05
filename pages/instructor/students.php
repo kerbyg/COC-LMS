@@ -229,7 +229,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                 <th>Progress</th>
                                 <th>Quizzes</th>
                                 <th>Avg Score</th>
-                                <th>Actions</th>
+                                <th style="width: 60px; text-align: center;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -278,13 +278,30 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to remove this student from the section?');">
-                                        <input type="hidden" name="action" value="remove_student">
-                                        <input type="hidden" name="student_subject_id" value="<?= $student['student_subject_id'] ?>">
-                                        <button type="submit" class="btn-remove" title="Remove student">
-                                            🗑️
+                                    <div class="actions-cell">
+                                        <button class="btn-actions-toggle" onclick="toggleActions(this)" title="Actions">
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.5" fill="currentColor"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/></svg>
                                         </button>
-                                    </form>
+                                        <div class="actions-dropdown">
+                                            <a href="student-progress.php?student_id=<?= $student['users_id'] ?>&subject_id=<?= $student['subject_id'] ?>" class="action-item">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                View Progress
+                                            </a>
+                                            <a href="mailto:<?= e($student['email']) ?>" class="action-item">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                                Send Email
+                                            </a>
+                                            <div class="action-divider"></div>
+                                            <form method="POST" onsubmit="return confirm('Are you sure you want to remove this student from the section? This action cannot be undone.');">
+                                                <input type="hidden" name="action" value="remove_student">
+                                                <input type="hidden" name="student_subject_id" value="<?= $student['student_subject_id'] ?>">
+                                                <button type="submit" class="action-item action-danger">
+                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                                                    Remove Student
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -311,7 +328,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                 <th>Section</th>
                                 <th>Progress</th>
                                 <th>Avg Score</th>
-                                <th>Actions</th>
+                                <th style="width: 60px; text-align: center;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -356,13 +373,30 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to remove this student from the section?');">
-                                        <input type="hidden" name="action" value="remove_student">
-                                        <input type="hidden" name="student_subject_id" value="<?= $student['student_subject_id'] ?>">
-                                        <button type="submit" class="btn-remove" title="Remove student">
-                                            🗑️
+                                    <div class="actions-cell">
+                                        <button class="btn-actions-toggle" onclick="toggleActions(this)" title="Actions">
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.5" fill="currentColor"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/></svg>
                                         </button>
-                                    </form>
+                                        <div class="actions-dropdown">
+                                            <a href="student-progress.php?student_id=<?= $student['users_id'] ?>&subject_id=<?= $student['subject_id'] ?>" class="action-item">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                View Progress
+                                            </a>
+                                            <a href="mailto:<?= e($student['email']) ?>" class="action-item">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                                Send Email
+                                            </a>
+                                            <div class="action-divider"></div>
+                                            <form method="POST" onsubmit="return confirm('Are you sure you want to remove this student from the section? This action cannot be undone.');">
+                                                <input type="hidden" name="action" value="remove_student">
+                                                <input type="hidden" name="student_subject_id" value="<?= $student['student_subject_id'] ?>">
+                                                <button type="submit" class="action-item action-danger">
+                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                                                    Remove Student
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -377,6 +411,15 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 </main>
 
 <style>
+/* Override card/table overflow to allow dropdown to show */
+.card {
+    overflow: visible;
+}
+
+.table-container {
+    overflow: visible;
+}
+
 /* Page Header */
 .page-header {
     display: flex;
@@ -554,22 +597,114 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
     font-size: 12px;
 }
 
-/* Remove Button */
-.btn-remove {
-    background: transparent;
-    border: 1px solid var(--danger);
-    color: var(--danger);
-    padding: 6px 12px;
-    border-radius: 6px;
+/* Actions Dropdown */
+.actions-cell {
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
+.btn-actions-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--gray-200);
+    background: var(--white);
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 16px;
+    color: var(--gray-500);
     transition: all 0.2s;
 }
 
-.btn-remove:hover {
-    background: var(--danger);
-    color: white;
-    transform: scale(1.1);
+.btn-actions-toggle:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+}
+
+.btn-actions-toggle.active {
+    background: var(--gray-100);
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(0, 70, 27, 0.1);
+}
+
+.actions-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+    min-width: 180px;
+    z-index: 100;
+    padding: 6px;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+.actions-dropdown.show {
+    display: block;
+}
+
+@keyframes dropdownFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-700);
+    text-decoration: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+}
+
+.action-item:hover {
+    background: var(--cream-light);
+    color: var(--gray-800);
+}
+
+.action-item svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.action-item:hover svg {
+    opacity: 1;
+}
+
+.action-divider {
+    height: 1px;
+    background: var(--gray-200);
+    margin: 4px 0;
+}
+
+.action-item.action-danger {
+    color: var(--danger);
+}
+
+.action-item.action-danger:hover {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.action-item.action-danger svg {
+    stroke: var(--danger);
 }
 
 /* Alert Messages */
@@ -592,5 +727,34 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
     border-left: 4px solid #ef4444;
 }
 </style>
+
+<script>
+function toggleActions(btn) {
+    const dropdown = btn.nextElementSibling;
+    const isOpen = dropdown.classList.contains('show');
+
+    // Close all other dropdowns first
+    document.querySelectorAll('.actions-dropdown.show').forEach(d => {
+        d.classList.remove('show');
+        d.previousElementSibling.classList.remove('active');
+    });
+
+    // Toggle current
+    if (!isOpen) {
+        dropdown.classList.add('show');
+        btn.classList.add('active');
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.actions-cell')) {
+        document.querySelectorAll('.actions-dropdown.show').forEach(d => {
+            d.classList.remove('show');
+            d.previousElementSibling.classList.remove('active');
+        });
+    }
+});
+</script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

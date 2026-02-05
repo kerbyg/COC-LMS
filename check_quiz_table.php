@@ -31,7 +31,7 @@ $status = 'published';
 try {
     echo "Attempting to insert quiz:\n";
     echo "  subject_id: $subjectId\n";
-    echo "  lesson_id: $lessonId\n";
+    echo "  lessons_id: $lessonId\n";
     echo "  user_teacher_id: $teacherId\n";
     echo "  quiz_title: $quizTitle\n";
     echo "  time_limit: $timeLimit\n";
@@ -39,7 +39,7 @@ try {
     echo "  status: $status\n\n";
 
     $result = db()->execute(
-        "INSERT INTO quiz (subject_id, lesson_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, due_date, status, created_at, updated_at)
+        "INSERT INTO quiz (subject_id, lessons_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, due_date, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
         [$subjectId, $lessonId, $teacherId, $quizTitle, $description, $timeLimit, $passingRate, $dueDate, $status]
     );

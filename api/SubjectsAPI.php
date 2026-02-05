@@ -92,7 +92,7 @@ function getEnrolledSubjects() {
                  
                 (SELECT COUNT(*) 
                  FROM student_lesson_progress slp 
-                 JOIN lesson l ON slp.lesson_id = l.lesson_id 
+                 JOIN lesson l ON slp.lessons_id = l.lessons_id 
                  WHERE slp.user_student_id = ? 
                  AND l.subject_offering_id = so.subject_offering_id 
                  AND slp.is_completed = 1) as completed_lessons,
@@ -206,7 +206,7 @@ function getSubjectDetails() {
         // Get lessons
         $lessons = db()->fetchAll(
             "SELECT 
-                l.lesson_id,
+                l.lessons_id,
                 l.title,
                 l.description,
                 l.order_number,
@@ -216,7 +216,7 @@ function getSubjectDetails() {
                 slp.completed_at
             FROM lesson l
             LEFT JOIN student_lesson_progress slp 
-                ON l.lesson_id = slp.lesson_id AND slp.user_student_id = ?
+                ON l.lessons_id = slp.lessons_id AND slp.user_student_id = ?
             WHERE l.subject_offering_id = ? AND l.status = 'published'
             ORDER BY l.order_number",
             [$userId, $subjectOfferingId]
@@ -224,20 +224,20 @@ function getSubjectDetails() {
         
         // Get quizzes
         $quizzes = db()->fetchAll(
-            "SELECT 
+            "SELECT
                 q.quiz_id,
-                q.title,
-                q.description,
+                q.quiz_title,
+                q.quiz_description,
                 q.time_limit,
-                q.passing_score,
+                q.passing_rate,
                 q.max_attempts,
                 q.due_date,
                 q.status,
-                (SELECT COUNT(*) FROM question WHERE quiz_id = q.quiz_id) as question_count,
+                (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
                 (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
                 (SELECT MAX(score) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score
             FROM quiz q
-            WHERE q.subject_offering_id = ? AND q.status = 'published'
+            WHERE q.subject_id = ? AND q.status = 'published'
             ORDER BY q.due_date",
             [$userId, $userId, $subjectOfferingId]
         );

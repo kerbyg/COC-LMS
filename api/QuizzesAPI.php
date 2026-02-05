@@ -53,21 +53,21 @@ function getQuizzes() {
     
     try {
         $quizzes = db()->fetchAll(
-            "SELECT 
+            "SELECT
                 q.quiz_id,
-                q.title,
-                q.description,
+                q.quiz_title,
+                q.quiz_description,
                 q.time_limit,
-                q.passing_score,
+                q.passing_rate,
                 q.max_attempts,
                 q.due_date,
                 q.created_at,
-                (SELECT COUNT(*) FROM question WHERE quiz_id = q.quiz_id) as question_count,
+                (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
                 (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
                 (SELECT MAX(score) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score,
                 (SELECT attempt_id FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? ORDER BY score DESC LIMIT 1) as best_attempt_id
             FROM quiz q
-            WHERE q.subject_offering_id = ? AND q.status = 'published'
+            WHERE q.subject_id = ? AND q.status = 'published'
             ORDER BY q.due_date ASC, q.created_at ASC",
             [$userId, $userId, $userId, $subjectOfferingId]
         );
@@ -77,7 +77,7 @@ function getQuizzes() {
             $now = time();
             $dueDate = $quiz['due_date'] ? strtotime($quiz['due_date']) : null;
             $isOverdue = $dueDate && $now > $dueDate;
-            $hasPassed = $quiz['best_score'] >= $quiz['passing_score'];
+            $hasPassed = $quiz['best_score'] >= $quiz['passing_rate'];
             
             if ($hasPassed) {
                 $quiz['status'] = 'passed';
@@ -120,17 +120,16 @@ function getQuiz() {
     
     try {
         $quiz = db()->fetchOne(
-            "SELECT 
+            "SELECT
                 q.*,
                 s.subject_code,
                 s.subject_name,
-                (SELECT COUNT(*) FROM question WHERE quiz_id = q.quiz_id) as question_count,
-                (SELECT SUM(points) FROM question WHERE quiz_id = q.quiz_id) as total_points,
+                (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
+                (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.quiz_id) as total_points,
                 (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
                 (SELECT MAX(score) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score
             FROM quiz q
-            JOIN subject_offering so ON q.subject_offering_id = so.subject_offering_id
-            JOIN subject s ON so.subject_id = s.subject_id
+            JOIN subject s ON q.subject_id = s.subject_id
             WHERE q.quiz_id = ? AND q.status = 'published'",
             [$userId, $userId, $quizId]
         );
@@ -170,8 +169,7 @@ function getQuestions() {
         $quiz = db()->fetchOne(
             "SELECT q.*, e.enrollment_id
              FROM quiz q
-             JOIN subject_offering so ON q.subject_offering_id = so.subject_offering_id
-             JOIN enrollment e ON e.subject_offering_id = so.subject_offering_id
+             JOIN student_subject e ON e.subject_id = q.subject_id
              WHERE q.quiz_id = ? AND e.user_student_id = ? AND e.status = 'enrolled' AND q.status = 'published'",
             [$quizId, $userId]
         );
@@ -195,10 +193,10 @@ function getQuestions() {
         }
         
         // Get questions (shuffle if enabled)
-        $orderBy = $quiz['shuffle_questions'] ? "RAND()" : "order_number";
+        $orderBy = !empty($quiz['is_randomized']) ? "RAND()" : "order_number";
         $questions = db()->fetchAll(
-            "SELECT question_id, question_text, question_type, points
-             FROM question
+            "SELECT questions_id, question_text, question_type, points
+             FROM quiz_questions
              WHERE quiz_id = ?
              ORDER BY $orderBy",
             [$quizId]
@@ -206,13 +204,13 @@ function getQuestions() {
         
         // Get choices (without is_correct flag)
         foreach ($questions as &$q) {
-            $choiceOrder = $quiz['shuffle_questions'] ? "RAND()" : "order_number";
+            $choiceOrder = !empty($quiz['is_randomized']) ? "RAND()" : "option_order";
             $q['choices'] = db()->fetchAll(
-                "SELECT choice_id, choice_text
+                "SELECT option_id, option_text
                  FROM question_option
-                 WHERE question_id = ?
+                 WHERE questions_id = ?
                  ORDER BY $choiceOrder",
-                [$q['question_id']]
+                [$q['questions_id']]
             );
         }
         
@@ -221,9 +219,9 @@ function getQuestions() {
             'data' => [
                 'quiz' => [
                     'quiz_id' => $quiz['quiz_id'],
-                    'title' => $quiz['title'],
+                    'title' => $quiz['quiz_title'],
                     'time_limit' => $quiz['time_limit'],
-                    'passing_score' => $quiz['passing_score']
+                    'passing_rate' => $quiz['passing_rate']
                 ],
                 'questions' => $questions
             ]

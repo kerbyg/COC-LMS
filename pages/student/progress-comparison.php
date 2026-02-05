@@ -68,14 +68,14 @@ $comparisons = db()->fetchAll(
 // Get lesson progress
 $lessonProgress = db()->fetchAll(
     "SELECT
-        l.lesson_id,
+        l.lessons_id,
         l.lesson_title,
         l.lesson_order,
         COALESCE(lp.completion_percentage, 0) as completion_percentage,
         COALESCE(lp.is_completed, 0) as is_completed,
         lp.completed_at
     FROM lessons l
-    LEFT JOIN lesson_progress lp ON l.lesson_id = lp.lesson_id AND lp.user_student_id = ?
+    LEFT JOIN lesson_progress lp ON l.lessons_id = lp.lessons_id AND lp.user_student_id = ?
     WHERE l.subject_id = ? AND l.status = 'published'
     ORDER BY l.lesson_order",
     [$userId, $subject['subject_id']]
@@ -240,7 +240,7 @@ include __DIR__ . '/../../includes/student_sidebar.php';
                                 <span class="lesson-pending">Not completed</span>
                             <?php endif; ?>
                         </div>
-                        <a href="lesson-view.php?id=<?= $lesson['lesson_id'] ?>" class="lesson-link">
+                        <a href="lesson-view.php?id=<?= $lesson['lessons_id'] ?>" class="lesson-link">
                             <?= $lesson['is_completed'] ? 'Review' : 'Start' ?> →
                         </a>
                     </div>

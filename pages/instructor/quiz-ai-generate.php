@@ -29,7 +29,7 @@ $mySubjects = db()->fetchAll(
 $lessons = [];
 if ($subjectId) {
     $lessons = db()->fetchAll(
-        "SELECT lesson_id, lesson_title FROM lessons WHERE subject_id = ? AND user_teacher_id = ? ORDER BY lesson_order",
+        "SELECT lessons_id, lesson_title FROM lessons WHERE subject_id = ? AND user_teacher_id = ? ORDER BY lesson_order",
         [$subjectId, $userId]
     ) ?: [];
 }
@@ -88,7 +88,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                         <select id="lessonSelect" class="form-input">
                             <option value="">Independent Quiz</option>
                             <?php foreach ($lessons as $l): ?>
-                            <option value="<?= $l['lesson_id'] ?>"><?= e($l['lesson_title']) ?></option>
+                            <option value="<?= $l['lessons_id'] ?>"><?= e($l['lesson_title']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -565,7 +565,7 @@ async function saveQuiz() {
             body: JSON.stringify({
                 action: 'save',
                 subject_id: subjectId,
-                lesson_id: lessonId || null,
+                lessons_id: lessonId || null,
                 quiz_title: quizTitle,
                 quiz_type: quizType,
                 questions: generatedQuestions

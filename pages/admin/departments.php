@@ -66,12 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($postAction === 'delete') {
         $deleteId = (int)$_POST['department_id'];
-        // Check if department has programs
-        $hasPrograms = db()->fetchOne("SELECT COUNT(*) as count FROM program WHERE department_id = ?", [$deleteId])['count'];
+        // Check if department has active programs
+        $hasPrograms = db()->fetchOne("SELECT COUNT(*) as count FROM program WHERE department_id = ? AND status = 'active'", [$deleteId])['count'];
         if ($hasPrograms > 0) {
-            $error = "Cannot delete department with $hasPrograms programs.";
+            $error = "Cannot delete department with $hasPrograms active programs.";
         } else {
-            db()->execute("DELETE FROM department WHERE department_id = ?", [$deleteId]);
+            // Soft delete - set status to inactive instead of removing record
+            db()->execute("UPDATE department SET status = 'inactive', updated_at = NOW() WHERE department_id = ?", [$deleteId]);
             header("Location: departments.php?success=deleted");
             exit;
         }

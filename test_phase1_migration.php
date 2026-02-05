@@ -284,7 +284,7 @@ try {
 
         if ($testSubject && $testInstructor) {
             db()->execute(
-                "INSERT INTO quiz (subject_id, lesson_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, status, created_at, updated_at)
+                "INSERT INTO quiz (subject_id, lessons_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, status, created_at, updated_at)
                  VALUES (?, 0, ?, 'Phase 1 Test Quiz', 'This is a test quiz for migration verification', 30, 60.00, 'draft', NOW(), NOW())",
                 [$testSubject['subject_id'], $testInstructor['users_id']]
             );

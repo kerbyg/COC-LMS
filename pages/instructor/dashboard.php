@@ -16,41 +16,21 @@ $currentPage = 'dashboard';
 
 // Get instructor stats
 $stats = db()->fetchOne(
-    "SELECT 
+    "SELECT
         (SELECT COUNT(*) FROM faculty_subject WHERE user_teacher_id = ? AND status = 'active') as total_classes,
         (SELECT COUNT(*) FROM lessons WHERE user_teacher_id = ? AND status = 'published') as total_lessons,
         (SELECT COUNT(*) FROM quiz WHERE user_teacher_id = ? AND status = 'published') as total_quizzes,
-        (SELECT COUNT(DISTINCT ss.user_student_id) 
-         FROM student_subject ss 
+        (SELECT COUNT(DISTINCT ss.user_student_id)
+         FROM student_subject ss
          JOIN faculty_subject fs ON ss.subject_offered_id = fs.subject_offered_id
          WHERE fs.user_teacher_id = ? AND ss.status = 'enrolled') as total_students
     ",
     [$userId, $userId, $userId, $userId]
 );
 
-// Get assigned classes with student count
-$classes = db()->fetchAll(
-    "SELECT 
-        s.subject_id,
-        s.subject_code,
-        s.subject_name,
-        so.subject_offered_id,
-        so.academic_year,
-        so.semester,
-        (SELECT COUNT(*) FROM student_subject ss WHERE ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled') as student_count,
-        (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id AND l.user_teacher_id = ? AND l.status = 'published') as lesson_count,
-        (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id AND q.user_teacher_id = ? AND q.status = 'published') as quiz_count
-    FROM faculty_subject fs
-    JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
-    JOIN subject s ON so.subject_id = s.subject_id
-    WHERE fs.user_teacher_id = ? AND fs.status = 'active'
-    ORDER BY s.subject_code",
-    [$userId, $userId, $userId]
-);
-
 // Get recent quiz attempts from students
 $recentAttempts = db()->fetchAll(
-    "SELECT 
+    "SELECT
         sqa.attempt_id,
         sqa.percentage,
         sqa.passed,
@@ -64,13 +44,13 @@ $recentAttempts = db()->fetchAll(
     JOIN users u ON sqa.user_student_id = u.users_id
     WHERE q.user_teacher_id = ? AND sqa.status = 'completed'
     ORDER BY sqa.completed_at DESC
-    LIMIT 5",
+    LIMIT 6",
     [$userId]
 );
 
 // Get pending quizzes (due soon)
 $upcomingDeadlines = db()->fetchAll(
-    "SELECT 
+    "SELECT
         q.quiz_id,
         q.quiz_title,
         q.due_date,
@@ -84,122 +64,118 @@ $upcomingDeadlines = db()->fetchAll(
     [$userId]
 );
 
+// Get recent activity (lessons created/updated recently)
+$recentLessons = db()->fetchAll(
+    "SELECT
+        l.lessons_id,
+        l.lesson_title,
+        l.status,
+        l.updated_at,
+        s.subject_code
+    FROM lessons l
+    JOIN subject s ON l.subject_id = s.subject_id
+    WHERE l.user_teacher_id = ?
+    ORDER BY l.updated_at DESC
+    LIMIT 4",
+    [$userId]
+);
+
 include __DIR__ . '/../../includes/header.php';
 include __DIR__ . '/../../includes/instructor_sidebar.php';
 ?>
 
 <main class="main-content">
     <?php include __DIR__ . '/../../includes/topbar.php'; ?>
-    
+
     <div class="page-content">
-        
-        <!-- Welcome Section -->
-        <div class="welcome-section">
-            <div class="welcome-text">
-                <h1>Welcome back, <?= e($userName) ?>! 👋</h1>
-                <p>Here's what's happening with your classes today.</p>
+
+        <!-- Welcome Banner -->
+        <div class="dash-welcome">
+            <div class="dash-welcome-left">
+                <h1>Good <?= date('H') < 12 ? 'morning' : (date('H') < 17 ? 'afternoon' : 'evening') ?>, <?= e($userName) ?></h1>
+                <p>Here's an overview of your teaching activity.</p>
             </div>
-            <div class="welcome-actions">
-                <a href="lesson-edit.php" class="btn-primary">+ New Lesson</a>
-                <a href="quiz-edit.php" class="btn-secondary">+ New Quiz</a>
-            </div>
-        </div>
-        
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon classes">📚</div>
-                <div class="stat-info">
-                    <span class="stat-num" data-count="<?= $stats['total_classes'] ?>">0</span>
-                    <span class="stat-label">My Classes</span>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon students">👥</div>
-                <div class="stat-info">
-                    <span class="stat-num" data-count="<?= $stats['total_students'] ?>">0</span>
-                    <span class="stat-label">Total Students</span>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon lessons">📖</div>
-                <div class="stat-info">
-                    <span class="stat-num" data-count="<?= $stats['total_lessons'] ?>">0</span>
-                    <span class="stat-label">Lessons Created</span>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon quizzes">📝</div>
-                <div class="stat-info">
-                    <span class="stat-num" data-count="<?= $stats['total_quizzes'] ?>">0</span>
-                    <span class="stat-label">Quizzes Created</span>
-                </div>
+            <div class="dash-welcome-actions">
+                <a href="lesson-edit.php" class="dash-btn dash-btn-light">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    New Lesson
+                </a>
+                <a href="quiz-edit.php" class="dash-btn dash-btn-outline">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    New Quiz
+                </a>
             </div>
         </div>
-        
-        <!-- My Classes -->
-        <div class="section-header">
-            <h2>📚 My Classes</h2>
-            <a href="my-classes.php" class="view-all">View All →</a>
+
+        <!-- Stats Row -->
+        <div class="dash-stats">
+            <div class="dash-stat-card">
+                <div class="dash-stat-icon" style="background: #E8F5E9; color: #1B4D3E;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                </div>
+                <div class="dash-stat-content">
+                    <span class="dash-stat-number" data-count="<?= $stats['total_classes'] ?>">0</span>
+                    <span class="dash-stat-label">Classes</span>
+                </div>
+            </div>
+            <div class="dash-stat-card">
+                <div class="dash-stat-icon" style="background: #E3F2FD; color: #1565C0;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div class="dash-stat-content">
+                    <span class="dash-stat-number" data-count="<?= $stats['total_students'] ?>">0</span>
+                    <span class="dash-stat-label">Students</span>
+                </div>
+            </div>
+            <div class="dash-stat-card">
+                <div class="dash-stat-icon" style="background: #FFF3E0; color: #E65100;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                </div>
+                <div class="dash-stat-content">
+                    <span class="dash-stat-number" data-count="<?= $stats['total_lessons'] ?>">0</span>
+                    <span class="dash-stat-label">Lessons</span>
+                </div>
+            </div>
+            <div class="dash-stat-card">
+                <div class="dash-stat-icon" style="background: #F3E5F5; color: #7B1FA2;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </div>
+                <div class="dash-stat-content">
+                    <span class="dash-stat-number" data-count="<?= $stats['total_quizzes'] ?>">0</span>
+                    <span class="dash-stat-label">Quizzes</span>
+                </div>
+            </div>
         </div>
-        
-        <div class="classes-grid">
-            <?php if (empty($classes)): ?>
-                <div class="empty-box">
-                    <span>📚</span>
-                    <h3>No Classes Assigned</h3>
-                    <p>You don't have any classes assigned yet.</p>
+
+        <!-- Main Grid -->
+        <div class="dash-grid">
+
+            <!-- Recent Submissions -->
+            <div class="dash-panel">
+                <div class="dash-panel-header">
+                    <h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                        Recent Submissions
+                    </h3>
                 </div>
-            <?php else: ?>
-                <?php foreach ($classes as $class): ?>
-                <div class="class-card">
-                    <div class="class-header">
-                        <span class="class-code"><?= e($class['subject_code']) ?></span>
-                        <span class="class-sem"><?= e($class['semester']) ?> <?= e($class['academic_year']) ?></span>
-                    </div>
-                    <h3 class="class-name"><?= e($class['subject_name']) ?></h3>
-                    <div class="class-stats">
-                        <div class="class-stat">
-                            <span class="cs-num"><?= $class['student_count'] ?></span>
-                            <span class="cs-label">Students</span>
-                        </div>
-                        <div class="class-stat">
-                            <span class="cs-num"><?= $class['lesson_count'] ?></span>
-                            <span class="cs-label">Lessons</span>
-                        </div>
-                        <div class="class-stat">
-                            <span class="cs-num"><?= $class['quiz_count'] ?></span>
-                            <span class="cs-label">Quizzes</span>
-                        </div>
-                    </div>
-                    <a href="lessons.php?subject_id=<?= $class['subject_id'] ?>&offered_id=<?= $class['subject_offered_id'] ?>" class="class-link">
-                        Manage Class →
-                    </a>
-                </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-        
-        <!-- Two Column Layout -->
-        <div class="grid-2col">
-            
-            <!-- Recent Quiz Attempts -->
-            <div class="panel">
-                <div class="panel-head">
-                    <h3>📊 Recent Quiz Submissions</h3>
-                </div>
-                <div class="panel-body">
+                <div class="dash-panel-body">
                     <?php if (empty($recentAttempts)): ?>
-                        <p class="empty-msg">No quiz submissions yet</p>
+                        <div class="dash-empty">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                            <p>No submissions yet</p>
+                        </div>
                     <?php else: ?>
-                        <div class="attempts-list">
+                        <div class="dash-list">
                             <?php foreach ($recentAttempts as $attempt): ?>
-                            <div class="attempt-item">
-                                <div class="attempt-info">
-                                    <span class="attempt-student"><?= e($attempt['student_name']) ?></span>
-                                    <span class="attempt-quiz"><?= e($attempt['subject_code']) ?> - <?= e($attempt['quiz_title']) ?></span>
+                            <div class="dash-list-item">
+                                <div class="dash-list-avatar">
+                                    <?= strtoupper(substr($attempt['student_name'], 0, 1)) ?>
                                 </div>
-                                <div class="attempt-score <?= $attempt['passed'] ? 'passed' : 'failed' ?>">
+                                <div class="dash-list-info">
+                                    <span class="dash-list-primary"><?= e($attempt['student_name']) ?></span>
+                                    <span class="dash-list-secondary"><?= e($attempt['subject_code']) ?> - <?= e($attempt['quiz_title']) ?></span>
+                                </div>
+                                <div class="dash-badge <?= $attempt['passed'] ? 'dash-badge-success' : 'dash-badge-danger' ?>">
                                     <?= round($attempt['percentage']) ?>%
                                 </div>
                             </div>
@@ -208,356 +184,331 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                     <?php endif; ?>
                 </div>
             </div>
-            
-            <!-- Upcoming Deadlines -->
-            <div class="panel">
-                <div class="panel-head">
-                    <h3>📅 Upcoming Quiz Deadlines</h3>
-                </div>
-                <div class="panel-body">
-                    <?php if (empty($upcomingDeadlines)): ?>
-                        <p class="empty-msg">No upcoming deadlines</p>
-                    <?php else: ?>
-                        <div class="deadlines-list">
-                            <?php foreach ($upcomingDeadlines as $quiz): 
-                                $daysLeft = (strtotime($quiz['due_date']) - time()) / 86400;
-                                $urgency = $daysLeft <= 2 ? 'urgent' : ($daysLeft <= 5 ? 'soon' : 'normal');
-                            ?>
-                            <div class="deadline-item">
-                                <div class="deadline-info">
-                                    <span class="deadline-title"><?= e($quiz['quiz_title']) ?></span>
-                                    <span class="deadline-subject"><?= e($quiz['subject_code']) ?> • <?= $quiz['attempts_count'] ?> submissions</span>
-                                </div>
-                                <div class="deadline-date <?= $urgency ?>">
-                                    <?= date('M d', strtotime($quiz['due_date'])) ?>
-                                </div>
+
+            <!-- Right Column -->
+            <div class="dash-right-col">
+
+                <!-- Upcoming Deadlines -->
+                <div class="dash-panel">
+                    <div class="dash-panel-header">
+                        <h3>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                            Upcoming Deadlines
+                        </h3>
+                    </div>
+                    <div class="dash-panel-body">
+                        <?php if (empty($upcomingDeadlines)): ?>
+                            <div class="dash-empty dash-empty-sm">
+                                <p>No upcoming deadlines</p>
                             </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
+                        <?php else: ?>
+                            <div class="dash-list dash-list-compact">
+                                <?php foreach ($upcomingDeadlines as $quiz):
+                                    $daysLeft = (strtotime($quiz['due_date']) - time()) / 86400;
+                                    $urgency = $daysLeft <= 2 ? 'dash-badge-danger' : ($daysLeft <= 5 ? 'dash-badge-warning' : 'dash-badge-neutral');
+                                ?>
+                                <div class="dash-list-item">
+                                    <div class="dash-list-info">
+                                        <span class="dash-list-primary"><?= e($quiz['quiz_title']) ?></span>
+                                        <span class="dash-list-secondary"><?= e($quiz['subject_code']) ?> &middot; <?= $quiz['attempts_count'] ?> submitted</span>
+                                    </div>
+                                    <div class="dash-badge <?= $urgency ?>">
+                                        <?= date('M d', strtotime($quiz['due_date'])) ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
+
+                <!-- Recent Lessons -->
+                <div class="dash-panel">
+                    <div class="dash-panel-header">
+                        <h3>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                            Recent Lessons
+                        </h3>
+                    </div>
+                    <div class="dash-panel-body">
+                        <?php if (empty($recentLessons)): ?>
+                            <div class="dash-empty dash-empty-sm">
+                                <p>No lessons created yet</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="dash-list dash-list-compact">
+                                <?php foreach ($recentLessons as $lesson): ?>
+                                <div class="dash-list-item">
+                                    <div class="dash-list-info">
+                                        <span class="dash-list-primary"><?= e($lesson['lesson_title']) ?></span>
+                                        <span class="dash-list-secondary"><?= e($lesson['subject_code']) ?> &middot; <?= date('M d', strtotime($lesson['updated_at'])) ?></span>
+                                    </div>
+                                    <div class="dash-badge <?= $lesson['status'] === 'published' ? 'dash-badge-success' : 'dash-badge-neutral' ?>">
+                                        <?= ucfirst($lesson['status']) ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
             </div>
-            
+
         </div>
-        
+
     </div>
 </main>
 
 <style>
-/* Instructor Dashboard Styles */
+/* ============================================
+   Instructor Dashboard - Clean Professional
+   ============================================ */
 
-.welcome-section {
+/* Welcome Banner */
+.dash-welcome {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
-    padding: 24px;
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-    border-radius: 16px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, #1B4D3E 0%, #2D6A4F 100%);
+    border-radius: 14px;
     color: #fff;
 }
-.welcome-text h1 {
-    font-size: 24px;
+.dash-welcome h1 {
+    font-size: 22px;
+    font-weight: 700;
     margin: 0 0 4px;
+    letter-spacing: -0.3px;
 }
-.welcome-text p {
+.dash-welcome p {
     margin: 0;
-    opacity: 0.9;
+    opacity: 0.8;
+    font-size: 14px;
 }
-.welcome-actions {
+.dash-welcome-actions {
     display: flex;
-    gap: 12px;
+    gap: 10px;
 }
-.btn-primary {
-    padding: 12px 20px;
+.dash-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.dash-btn-light {
     background: #fff;
-    color: #16a34a;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.2s;
+    color: #1B4D3E;
 }
-.btn-primary:hover { background: #f0fdf4; }
-.btn-secondary {
-    padding: 12px 20px;
-    background: rgba(255,255,255,0.2);
+.dash-btn-light:hover { background: #E8F5E9; }
+.dash-btn-outline {
+    background: rgba(255,255,255,0.12);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 8px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.2s;
+    border: 1px solid rgba(255,255,255,0.25);
 }
-.btn-secondary:hover { background: rgba(255,255,255,0.3); }
+.dash-btn-outline:hover { background: rgba(255,255,255,0.22); }
 
 /* Stats */
-.stats-grid {
+.dash-stats {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    gap: 14px;
     margin-bottom: 24px;
 }
-.stat-card {
+.dash-stat-card {
     background: #fff;
-    border: 1px solid #f5f0e8;
+    border: 1px solid #e8e8e8;
     border-radius: 12px;
     padding: 20px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    transition: border-color 0.2s ease;
 }
-.stat-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: 12px;
+.dash-stat-card:hover {
+    border-color: #1B4D3E;
+}
+.dash-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    flex-shrink: 0;
 }
-.stat-icon.classes { background: #dbeafe; }
-.stat-icon.students { background: #dcfce7; }
-.stat-icon.lessons { background: #fef3c7; }
-.stat-icon.quizzes { background: #f3e8ff; }
-.stat-num {
+.dash-stat-number {
     display: block;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 700;
-    color: #1c1917;
+    color: #1a1a1a;
+    line-height: 1.1;
 }
-.stat-label {
-    font-size: 13px;
-    color: #78716c;
-}
-
-/* Section Header */
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-}
-.section-header h2 {
-    font-size: 18px;
-    color: #1c1917;
-    margin: 0;
-}
-.view-all {
-    color: #16a34a;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-}
-.view-all:hover { text-decoration: underline; }
-
-/* Classes Grid */
-.classes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-}
-.class-card {
-    background: #fff;
-    border: 1px solid #f5f0e8;
-    border-radius: 12px;
-    padding: 20px;
-    transition: all 0.2s;
-}
-.class-card:hover {
-    border-color: #16a34a;
-    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.1);
-}
-.class-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-.class-code {
-    background: #16a34a;
-    color: #fff;
-    padding: 4px 10px;
-    border-radius: 6px;
+.dash-stat-label {
     font-size: 12px;
-    font-weight: 600;
-}
-.class-sem {
-    font-size: 12px;
-    color: #78716c;
-}
-.class-name {
-    font-size: 16px;
-    color: #1c1917;
-    margin: 0 0 16px;
-}
-.class-stats {
-    display: flex;
-    gap: 16px;
-    padding: 12px 0;
-    border-top: 1px solid #f5f0e8;
-    border-bottom: 1px solid #f5f0e8;
-    margin-bottom: 12px;
-}
-.class-stat { text-align: center; flex: 1; }
-.cs-num {
-    display: block;
-    font-size: 20px;
-    font-weight: 700;
-    color: #16a34a;
-}
-.cs-label {
-    font-size: 11px;
-    color: #78716c;
-}
-.class-link {
-    display: block;
-    text-align: center;
-    color: #16a34a;
-    text-decoration: none;
+    color: #6b7280;
     font-weight: 500;
-    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
-.class-link:hover { text-decoration: underline; }
 
-/* Two Column Grid */
-.grid-2col {
+/* Main Grid */
+.dash-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1.2fr 1fr;
+    gap: 20px;
+}
+.dash-right-col {
+    display: flex;
+    flex-direction: column;
     gap: 20px;
 }
 
 /* Panels */
-.panel {
+.dash-panel {
     background: #fff;
-    border: 1px solid #f5f0e8;
+    border: 1px solid #e8e8e8;
     border-radius: 12px;
     overflow: hidden;
 }
-.panel-head {
+.dash-panel-header {
     padding: 16px 20px;
-    background: #fdfbf7;
-    border-bottom: 1px solid #f5f0e8;
+    border-bottom: 1px solid #f0f0f0;
 }
-.panel-head h3 {
-    font-size: 15px;
-    color: #1c1917;
-    margin: 0;
-}
-.panel-body {
-    padding: 16px 20px;
-}
-
-/* Attempts List */
-.attempts-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-.attempt-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #f5f0e8;
-}
-.attempt-item:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-}
-.attempt-student {
-    display: block;
-    font-weight: 500;
-    color: #1c1917;
-    font-size: 14px;
-}
-.attempt-quiz {
-    font-size: 12px;
-    color: #78716c;
-}
-.attempt-score {
-    padding: 6px 12px;
-    border-radius: 20px;
+.dash-panel-header h3 {
     font-size: 14px;
     font-weight: 600;
+    color: #1a1a1a;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
-.attempt-score.passed { background: #dcfce7; color: #16a34a; }
-.attempt-score.failed { background: #fee2e2; color: #dc2626; }
+.dash-panel-header h3 svg {
+    color: #1B4D3E;
+}
+.dash-panel-body {
+    padding: 4px 0;
+}
 
-/* Deadlines List */
-.deadlines-list {
+/* Lists */
+.dash-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
 }
-.deadline-item {
+.dash-list-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #f5f0e8;
+    gap: 12px;
+    padding: 12px 20px;
+    transition: background 0.15s ease;
 }
-.deadline-item:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
+.dash-list-item:hover {
+    background: #fafafa;
 }
-.deadline-title {
+.dash-list-compact .dash-list-item {
+    padding: 10px 20px;
+}
+.dash-list-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #E8F5E9;
+    color: #1B4D3E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.dash-list-info {
+    flex: 1;
+    min-width: 0;
+}
+.dash-list-primary {
     display: block;
-    font-weight: 500;
-    color: #1c1917;
-    font-size: 14px;
-}
-.deadline-subject {
-    font-size: 12px;
-    color: #78716c;
-}
-.deadline-date {
-    padding: 6px 12px;
-    border-radius: 8px;
     font-size: 13px;
     font-weight: 600;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.deadline-date.urgent { background: #fee2e2; color: #dc2626; }
-.deadline-date.soon { background: #fef3c7; color: #b45309; }
-.deadline-date.normal { background: #f5f0e8; color: #57534e; }
+.dash-list-secondary {
+    display: block;
+    font-size: 12px;
+    color: #9ca3af;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Badges */
+.dash-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.dash-badge-success { background: #E8F5E9; color: #1B4D3E; }
+.dash-badge-danger { background: #FEE2E2; color: #DC2626; }
+.dash-badge-warning { background: #FEF3C7; color: #B45309; }
+.dash-badge-neutral { background: #F3F4F6; color: #6B7280; }
 
 /* Empty States */
-.empty-box {
+.dash-empty {
     text-align: center;
-    padding: 40px;
-    background: #fdfbf7;
-    border-radius: 12px;
-    grid-column: 1 / -1;
+    padding: 32px 20px;
+    color: #9ca3af;
 }
-.empty-box span { font-size: 40px; display: block; margin-bottom: 8px; opacity: 0.5; }
-.empty-box h3 { font-size: 16px; color: #1c1917; margin: 0 0 4px; }
-.empty-box p { color: #78716c; margin: 0; font-size: 14px; }
-.empty-msg {
-    text-align: center;
-    color: #a8a29e;
-    padding: 20px;
+.dash-empty svg {
+    margin-bottom: 8px;
+    opacity: 0.4;
+}
+.dash-empty p {
     margin: 0;
+    font-size: 13px;
+}
+.dash-empty-sm {
+    padding: 20px;
 }
 
 /* Responsive */
 @media (max-width: 1024px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .grid-2col { grid-template-columns: 1fr; }
+    .dash-stats { grid-template-columns: repeat(2, 1fr); }
+    .dash-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-    .welcome-section { flex-direction: column; text-align: center; gap: 16px; }
-    .stats-grid { grid-template-columns: 1fr; }
+    .dash-welcome { flex-direction: column; text-align: center; gap: 16px; padding: 24px 20px; }
+    .dash-welcome h1 { font-size: 18px; }
+    .dash-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .dash-stat-card { padding: 16px; }
+    .dash-stat-number { font-size: 22px; }
+}
+@media (max-width: 480px) {
+    .dash-stats { grid-template-columns: 1fr; }
+    .dash-welcome-actions { flex-direction: column; width: 100%; }
+    .dash-btn { justify-content: center; }
 }
 </style>
 
 <script>
-// Count-up animation for stats
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.stat-num').forEach(function(el) {
+    document.querySelectorAll('.dash-stat-number').forEach(function(el) {
         const target = parseInt(el.dataset.count) || 0;
+        if (target === 0) { el.textContent = '0'; return; }
         let current = 0;
-        const increment = target / 30;
+        const increment = target / 25;
         const timer = setInterval(function() {
             current += increment;
             if (current >= target) {

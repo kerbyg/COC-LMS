@@ -50,6 +50,10 @@ $currentPage = $currentPage ?? '';
                 <span class="nav-icon">📋</span>
                 <span class="nav-text">Gradebook</span>
             </a>
+            <a href="analytics.php" class="nav-item <?= $currentPage === 'analytics' ? 'active' : '' ?>">
+                <span class="nav-icon">📈</span>
+                <span class="nav-text">Analytics</span>
+            </a>
         </div>
         
         <div class="nav-section">

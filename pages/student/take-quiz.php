@@ -122,7 +122,7 @@ if ($quizType === 'post_test') {
 
     $lessonsCompleted = db()->fetchOne(
         "SELECT COUNT(*) as count FROM student_progress sp
-         JOIN lessons l ON sp.lesson_id = l.lesson_id
+         JOIN lessons l ON sp.lessons_id = l.lessons_id
          WHERE sp.user_student_id = ? AND l.subject_id = ? AND sp.status = 'completed'",
         [$userId, $quiz['subject_id']]
     )['count'] ?? 0;
@@ -318,7 +318,7 @@ if ($attemptCount >= $quiz['max_attempts']) {
  */
 $questions = db()->fetchAll(
     "SELECT
-        q.question_id,
+        q.questions_id,
         q.question_text,
         q.question_type,
         q.points
@@ -337,7 +337,7 @@ foreach ($questions as &$q) {
          FROM question_option
          WHERE quiz_question_id = ?
          ORDER BY " . ($quiz['is_randomized'] ? "RAND()" : "order_number"),
-        [$q['question_id']]
+        [$q['questions_id']]
     );
 }
 unset($q); // Destroy reference to prevent bugs
@@ -397,7 +397,7 @@ $pageTitle = 'Taking: ' . $quiz['quiz_title'];
                     <?php if ($q['question_type'] === 'multiple_choice' || $q['question_type'] === 'true_false'): ?>
                         <?php foreach ($q['choices'] as $choice): ?>
                         <label class="choice-item">
-                            <input type="radio" name="answers[<?= $q['question_id'] ?>]" value="<?= $choice['choice_id'] ?>" onchange="updateProgress()">
+                            <input type="radio" name="answers[<?= $q['questions_id'] ?>]" value="<?= $choice['choice_id'] ?>" onchange="updateProgress()">
                             <span class="choice-radio"></span>
                             <span class="choice-text"><?= e($choice['choice_text']) ?></span>
                         </label>

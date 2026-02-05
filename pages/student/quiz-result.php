@@ -116,7 +116,7 @@ if ($isPreTest) {
         $completedLessons = db()->fetchOne(
             "SELECT COUNT(*) as count FROM lesson_progress
              WHERE user_student_id = ? AND is_completed = 1
-             AND lesson_id IN (SELECT lesson_id FROM lessons WHERE subject_id = (SELECT subject_id FROM quiz WHERE quiz_id = ?))",
+             AND lessons_id IN (SELECT lessons_id FROM lessons WHERE subject_id = (SELECT subject_id FROM quiz WHERE quiz_id = ?))",
             [$userId, $attempt['quiz_id']]
         )['count'] ?? 0;
 
@@ -131,7 +131,7 @@ if ($isPreTest) {
 // Get questions with user's answers (matches Phase 1 migration structure)
 $questions = db()->fetchAll(
     "SELECT
-        q.question_id,
+        q.questions_id,
         q.question_text,
         q.question_type,
         q.points,
@@ -141,7 +141,7 @@ $questions = db()->fetchAll(
         (sqa.points_earned > 0) as is_correct,
         sqa.points_earned
     FROM quiz_questions q
-    LEFT JOIN student_quiz_answers sqa ON q.question_id = sqa.question_id AND sqa.attempt_id = ?
+    LEFT JOIN student_quiz_answers sqa ON q.questions_id = sqa.questions_id AND sqa.attempt_id = ?
     WHERE q.quiz_id = ?
     ORDER BY q.order_number",
     [$attemptId, $attempt['quiz_id']]
@@ -154,7 +154,7 @@ foreach ($questions as &$q) {
          FROM question_option
          WHERE quiz_question_id = ?
          ORDER BY order_number",
-        [$q['question_id']]
+        [$q['questions_id']]
     );
 }
 unset($q); // Destroy reference to prevent bugs

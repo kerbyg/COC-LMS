@@ -45,7 +45,7 @@ $subjectProgress = db()->fetchAll(
         CONCAT(u.first_name, ' ', u.last_name) as instructor_name,
         (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id AND l.status = 'published') as total_lessons,
         (SELECT COUNT(*) FROM student_progress sp
-         JOIN lessons l ON sp.lesson_id = l.lesson_id
+         JOIN lessons l ON sp.lessons_id = l.lessons_id
          WHERE sp.user_student_id = ? AND l.subject_id = s.subject_id AND sp.status = 'completed') as completed_lessons,
         (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id AND q.status = 'published') as total_quizzes,
         (SELECT COUNT(DISTINCT qa.quiz_id) FROM student_quiz_attempts qa

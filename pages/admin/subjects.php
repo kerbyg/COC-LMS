@@ -68,11 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($postAction === 'delete') {
         $deleteId = (int)$_POST['subject_id'];
-        $hasOfferings = db()->fetchOne("SELECT COUNT(*) as count FROM subject_offered WHERE subject_id = ?", [$deleteId])['count'];
+        $hasOfferings = db()->fetchOne("SELECT COUNT(*) as count FROM subject_offered WHERE subject_id = ? AND status = 'open'", [$deleteId])['count'];
         if ($hasOfferings > 0) {
-            $error = "Cannot delete subject with $hasOfferings offerings.";
+            $error = "Cannot delete subject with $hasOfferings active offerings.";
         } else {
-            db()->execute("DELETE FROM subject WHERE subject_id = ?", [$deleteId]);
+            // Soft delete - set status to inactive instead of removing record
+            db()->execute("UPDATE subject SET status = 'inactive', updated_at = NOW() WHERE subject_id = ?", [$deleteId]);
             header("Location: subjects.php?success=deleted");
             exit;
         }

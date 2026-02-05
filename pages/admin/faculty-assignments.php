@@ -64,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($postAction === 'unassign') {
         $assignmentId = (int)$_POST['assignment_id'];
-        db()->execute("DELETE FROM faculty_subject WHERE faculty_subject_id = ?", [$assignmentId]);
+        // Soft delete - set status to inactive instead of removing record
+        db()->execute("UPDATE faculty_subject SET status = 'inactive', assigned_at = NOW() WHERE faculty_subject_id = ?", [$assignmentId]);
         $success = 'Assignment removed!';
     }
     

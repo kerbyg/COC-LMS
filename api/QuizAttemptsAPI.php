@@ -92,8 +92,8 @@ function submitQuiz() {
 
         // 4. FIXED: Get questions from 'quiz_questions' table (matches Phase 1 migration structure)
         $questions = db()->fetchAll(
-            "SELECT q.question_id, q.question_type, q.points,
-                    (SELECT option_id FROM question_option WHERE quiz_question_id = q.question_id AND is_correct = 1 LIMIT 1) as correct_option_id
+            "SELECT q.questions_id, q.question_type, q.points,
+                    (SELECT option_id FROM question_option WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_option_id
              FROM quiz_questions q
              WHERE q.quiz_id = ?",
             [$quizId]
@@ -105,7 +105,7 @@ function submitQuiz() {
         
         foreach ($questions as $q) {
             $totalPoints += $q['points'];
-            $userAnswer = $answers[$q['question_id']] ?? null;
+            $userAnswer = $answers[$q['questions_id']] ?? null;
             $isCorrect = false;
             $pointsEarned = 0;
             
@@ -119,7 +119,7 @@ function submitQuiz() {
             }
             
             $answerRecords[] = [
-                'question_id' => $q['question_id'],
+                'questions_id' => $q['questions_id'],
                 'selected_option_id' => $userAnswer,
                 'is_correct' => $isCorrect ? 1 : 0,
                 'points_earned' => $pointsEarned
@@ -144,9 +144,9 @@ function submitQuiz() {
         foreach ($answerRecords as $record) {
             db()->execute(
                 "INSERT INTO student_quiz_answers
-                 (attempt_id, quiz_id, question_id, user_student_id, selected_option_id, is_correct, points_earned)
+                 (attempt_id, quiz_id, questions_id, user_student_id, selected_option_id, is_correct, points_earned)
                  VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [$attemptId, $quizId, $record['question_id'], $userId, $record['selected_option_id'], $record['is_correct'], $record['points_earned']]
+                [$attemptId, $quizId, $record['questions_id'], $userId, $record['selected_option_id'], $record['is_correct'], $record['points_earned']]
             );
         }
         

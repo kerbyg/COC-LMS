@@ -22,7 +22,7 @@ $lessonCols = array_column(db()->fetchAll("SELECT column_name FROM information_s
 $topicCols = array_column(db()->fetchAll("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'topic'") ?: [], 'column_name');
 
 $hasObjectives = in_array('learning_objectives', $lessonCols);
-$hasPrerequisite = in_array('prerequisite_lesson_id', $lessonCols);
+$hasPrerequisite = in_array('prerequisite_lessons_id', $lessonCols);
 $hasDifficulty = in_array('difficulty', $lessonCols);
 $hasVideoUrl = in_array('video_url', $topicCols);
 
@@ -30,7 +30,7 @@ $hasVideoUrl = in_array('video_url', $topicCols);
 $lesson = [
     'subject_id' => $subjectId, 'lesson_title' => '', 'lesson_description' => '',
     'lesson_content' => '', 'lesson_order' => 1, 'estimated_time' => 30,
-    'status' => 'published', 'learning_objectives' => '', 'prerequisite_lesson_id' => null,
+    'status' => 'published', 'learning_objectives' => '', 'prerequisite_lessons_id' => null,
     'difficulty' => 'beginner'
 ];
 
@@ -44,7 +44,7 @@ $mySubjects = db()->fetchAll(
 
 // If editing, load existing lesson
 if ($isEdit) {
-    $lessonData = db()->fetchOne("SELECT * FROM lessons WHERE lesson_id = ? AND user_teacher_id = ?", [$lessonId, $userId]);
+    $lessonData = db()->fetchOne("SELECT * FROM lessons WHERE lessons_id = ? AND user_teacher_id = ?", [$lessonId, $userId]);
     if (!$lessonData) { header('Location: lessons.php'); exit; }
     $lesson = array_merge($lesson, $lessonData);
     $subjectId = $lesson['subject_id'];
@@ -52,7 +52,7 @@ if ($isEdit) {
 
 // Get other lessons for prerequisite dropdown (excluding current)
 $otherLessons = $subjectId ? db()->fetchAll(
-    "SELECT lesson_id, lesson_title, lesson_order FROM lessons WHERE subject_id = ? AND user_teacher_id = ?" . ($isEdit ? " AND lesson_id != ?" : "") . " ORDER BY lesson_order",
+    "SELECT lessons_id, lesson_title, lesson_order FROM lessons WHERE subject_id = ? AND user_teacher_id = ?" . ($isEdit ? " AND lessons_id != ?" : "") . " ORDER BY lesson_order",
     $isEdit ? [$subjectId, $userId, $lessonId] : [$subjectId, $userId]
 ) ?: [] : [];
 
@@ -63,7 +63,7 @@ if ($subjectId && !$isEdit) {
 }
 
 // Fetch topics
-$topics = $isEdit ? (db()->fetchAll("SELECT * FROM topic WHERE lesson_id = ? ORDER BY topic_order", [$lessonId]) ?: []) : [];
+$topics = $isEdit ? (db()->fetchAll("SELECT * FROM topic WHERE lessons_id = ? ORDER BY topic_order", [$lessonId]) ?: []) : [];
 
 // Allowed file types for upload
 $allowedTypes = [
@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isEdit && isset($_POST['topic_acti
         $order = count($topics) + 1;
 
         if ($title) {
-            $cols = ['lesson_id', 'topic_title', 'topic_content', 'topic_order', 'created_at', 'updated_at'];
+            $cols = ['lessons_id', 'topic_title', 'topic_content', 'topic_order', 'created_at', 'updated_at'];
             $vals = [$lessonId, $title, $content, $order, date('Y-m-d H:i:s'), date('Y-m-d H:i:s')];
             $placeholders = ['?', '?', '?', '?', '?', '?'];
 
@@ -163,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isEdit && isset($_POST['topic_acti
                     $result = uploadMaterialFile($file, $lessonId, $newTopicId);
                     if (!empty($result['success'])) {
                         db()->execute(
-                            "INSERT INTO lesson_materials (lesson_id, topic_id, file_name, original_name, file_path, file_type, file_size, material_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                            "INSERT INTO lesson_materials (lessons_id, topic_id, file_name, original_name, file_path, file_type, file_size, material_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
                             [$lessonId, $newTopicId, $result['file_name'], $result['original_name'], $result['file_path'], $result['file_type'], $result['file_size'], $result['file_type']]
                         );
                     }
@@ -189,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isEdit && isset($_POST['topic_acti
                 $result = uploadMaterialFile($file, $lessonId, $topicId);
                 if (!empty($result['success'])) {
                     db()->execute(
-                        "INSERT INTO lesson_materials (lesson_id, topic_id, file_name, original_name, file_path, file_type, file_size, material_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                        "INSERT INTO lesson_materials (lessons_id, topic_id, file_name, original_name, file_path, file_type, file_size, material_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
                         [$lessonId, $topicId, $result['file_name'], $result['original_name'], $result['file_path'], $result['file_type'], $result['file_size'], $result['file_type']]
                     );
                     $uploadCount++;
@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isEdit && isset($_POST['topic_acti
         // Handle file deletion
         $materialId = (int)($_POST['material_id'] ?? 0);
         if ($materialId) {
-            $material = db()->fetchOne("SELECT * FROM lesson_materials WHERE material_id = ? AND lesson_id = ?", [$materialId, $lessonId]);
+            $material = db()->fetchOne("SELECT * FROM lesson_materials WHERE material_id = ? AND lessons_id = ?", [$materialId, $lessonId]);
             if ($material) {
                 $filePath = __DIR__ . '/../../' . $material['file_path'];
                 if (file_exists($filePath)) {
@@ -223,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isEdit && isset($_POST['topic_acti
             $sql = "UPDATE topic SET topic_title=?, topic_content=?, updated_at=NOW()";
             $params = [$title, $content];
             if ($hasVideoUrl) { $sql .= ", video_url=?"; $params[] = $videoUrl; }
-            $sql .= " WHERE topic_id=? AND lesson_id=?";
+            $sql .= " WHERE topic_id=? AND lessons_id=?";
             $params[] = $topicId; $params[] = $lessonId;
             db()->execute($sql, $params);
             $success = 'Topic updated!';
@@ -238,11 +238,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isEdit && isset($_POST['topic_acti
                 if (file_exists($filePath)) unlink($filePath);
             }
             db()->execute("DELETE FROM lesson_materials WHERE topic_id = ?", [$topicId]);
-            db()->execute("DELETE FROM topic WHERE topic_id=? AND lesson_id=?", [$topicId, $lessonId]);
+            db()->execute("DELETE FROM topic WHERE topic_id=? AND lessons_id=?", [$topicId, $lessonId]);
             $success = 'Topic deleted!';
         }
     }
-    $topics = db()->fetchAll("SELECT * FROM topic WHERE lesson_id = ? ORDER BY topic_order", [$lessonId]) ?: [];
+    $topics = db()->fetchAll("SELECT * FROM topic WHERE lessons_id = ? ORDER BY topic_order", [$lessonId]) ?: [];
 }
 
 // Handle Lesson Save
@@ -255,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_lesson'])) {
     $lesson['estimated_time'] = (int)($_POST['estimated_time'] ?? 30);
     $lesson['status'] = $_POST['status'] ?? 'draft';
     $lesson['learning_objectives'] = trim($_POST['learning_objectives'] ?? '');
-    $lesson['prerequisite_lesson_id'] = !empty($_POST['prerequisite_lesson_id']) ? (int)$_POST['prerequisite_lesson_id'] : null;
+    $lesson['prerequisite_lessons_id'] = !empty($_POST['prerequisite_lessons_id']) ? (int)$_POST['prerequisite_lessons_id'] : null;
     $lesson['difficulty'] = $_POST['difficulty'] ?? 'beginner';
 
     if (empty($lesson['subject_id']) || empty($lesson['lesson_title'])) {
@@ -266,13 +266,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_lesson'])) {
         $vals = [$lesson['subject_id'], $lesson['lesson_title'], $lesson['lesson_description'], $lesson['lesson_content'], $lesson['lesson_order'], $lesson['estimated_time'], $lesson['status']];
 
         if ($hasObjectives) { $cols[] = 'learning_objectives'; $vals[] = $lesson['learning_objectives']; }
-        if ($hasPrerequisite) { $cols[] = 'prerequisite_lesson_id'; $vals[] = $lesson['prerequisite_lesson_id']; }
+        if ($hasPrerequisite) { $cols[] = 'prerequisite_lessons_id'; $vals[] = $lesson['prerequisite_lessons_id']; }
         if ($hasDifficulty) { $cols[] = 'difficulty'; $vals[] = $lesson['difficulty']; }
 
         if ($isEdit) {
             $set = implode('=?, ', $cols) . '=?, updated_at=NOW()';
             $vals[] = $lessonId; $vals[] = $userId;
-            $saveSuccess = db()->execute("UPDATE lessons SET $set WHERE lesson_id=? AND user_teacher_id=?", $vals);
+            $saveSuccess = db()->execute("UPDATE lessons SET $set WHERE lessons_id=? AND user_teacher_id=?", $vals);
         } else {
             $cols[] = 'user_teacher_id'; $vals[] = $userId;
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
@@ -290,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_lesson'])) {
 if (isset($_GET['created'])) $success = 'Lesson created! Add topics below.';
 
 // Get lesson-level materials (not attached to any topic)
-$lessonMaterials = $isEdit ? (db()->fetchAll("SELECT * FROM lesson_materials WHERE lesson_id = ? AND topic_id IS NULL ORDER BY uploaded_at", [$lessonId]) ?: []) : [];
+$lessonMaterials = $isEdit ? (db()->fetchAll("SELECT * FROM lesson_materials WHERE lessons_id = ? AND topic_id IS NULL ORDER BY uploaded_at", [$lessonId]) ?: []) : [];
 
 include __DIR__ . '/../../includes/header.php';
 include __DIR__ . '/../../includes/instructor_sidebar.php';
@@ -362,10 +362,10 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                     <?php if ($hasPrerequisite): ?>
                     <div class="field">
                         <label>Prerequisite Lesson</label>
-                        <select name="prerequisite_lesson_id">
+                        <select name="prerequisite_lessons_id">
                             <option value="">None - Available immediately</option>
                             <?php foreach ($otherLessons as $ol): ?>
-                            <option value="<?= $ol['lesson_id'] ?>" <?= ($lesson['prerequisite_lesson_id']??'')==$ol['lesson_id']?'selected':'' ?>>
+                            <option value="<?= $ol['lessons_id'] ?>" <?= ($lesson['prerequisite_lessons_id']??'')==$ol['lessons_id']?'selected':'' ?>>
                                 Module <?= $ol['lesson_order'] ?>: <?= e($ol['lesson_title']) ?>
                             </option>
                             <?php endforeach; ?>

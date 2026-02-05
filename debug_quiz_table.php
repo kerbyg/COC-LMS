@@ -16,7 +16,7 @@ foreach ($cols as $c) {
 
 echo "\n=== CHECK FOR REQUIRED COLUMNS ===\n";
 $colNames = array_column($cols, 'Field');
-$requiredCols = ['quiz_id', 'subject_id', 'lesson_id', 'user_teacher_id', 'quiz_title', 'quiz_description', 'time_limit', 'passing_rate', 'status', 'created_at', 'updated_at'];
+$requiredCols = ['quiz_id', 'subject_id', 'lessons_id', 'user_teacher_id', 'quiz_title', 'quiz_description', 'time_limit', 'passing_rate', 'status', 'created_at', 'updated_at'];
 $optionalCols = ['quiz_type', 'linked_quiz_id', 'require_lessons', 'due_date'];
 
 foreach ($requiredCols as $col) {
@@ -32,21 +32,21 @@ foreach ($optionalCols as $col) {
 
 // Test insert with minimal data
 echo "\n=== TEST INSERT (simulation) ===\n";
-$testSql = "INSERT INTO quiz (user_teacher_id, subject_id, lesson_id, quiz_title, quiz_description, time_limit, passing_rate, status, created_at, updated_at)
+$testSql = "INSERT INTO quiz (user_teacher_id, subject_id, lessons_id, quiz_title, quiz_description, time_limit, passing_rate, status, created_at, updated_at)
             VALUES (1, 6, 0, 'Test Quiz', 'Test Description', 30, 60, 'draft', NOW(), NOW())";
 echo "SQL: " . $testSql . "\n\n";
 
-// Check if lesson_id allows 0
+// Check if lessons_id allows 0
 $lessonIdCol = null;
 foreach ($cols as $c) {
-    if ($c['Field'] === 'lesson_id') {
+    if ($c['Field'] === 'lessons_id') {
         $lessonIdCol = $c;
         break;
     }
 }
 
 if ($lessonIdCol) {
-    echo "lesson_id column details:\n";
+    echo "lessons_id column details:\n";
     echo "  Type: " . $lessonIdCol['Type'] . "\n";
     echo "  Null: " . $lessonIdCol['Null'] . "\n";
     echo "  Default: " . ($lessonIdCol['Default'] ?? 'NULL') . "\n";
@@ -57,7 +57,7 @@ if ($lessonIdCol) {
         "SELECT * FROM information_schema.KEY_COLUMN_USAGE
          WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'quiz'
-         AND COLUMN_NAME = 'lesson_id'
+         AND COLUMN_NAME = 'lessons_id'
          AND REFERENCED_TABLE_NAME IS NOT NULL"
     );
 
@@ -66,9 +66,9 @@ if ($lessonIdCol) {
         foreach ($fkCheck as $fk) {
             echo "  References: " . $fk['REFERENCED_TABLE_NAME'] . "." . $fk['REFERENCED_COLUMN_NAME'] . "\n";
         }
-        echo "\nThis may be causing the issue - lesson_id=0 doesn't exist in lessons table!\n";
+        echo "\nThis may be causing the issue - lessons_id=0 doesn't exist in lessons table!\n";
     } else {
-        echo "\n✓ No foreign key constraint on lesson_id\n";
+        echo "\n✓ No foreign key constraint on lessons_id\n";
     }
 }
 

@@ -1,9 +1,7 @@
 <?php
 /**
- * CIT-LMS - Student Enrollment Page
- * Allows students to self-enroll using enrollment codes
+ * Student Enrollment Page - Clean Green Theme
  */
-
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/auth.php';
 
@@ -21,7 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enrollment_code'])) {
     $enrollmentCode = strtoupper(trim($_POST['enrollment_code']));
 
     try {
-        // Find the section by enrollment code
         $section = db()->fetchOne(
             "SELECT sec.*,
                 so.subject_id,
@@ -44,13 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enrollment_code'])) {
         );
 
         if (!$section) {
-            $errorMessage = "Invalid enrollment code. Please check the code and try again.";
+            $errorMessage = "Invalid enrollment code. Please check and try again.";
         } else {
-            // Check if section is full
             if ($section['current_enrollment'] >= $section['max_students']) {
                 $errorMessage = "This section is full. Please contact your instructor.";
             } else {
-                // Check if already enrolled
                 $existingEnrollment = db()->fetchOne(
                     "SELECT student_subject_id FROM student_subject
                      WHERE user_student_id = ? AND section_id = ?",
@@ -60,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enrollment_code'])) {
                 if ($existingEnrollment) {
                     $errorMessage = "You are already enrolled in this section.";
                 } else {
-                    // Enroll the student
                     db()->execute(
                         "INSERT INTO student_subject (user_student_id, subject_offered_id, section_id, status, enrollment_date, updated_at)
                          VALUES (?, ?, ?, 'enrolled', NOW(), NOW())",
@@ -73,7 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enrollment_code'])) {
         }
     } catch (Exception $e) {
         $errorMessage = "Enrollment failed: " . $e->getMessage();
-        error_log("Enrollment error: " . $e->getMessage());
     }
 }
 
@@ -108,106 +101,109 @@ include __DIR__ . '/../../includes/sidebar.php';
 ?>
 
 <main class="main-content">
-    <div class="content-wrapper">
-        <!-- Page Header -->
-        <div class="page-header">
-            <h2 class="page-title">📚 Enroll in Section</h2>
-            <p class="page-subtitle">Enter your enrollment code to join a class section</p>
-        </div>
+    <?php include __DIR__ . '/../../includes/topbar.php'; ?>
+
+    <div class="enroll-wrap">
 
         <?php if ($successMessage): ?>
         <div class="alert alert-success">
-            ✓ <?= htmlspecialchars($successMessage) ?>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            <?= htmlspecialchars($successMessage) ?>
         </div>
         <?php endif; ?>
 
         <?php if ($errorMessage): ?>
-        <div class="alert alert-danger">
-            ✗ <?= htmlspecialchars($errorMessage) ?>
+        <div class="alert alert-error">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <?= htmlspecialchars($errorMessage) ?>
         </div>
         <?php endif; ?>
 
-        <!-- Enrollment Form Card -->
-        <div class="enrollment-card">
-            <div class="enrollment-icon">🎓</div>
-            <h3 class="enrollment-title">Enter Enrollment Code</h3>
-            <p class="enrollment-description">
-                Get the enrollment code from your instructor or class announcement
-            </p>
+        <!-- Enrollment Form -->
+        <div class="enroll-card">
+            <div class="enroll-header">
+                <div class="enroll-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                    </svg>
+                </div>
+                <h1>Enroll in Section</h1>
+                <p>Enter the enrollment code from your instructor</p>
+            </div>
 
-            <form method="POST" class="enrollment-form">
-                <div class="code-input-wrapper">
+            <form method="POST" class="enroll-form">
+                <div class="input-group">
                     <input
                         type="text"
                         name="enrollment_code"
                         class="code-input"
                         placeholder="ABC-1234"
-                        pattern="[A-Za-z]{3}-[0-9]{4}"
                         maxlength="8"
                         required
                         autocomplete="off"
                     >
-                    <small class="input-hint">Format: XXX-9999 (e.g., ABC-1234)</small>
+                    <span class="input-hint">Format: XXX-9999</span>
                 </div>
-
-                <button type="submit" class="btn btn-enroll">
-                    ➜ Enroll Now
+                <button type="submit" class="btn-enroll">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                    Enroll Now
                 </button>
             </form>
         </div>
 
-        <!-- Current Enrollments -->
+        <!-- Enrolled Sections -->
         <?php if (!empty($enrolledSections)): ?>
-        <div class="enrolled-sections">
-            <h3 class="section-heading">Your Enrolled Sections</h3>
+        <div class="enrolled-section">
+            <h2>Your Enrolled Sections</h2>
             <div class="sections-grid">
                 <?php foreach ($enrolledSections as $enrolled): ?>
                 <div class="section-card">
-                    <div class="section-header">
-                        <div class="subject-code-badge">
-                            <?= htmlspecialchars($enrolled['subject_code']) ?>
-                        </div>
-                        <div class="section-badge">
-                            Section <?= htmlspecialchars($enrolled['section_name']) ?>
-                        </div>
+                    <div class="card-badges">
+                        <span class="badge badge-code"><?= htmlspecialchars($enrolled['subject_code']) ?></span>
+                        <span class="badge badge-section"><?= htmlspecialchars($enrolled['section_name']) ?></span>
                     </div>
-
-                    <h4 class="subject-title">
-                        <?= htmlspecialchars($enrolled['subject_name']) ?>
-                    </h4>
-
-                    <div class="section-details">
-                        <div class="detail-item">
-                            <span class="detail-icon">👨‍🏫</span>
-                            <span class="detail-text">
-                                <?= htmlspecialchars($enrolled['instructor_name'] ?: 'No instructor assigned') ?>
-                            </span>
+                    <h3><?= htmlspecialchars($enrolled['subject_name']) ?></h3>
+                    <div class="card-details">
+                        <div class="detail">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <span><?= htmlspecialchars($enrolled['instructor_name'] ?: 'TBA') ?></span>
                         </div>
-
-                        <div class="detail-item">
-                            <span class="detail-icon">📅</span>
-                            <span class="detail-text">
-                                <?= htmlspecialchars($enrolled['schedule'] ?: 'TBA') ?>
-                            </span>
+                        <?php if ($enrolled['schedule']): ?>
+                        <div class="detail">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/>
+                                <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            <span><?= htmlspecialchars($enrolled['schedule']) ?></span>
                         </div>
-
-                        <div class="detail-item">
-                            <span class="detail-icon">🏫</span>
-                            <span class="detail-text">
-                                <?= htmlspecialchars($enrolled['room'] ?: 'TBA') ?>
-                            </span>
+                        <?php endif; ?>
+                        <?php if ($enrolled['room']): ?>
+                        <div class="detail">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                                <polyline points="9 22 9 12 15 12 15 22"/>
+                            </svg>
+                            <span><?= htmlspecialchars($enrolled['room']) ?></span>
                         </div>
-
-                        <div class="detail-item">
-                            <span class="detail-icon">🔑</span>
-                            <span class="detail-text">
-                                Code: <strong><?= htmlspecialchars($enrolled['enrollment_code']) ?></strong>
-                            </span>
-                        </div>
+                        <?php endif; ?>
                     </div>
-
-                    <div class="enrolled-date">
-                        Enrolled: <?= date('M j, Y', strtotime($enrolled['enrollment_date'])) ?>
+                    <div class="card-footer">
+                        Enrolled <?= date('M j, Y', strtotime($enrolled['enrollment_date'])) ?>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -215,90 +211,299 @@ include __DIR__ . '/../../includes/sidebar.php';
         </div>
         <?php else: ?>
         <div class="empty-state">
-            <div class="empty-icon">📖</div>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
             <h3>No Enrollments Yet</h3>
-            <p>You haven't enrolled in any sections. Enter an enrollment code above to get started!</p>
+            <p>Enter an enrollment code above to join a section</p>
         </div>
         <?php endif; ?>
+
     </div>
 </main>
 
 <style>
-.content-wrapper{max-width:1200px;margin:0 auto;padding:32px}
+/* Enroll Page - Green/Cream Theme */
+.enroll-wrap {
+    padding: 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
 
-.page-header{text-align:center;margin-bottom:48px}
-.page-title{font-size:36px;font-weight:800;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
-.page-subtitle{font-size:16px;color:#6b7280}
+/* Alerts */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
 
-.enrollment-card{background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);border:2px solid #3b82f6;border-radius:20px;padding:48px;text-align:center;margin-bottom:48px;box-shadow:0 4px 12px rgba(59,130,246,0.15)}
+.alert-success {
+    background: #E8F5E9;
+    color: #1B4D3E;
+    border: 1px solid #A5D6A7;
+}
 
-.enrollment-icon{font-size:64px;margin-bottom:24px}
-.enrollment-title{font-size:28px;font-weight:700;color:#1e3a8a;margin-bottom:12px}
-.enrollment-description{font-size:16px;color:#6b7280;margin-bottom:32px}
+.alert-error {
+    background: #FFEBEE;
+    color: #C62828;
+    border: 1px solid #EF9A9A;
+}
 
-.enrollment-form{max-width:500px;margin:0 auto}
+/* Enrollment Card */
+.enroll-card {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    margin-bottom: 32px;
+}
 
-.code-input-wrapper{margin-bottom:24px}
-.code-input{width:100%;padding:20px 24px;font-size:28px;font-weight:700;text-align:center;border:3px solid #3b82f6;border-radius:12px;font-family:monospace;letter-spacing:4px;text-transform:uppercase;transition:all 0.2s}
-.code-input:focus{outline:none;border-color:#1e3a8a;box-shadow:0 0 0 4px rgba(59,130,246,0.2)}
-.code-input::placeholder{color:#cbd5e1;letter-spacing:2px}
+.enroll-header {
+    margin-bottom: 32px;
+}
 
-.input-hint{display:block;margin-top:8px;color:#6b7280;font-size:14px}
+.enroll-icon {
+    width: 64px;
+    height: 64px;
+    background: #E8F5E9;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    color: #1B4D3E;
+}
 
-.btn-enroll{width:100%;padding:18px 32px;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:white;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;transition:all 0.3s;box-shadow:0 4px 12px rgba(59,130,246,0.3)}
-.btn-enroll:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(59,130,246,0.4)}
+.enroll-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1B4D3E;
+    margin: 0 0 8px;
+}
 
-.enrolled-sections{margin-top:48px}
-.section-heading{font-size:24px;font-weight:700;color:#1e3a8a;margin-bottom:24px}
+.enroll-header p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
 
-.sections-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:24px}
+/* Form */
+.enroll-form {
+    max-width: 360px;
+    margin: 0 auto;
+}
 
-.section-card{background:white;border:2px solid #e5e7eb;border-radius:16px;padding:24px;transition:all 0.3s}
-.section-card:hover{border-color:#3b82f6;box-shadow:0 8px 16px rgba(59,130,246,0.15);transform:translateY(-4px)}
+.input-group {
+    margin-bottom: 20px;
+}
 
-.section-header{display:flex;gap:12px;margin-bottom:16px}
+.code-input {
+    width: 100%;
+    padding: 16px 20px;
+    font-size: 24px;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid #e8e8e8;
+    border-radius: 10px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    background: #fafafa;
+}
 
-.subject-code-badge{background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);color:#92400e;padding:8px 16px;border-radius:8px;font-weight:700;font-size:14px;border:2px solid #fbbf24}
+.code-input:focus {
+    outline: none;
+    border-color: #1B4D3E;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(27, 77, 62, 0.1);
+}
 
-.section-badge{background:linear-gradient(135deg,#dbeafe 0%,#bfdbfe 100%);color:#1e3a8a;padding:8px 16px;border-radius:8px;font-weight:700;font-size:14px;border:2px solid #3b82f6}
+.code-input::placeholder {
+    color: #ccc;
+    letter-spacing: 2px;
+}
 
-.subject-title{font-size:20px;font-weight:700;color:#1f2937;margin-bottom:20px}
+.input-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #999;
+}
 
-.section-details{display:flex;flex-direction:column;gap:12px;margin-bottom:16px}
+.btn-enroll {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 24px;
+    background: #1B4D3E;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
 
-.detail-item{display:flex;align-items:center;gap:12px;font-size:14px;color:#4b5563}
-.detail-icon{font-size:18px}
-.detail-text{flex:1}
+.btn-enroll:hover {
+    background: #2D6A4F;
+    transform: translateY(-1px);
+}
 
-.enrolled-date{padding-top:16px;border-top:2px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:center}
+/* Enrolled Sections */
+.enrolled-section {
+    margin-top: 32px;
+}
 
-.empty-state{text-align:center;padding:64px 32px;background:linear-gradient(135deg,#f9fafb 0%,#f3f4f6 100%);border-radius:16px;border:2px dashed #d1d5db}
-.empty-icon{font-size:64px;margin-bottom:16px}
-.empty-state h3{font-size:20px;font-weight:700;color:#1f2937;margin-bottom:8px}
-.empty-state p{color:#6b7280;font-size:16px}
+.enrolled-section h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 20px;
+}
 
-.alert{padding:18px 24px;border-radius:12px;margin-bottom:24px;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-.alert-success{background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%);color:#065f46;border-left:5px solid #10b981}
-.alert-danger{background:linear-gradient(135deg,#fee2e2 0%,#fecaca 100%);color:#991b1b;border-left:5px solid #ef4444}
+.sections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
 
-@media(max-width:768px){
-    .content-wrapper{padding:16px}
-    .page-title{font-size:28px}
-    .enrollment-card{padding:32px 24px}
-    .code-input{font-size:22px;padding:16px}
-    .sections-grid{grid-template-columns:1fr}
+.section-card {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.section-card:hover {
+    border-color: #1B4D3E;
+    box-shadow: 0 4px 12px rgba(27, 77, 62, 0.1);
+}
+
+.card-badges {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.badge {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-code {
+    background: #1B4D3E;
+    color: #fff;
+}
+
+.badge-section {
+    background: #E8F5E9;
+    color: #1B4D3E;
+}
+
+.section-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 16px;
+    line-height: 1.4;
+}
+
+.card-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #666;
+}
+
+.detail svg {
+    color: #1B4D3E;
+    flex-shrink: 0;
+}
+
+.card-footer {
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+    font-size: 12px;
+    color: #999;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: #fafafa;
+    border: 1px dashed #ddd;
+    border-radius: 12px;
+    margin-top: 32px;
+}
+
+.empty-state svg {
+    color: #ccc;
+    margin-bottom: 16px;
+}
+
+.empty-state h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 8px;
+}
+
+.empty-state p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .enroll-wrap {
+        padding: 16px;
+    }
+
+    .enroll-card {
+        padding: 28px 20px;
+    }
+
+    .code-input {
+        font-size: 20px;
+        padding: 14px 16px;
+    }
+
+    .sections-grid {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 
 <script>
-// Auto-format enrollment code as user types
 document.querySelector('.code-input').addEventListener('input', function(e) {
     let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
     if (value.length > 3) {
         value = value.slice(0, 3) + '-' + value.slice(3, 7);
     }
-
     e.target.value = value;
 });
 </script>

@@ -66,12 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($postAction === 'delete') {
         $deleteId = (int)$_POST['program_id'];
-        // Check if program has users
-        $hasUsers = db()->fetchOne("SELECT COUNT(*) as count FROM users WHERE program_id = ?", [$deleteId])['count'];
+        // Check if program has active users
+        $hasUsers = db()->fetchOne("SELECT COUNT(*) as count FROM users WHERE program_id = ? AND status = 'active'", [$deleteId])['count'];
         if ($hasUsers > 0) {
-            $error = "Cannot delete program with $hasUsers enrolled users.";
+            $error = "Cannot delete program with $hasUsers active enrolled users.";
         } else {
-            db()->execute("DELETE FROM program WHERE program_id = ?", [$deleteId]);
+            // Soft delete - set status to inactive instead of removing record
+            db()->execute("UPDATE program SET status = 'inactive', updated_at = NOW() WHERE program_id = ?", [$deleteId]);
             header("Location: programs.php?success=deleted");
             exit;
         }

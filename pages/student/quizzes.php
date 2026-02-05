@@ -1,6 +1,6 @@
 <?php
 /**
- * CIT-LMS - Quizzes Page (Organized by Subject)
+ * Quizzes Page - Clean Green Theme
  * Shows all quizzes grouped by subject with collapsible sections
  */
 
@@ -148,7 +148,7 @@ function getLessonProgress($userId, $subjectId) {
 
     $completedLessons = db()->fetchOne(
         "SELECT COUNT(*) as count FROM student_progress sp
-         JOIN lessons l ON sp.lesson_id = l.lesson_id
+         JOIN lessons l ON sp.lessons_id = l.lessons_id
          WHERE sp.user_student_id = ? AND l.subject_id = ? AND sp.status = 'completed'",
         [$userId, $subjectId]
     )['count'] ?? 0;
@@ -191,45 +191,67 @@ include __DIR__ . '/../../includes/sidebar.php';
 <main class="main-content">
     <?php include __DIR__ . '/../../includes/topbar.php'; ?>
 
-    <div class="page-content">
+    <div class="quizzes-wrap">
 
         <?php if ($subject): ?>
             <!-- Back Link -->
-            <div class="page-top">
-                <a href="my-subjects.php" class="back-link">← Back to Subjects</a>
-            </div>
+            <a href="my-subjects.php" class="back-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Back to Subjects
+            </a>
 
             <!-- Subject Header -->
             <div class="subject-header">
-                <div class="header-left">
-                    <span class="subj-code"><?= e($subject['subject_code']) ?></span>
-                    <h1 class="subject-title"><?= e($subject['subject_name']) ?></h1>
-                    <p class="instructor-info">Instructor: <?= e($subject['instructor_name'] ?? 'TBA') ?></p>
+                <div class="header-info">
+                    <span class="subject-code"><?= e($subject['subject_code']) ?></span>
+                    <h1><?= e($subject['subject_name']) ?></h1>
+                    <div class="instructor">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        <?= e($subject['instructor_name'] ?? 'TBA') ?>
+                    </div>
                 </div>
-                <div class="header-right">
-                    <a href="learning-hub.php?id=<?= $subjectOfferingId ?>" class="btn-learning-hub">
-                        View Learning Path
-                    </a>
-                </div>
+                <a href="learning-hub.php?id=<?= $subjectOfferingId ?>" class="btn-hub">
+                    View Learning Path
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
 
             <!-- Navigation Tabs -->
             <div class="nav-tabs">
-                <a href="learning-hub.php?id=<?= $subjectOfferingId ?>" class="nav-tab">
-                    <span class="tab-icon">🎯</span>
-                    <span class="tab-text">Learning Hub</span>
+                <a href="learning-hub.php?id=<?= $subjectOfferingId ?>" class="tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    Learning Hub
                 </a>
-                <a href="lessons.php?id=<?= $subjectOfferingId ?>" class="nav-tab">
-                    <span class="tab-icon">📖</span>
-                    <span class="tab-text">Lessons</span>
+                <a href="lessons.php?id=<?= $subjectOfferingId ?>" class="tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                    Lessons
                 </a>
-                <a href="quizzes.php?id=<?= $subjectOfferingId ?>" class="nav-tab active">
-                    <span class="tab-icon">📝</span>
-                    <span class="tab-text">Quizzes</span>
+                <a href="quizzes.php?id=<?= $subjectOfferingId ?>" class="tab active">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    Quizzes
                 </a>
-                <a href="announcements.php?id=<?= $subjectOfferingId ?>" class="nav-tab">
-                    <span class="tab-icon">📢</span>
-                    <span class="tab-text">Announcements</span>
+                <a href="announcements.php?id=<?= $subjectOfferingId ?>" class="tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    Announcements
                 </a>
             </div>
 
@@ -240,91 +262,101 @@ include __DIR__ . '/../../includes/sidebar.php';
             ?>
             <?php if ($preTestStatus['exists'] && !$preTestStatus['taken']): ?>
             <div class="flow-notice info">
-                <span class="notice-icon">💡</span>
-                <div class="notice-text">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
+                </svg>
+                <div class="notice-content">
                     <strong>Start with the Pre-Test!</strong>
-                    Take the pre-test first to assess your knowledge. If you pass, you can skip the lessons and go directly to the post-test.
+                    <span>Take the pre-test first to assess your knowledge. If you pass, you can skip the lessons and go directly to the post-test.</span>
                 </div>
             </div>
             <?php elseif ($preTestStatus['exists'] && $preTestStatus['taken'] && !$preTestStatus['passed'] && !$lessonProgress['all_done']): ?>
             <div class="flow-notice warning">
-                <span class="notice-icon">📚</span>
-                <div class="notice-text">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                <div class="notice-content">
                     <strong>Complete the Lessons</strong>
-                    You need to complete all <?= $lessonProgress['total'] ?> lessons (<?= $lessonProgress['completed'] ?> done) to unlock the Post-Test.
-                    <a href="lessons.php?id=<?= $subjectOfferingId ?>">Go to Lessons →</a>
+                    <span>You need to complete all <?= $lessonProgress['total'] ?> lessons (<?= $lessonProgress['completed'] ?> done) to unlock the Post-Test.</span>
+                    <a href="lessons.php?id=<?= $subjectOfferingId ?>">Go to Lessons</a>
                 </div>
             </div>
             <?php endif; ?>
 
             <!-- Single Subject Quizzes -->
-            <div class="quizzes-container">
-                <?php if (empty($quizzes)): ?>
-                    <div class="empty-box">
-                        <span>📝</span>
-                        <h3>No Quizzes Available</h3>
-                        <p>Your instructor hasn't posted any quizzes yet.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="quizzes-list">
-                        <?php foreach ($quizzes as $quiz): ?>
-                            <?php echo renderQuizCard($quiz, $userId, $quizzes, $subjectId); ?>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
+            <?php if (empty($quizzes)): ?>
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    <h3>No Quizzes Available</h3>
+                    <p>Your instructor hasn't posted any quizzes yet.</p>
+                </div>
+            <?php else: ?>
+                <div class="quizzes-list">
+                    <?php foreach ($quizzes as $quiz): ?>
+                        <?php echo renderQuizCard($quiz, $userId, $quizzes, $subjectId); ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
 
         <?php else: ?>
             <!-- All Quizzes View - Organized by Subject -->
-            <div class="page-head">
-                <h1>📝 All Quizzes</h1>
+            <div class="page-header">
+                <h1>All Quizzes</h1>
                 <p>View all quizzes from your enrolled subjects</p>
             </div>
 
-            <div class="quizzes-container">
-                <?php if (empty($quizzesBySubject)): ?>
-                    <div class="empty-box">
-                        <span>📝</span>
-                        <h3>No Quizzes Available</h3>
-                        <p>Your instructors haven't posted any quizzes yet.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="subject-accordion">
-                        <?php foreach ($quizzesBySubject as $subjectData):
-                            $stats = getSubjectQuizStats($subjectData['quizzes']);
-                        ?>
-                        <div class="subject-section">
-                            <div class="subject-header-accordion" onclick="toggleSubject(this)">
-                                <div class="subject-info">
-                                    <span class="subj-badge"><?= e($subjectData['subject_code']) ?></span>
-                                    <span class="subj-name"><?= e($subjectData['subject_name']) ?></span>
-                                </div>
-                                <div class="subject-stats">
-                                    <span class="stat-badge total"><?= $stats['total'] ?> Quiz<?= $stats['total'] != 1 ? 'zes' : '' ?></span>
-                                    <?php if ($stats['passed'] > 0): ?>
-                                    <span class="stat-badge passed"><?= $stats['passed'] ?> Passed</span>
-                                    <?php endif; ?>
-                                    <?php if ($stats['completed'] > 0 && $stats['completed'] != $stats['passed']): ?>
-                                    <span class="stat-badge attempted"><?= $stats['completed'] - $stats['passed'] ?> Attempted</span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="subject-actions">
-                                    <a href="learning-hub.php?id=<?= $subjectData['subject_offered_id'] ?>" class="hub-link" onclick="event.stopPropagation()">View Learning Path →</a>
-                                    <span class="accordion-icon">▼</span>
-                                </div>
+            <?php if (empty($quizzesBySubject)): ?>
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    <h3>No Quizzes Available</h3>
+                    <p>Your instructors haven't posted any quizzes yet.</p>
+                </div>
+            <?php else: ?>
+                <div class="subjects-accordion">
+                    <?php foreach ($quizzesBySubject as $subjectData):
+                        $stats = getSubjectQuizStats($subjectData['quizzes']);
+                    ?>
+                    <div class="subject-section">
+                        <div class="section-header" onclick="toggleSection(this)">
+                            <div class="section-info">
+                                <span class="subject-badge"><?= e($subjectData['subject_code']) ?></span>
+                                <span class="subject-name"><?= e($subjectData['subject_name']) ?></span>
                             </div>
-                            <div class="subject-content">
-                                <div class="quizzes-list">
-                                    <?php foreach ($subjectData['quizzes'] as $quiz): ?>
-                                        <?php echo renderQuizCard($quiz, $userId, $subjectData['quizzes'], $subjectData['subject_id']); ?>
-                                    <?php endforeach; ?>
-                                </div>
+                            <div class="section-stats">
+                                <span class="stat-pill"><?= $stats['total'] ?> Quiz<?= $stats['total'] != 1 ? 'zes' : '' ?></span>
+                                <?php if ($stats['passed'] > 0): ?>
+                                <span class="stat-pill passed"><?= $stats['passed'] ?> Passed</span>
+                                <?php endif; ?>
+                                <?php if ($stats['completed'] > 0 && $stats['completed'] != $stats['passed']): ?>
+                                <span class="stat-pill attempted"><?= $stats['completed'] - $stats['passed'] ?> Attempted</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="section-actions">
+                                <a href="learning-hub.php?id=<?= $subjectData['subject_offered_id'] ?>" class="hub-link" onclick="event.stopPropagation()">View Learning Path</a>
+                                <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 9l6 6 6-6"/>
+                                </svg>
                             </div>
                         </div>
-                        <?php endforeach; ?>
+                        <div class="section-content">
+                            <div class="quizzes-list">
+                                <?php foreach ($subjectData['quizzes'] as $quiz): ?>
+                                    <?php echo renderQuizCard($quiz, $userId, $subjectData['quizzes'], $subjectData['subject_id']); ?>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
                     </div>
-                <?php endif; ?>
-            </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </main>
@@ -363,18 +395,26 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
     ?>
     <div class="quiz-card <?= $status ?> <?= $isLocked ? 'locked' : '' ?> type-<?= $quizType ?>">
         <div class="quiz-main">
-            <div class="quiz-header">
-                <div class="quiz-title-row">
+            <div class="quiz-top">
+                <div class="quiz-badges">
                     <?php if ($quizType === 'pre_test'): ?>
-                        <span class="quiz-type-badge pretest">PRE-TEST</span>
+                        <span class="type-badge pretest">PRE-TEST</span>
                     <?php elseif ($quizType === 'post_test'): ?>
-                        <span class="quiz-type-badge posttest">POST-TEST</span>
+                        <span class="type-badge posttest">POST-TEST</span>
                     <?php endif; ?>
-                    <h3><?= e($quiz['title']) ?></h3>
+                    <span class="status-badge <?= $status ?> <?= $isLocked ? 'locked' : '' ?>">
+                        <?php if ($isLocked): ?>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            Locked
+                        <?php else: ?>
+                            <?= $statusText ?>
+                        <?php endif; ?>
+                    </span>
                 </div>
-                <span class="quiz-badge <?= $status ?> <?= $isLocked ? 'locked' : '' ?>">
-                    <?= $isLocked ? '🔒 Locked' : $statusText ?>
-                </span>
+                <h3><?= e($quiz['title']) ?></h3>
             </div>
 
             <?php if (!empty($quiz['description'])): ?>
@@ -382,16 +422,39 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
             <?php endif; ?>
 
             <?php if ($isLocked): ?>
-                <div class="lock-reason">
-                    <span class="lock-icon">🔒</span>
+                <div class="lock-msg">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
                     <?= e($lockReason) ?>
                 </div>
             <?php endif; ?>
 
             <div class="quiz-meta">
-                <span>📋 <?= $quiz['question_count'] ?> Questions</span>
-                <span>⏱️ <?= $quiz['time_limit'] ?> Minutes</span>
-                <span>🎯 Passing: <?= $quiz['passing_rate'] ?>%</span>
+                <span class="meta-item">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <?= $quiz['question_count'] ?> Questions
+                </span>
+                <span class="meta-item">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <?= $quiz['time_limit'] ?> Minutes
+                </span>
+                <span class="meta-item">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    Passing: <?= $quiz['passing_rate'] ?>%
+                </span>
             </div>
         </div>
 
@@ -409,12 +472,20 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
 
             <div class="quiz-actions">
                 <?php if ($isLocked): ?>
-                    <span class="btn-locked">Max attempts reached</span>
+                    <span class="btn-locked">Locked</span>
                 <?php elseif ($quizType === 'pre_test' && $quiz['attempts_used'] > 0): ?>
-                    <span class="btn-completed">✓ Completed</span>
+                    <span class="btn-completed">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        Completed
+                    </span>
                 <?php elseif ($canTake): ?>
                     <a href="take-quiz.php?id=<?= $quiz['quiz_id'] ?>" class="btn-take">
-                        <?= $quiz['attempts_used'] > 0 ? 'Retry' : ($quizType === 'pre_test' ? 'Take Pre-Test' : 'Take Quiz') ?> →
+                        <?= $quiz['attempts_used'] > 0 ? 'Retry Quiz' : ($quizType === 'pre_test' ? 'Take Pre-Test' : 'Take Quiz') ?>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
                     </a>
                 <?php else: ?>
                     <span class="btn-disabled">Max attempts reached</span>
@@ -434,95 +505,124 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
 ?>
 
 <style>
-/* Enhanced Quizzes Page Styles */
+/* Quizzes Page - Green/Cream Theme */
+.quizzes-wrap {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
 
-.page-top { margin-bottom: 20px; }
+/* Back Link */
 .back-link {
-    color: #16a34a;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #1B4D3E;
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
+    margin-bottom: 20px;
 }
 .back-link:hover { text-decoration: underline; }
 
+/* Page Header */
+.page-header {
+    margin-bottom: 24px;
+}
+.page-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1B4D3E;
+    margin: 0 0 4px;
+}
+.page-header p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
 /* Subject Header */
 .subject-header {
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-    border: 1px solid #bbf7d0;
-    border-radius: 16px;
-    padding: 24px 28px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 24px;
     margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 24px;
+    gap: 20px;
 }
-
-.header-left { flex: 1; }
-.subj-code {
-    background: #16a34a;
+.subject-header:hover {
+    border-color: #1B4D3E;
+}
+.header-info h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #333;
+    margin: 8px 0;
+}
+.subject-code {
+    background: #1B4D3E;
     color: #fff;
-    padding: 5px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
-    font-size: 12px;
-    font-weight: 700;
-    display: inline-block;
-    margin-bottom: 10px;
+    font-size: 11px;
+    font-weight: 600;
 }
-.subject-title {
-    font-size: 22px;
-    color: #1a1a1a;
-    margin: 0 0 6px;
-    font-weight: 700;
-}
-.instructor-info {
+.instructor {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
     color: #666;
-    margin: 0;
-    font-size: 14px;
 }
-
-.btn-learning-hub {
-    background: #16a34a;
-    color: #fff;
+.instructor svg { color: #1B4D3E; }
+.btn-hub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #E8F5E9;
+    color: #1B4D3E;
     padding: 12px 20px;
-    border-radius: 10px;
+    border-radius: 8px;
     text-decoration: none;
     font-weight: 600;
     font-size: 14px;
     transition: all 0.2s;
 }
-.btn-learning-hub:hover {
-    background: #15803d;
+.btn-hub:hover {
+    background: #1B4D3E;
+    color: #fff;
 }
 
 /* Navigation Tabs */
 .nav-tabs {
     display: flex;
-    gap: 6px;
-    margin-bottom: 20px;
+    gap: 4px;
     background: #fff;
-    border: 1px solid #e5e5e5;
-    border-radius: 12px;
-    padding: 5px;
+    border: 1px solid #e8e8e8;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
 }
-.nav-tab {
+.tab {
     flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     padding: 12px 16px;
     border-radius: 8px;
     text-decoration: none;
     font-size: 13px;
     font-weight: 600;
     color: #666;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
     transition: all 0.2s;
 }
-.nav-tab:hover { background: #f5f5f5; color: #16a34a; }
-.nav-tab.active { background: #16a34a; color: #fff; }
-.tab-icon { font-size: 14px; }
+.tab:hover { background: #f5f5f5; color: #1B4D3E; }
+.tab.active { background: #1B4D3E; color: #fff; }
+.tab.active svg { stroke: #fff; }
 
 /* Flow Notice */
 .flow-notice {
@@ -530,282 +630,293 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
     align-items: flex-start;
     gap: 14px;
     padding: 16px 20px;
-    border-radius: 12px;
+    border-radius: 10px;
     margin-bottom: 20px;
 }
-.flow-notice.info { background: #dbeafe; border: 1px solid #93c5fd; }
-.flow-notice.warning { background: #fef3c7; border: 1px solid #fcd34d; }
-.notice-icon { font-size: 24px; flex-shrink: 0; }
-.notice-text { font-size: 14px; color: #333; line-height: 1.5; }
-.notice-text strong { display: block; margin-bottom: 4px; }
-.notice-text a { color: #16a34a; font-weight: 600; }
-
-/* Page Head */
-.page-head { margin-bottom: 24px; }
-.page-head h1 { font-size: 26px; color: #1a1a1a; margin: 0 0 8px; }
-.page-head p { color: #666; margin: 0; font-size: 14px; }
+.flow-notice.info {
+    background: #E8F5E9;
+    border: 1px solid #A5D6A7;
+}
+.flow-notice.info svg { color: #1B4D3E; }
+.flow-notice.warning {
+    background: #FFF8E1;
+    border: 1px solid #FFE082;
+}
+.flow-notice.warning svg { color: #F9A825; }
+.notice-content {
+    font-size: 14px;
+    color: #333;
+    line-height: 1.5;
+}
+.notice-content strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #1B4D3E;
+}
+.notice-content a {
+    color: #1B4D3E;
+    font-weight: 600;
+    text-decoration: none;
+    margin-left: 8px;
+}
+.notice-content a:hover { text-decoration: underline; }
 
 /* Subject Accordion */
-.subject-accordion {
+.subjects-accordion {
     display: flex;
     flex-direction: column;
     gap: 16px;
 }
-
 .subject-section {
     background: #fff;
-    border: 2px solid #e5e5e5;
-    border-radius: 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
     overflow: hidden;
-    transition: all 0.3s;
+    transition: all 0.2s;
 }
 .subject-section:hover {
-    border-color: #16a34a;
+    border-color: #1B4D3E;
 }
-.subject-section.collapsed .subject-content {
+.subject-section.collapsed .section-content {
     display: none;
 }
-.subject-section.collapsed .accordion-icon {
+.subject-section.collapsed .chevron {
     transform: rotate(-90deg);
 }
-
-.subject-header-accordion {
+.section-header {
     display: flex;
     align-items: center;
-    padding: 18px 24px;
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    padding: 18px 20px;
+    background: #fafafa;
     cursor: pointer;
     gap: 16px;
     transition: all 0.2s;
 }
-.subject-header-accordion:hover {
-    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-}
-
-.subject-info {
+.section-header:hover { background: #f0f0f0; }
+.section-info {
     display: flex;
     align-items: center;
     gap: 12px;
     flex: 1;
 }
-.subj-badge {
-    background: #16a34a;
+.subject-badge {
+    background: #1B4D3E;
     color: #fff;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
     font-weight: 700;
 }
-.subj-name {
-    font-size: 17px;
-    font-weight: 700;
-    color: #1a1a1a;
+.subject-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
 }
-
-.subject-stats {
+.section-stats {
     display: flex;
     gap: 8px;
 }
-.stat-badge {
+.stat-pill {
     padding: 5px 12px;
     border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
+    background: #f0f0f0;
+    color: #666;
 }
-.stat-badge.total { background: #e5e7eb; color: #374151; }
-.stat-badge.passed { background: #dcfce7; color: #166534; }
-.stat-badge.attempted { background: #fef3c7; color: #92400e; }
-
-.subject-actions {
+.stat-pill.passed { background: #E8F5E9; color: #1B4D3E; }
+.stat-pill.attempted { background: #FFF8E1; color: #F9A825; }
+.section-actions {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 }
 .hub-link {
-    color: #16a34a;
+    color: #1B4D3E;
     font-size: 13px;
     font-weight: 600;
     text-decoration: none;
 }
 .hub-link:hover { text-decoration: underline; }
-
-.accordion-icon {
-    font-size: 12px;
-    color: #666;
-    transition: transform 0.3s;
+.chevron {
+    color: #999;
+    transition: transform 0.2s;
 }
-
-.subject-content {
-    padding: 20px 24px;
-    border-top: 1px solid #e5e5e5;
-    background: #fafafa;
+.section-content {
+    padding: 20px;
+    border-top: 1px solid #e8e8e8;
+    background: #fff;
 }
 
 /* Quiz Cards */
-.quizzes-container { margin-top: 20px; }
-.quizzes-list { display: flex; flex-direction: column; gap: 12px; }
-
+.quizzes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 .quiz-card {
     background: #fff;
-    border: 2px solid #e5e5e5;
+    border: 1px solid #e8e8e8;
     border-radius: 12px;
     display: flex;
     overflow: hidden;
     transition: all 0.2s;
 }
 .quiz-card:hover {
-    border-color: #16a34a;
-    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.1);
+    border-color: #1B4D3E;
+    box-shadow: 0 4px 12px rgba(27, 77, 62, 0.1);
 }
 .quiz-card.locked {
     opacity: 0.85;
     background: #fafafa;
 }
 .quiz-card.locked:hover {
-    border-color: #e5e5e5;
+    border-color: #e8e8e8;
     box-shadow: none;
 }
 
 /* Quiz Type Borders */
-.quiz-card.type-pre_test { border-left: 4px solid #3b82f6; }
-.quiz-card.type-post_test { border-left: 4px solid #8b5cf6; }
-.quiz-card.passed { border-left-color: #22c55e; }
+.quiz-card.type-pre_test { border-left: 4px solid #2196F3; }
+.quiz-card.type-post_test { border-left: 4px solid #9C27B0; }
+.quiz-card.passed { border-left-color: #1B4D3E; }
 
-.quiz-main { flex: 1; padding: 18px 20px; }
-.quiz-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-    gap: 12px;
+.quiz-main {
+    flex: 1;
+    padding: 20px;
 }
-.quiz-title-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+.quiz-top {
+    margin-bottom: 10px;
 }
-.quiz-type-badge {
+.quiz-badges {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.type-badge {
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: 4px;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: 0.5px;
 }
-.quiz-type-badge.pretest { background: #dbeafe; color: #1d4ed8; }
-.quiz-type-badge.posttest { background: #ede9fe; color: #6d28d9; }
+.type-badge.pretest { background: #E3F2FD; color: #1565C0; }
+.type-badge.posttest { background: #F3E5F5; color: #7B1FA2; }
 
-.quiz-header h3 {
-    font-size: 16px;
-    color: #1a1a1a;
-    margin: 0;
-    font-weight: 700;
-}
-
-.quiz-badge {
-    padding: 5px 12px;
-    border-radius: 6px;
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
     font-size: 11px;
-    font-weight: 700;
-    flex-shrink: 0;
+    font-weight: 600;
 }
-.quiz-badge.available { background: #dcfce7; color: #16a34a; }
-.quiz-badge.passed { background: #dcfce7; color: #166534; }
-.quiz-badge.attempted { background: #fef3c7; color: #d97706; }
-.quiz-badge.locked { background: #f3f4f6; color: #6b7280; }
+.status-badge.available { background: #E8F5E9; color: #1B4D3E; }
+.status-badge.passed { background: #E8F5E9; color: #1B4D3E; }
+.status-badge.attempted { background: #FFF8E1; color: #F9A825; }
+.status-badge.locked { background: #f0f0f0; color: #999; }
 
+.quiz-top h3 {
+    font-size: 16px;
+    color: #333;
+    margin: 0;
+    font-weight: 600;
+}
 .quiz-desc {
     color: #666;
-    margin: 0 0 10px;
+    margin: 0 0 12px;
     font-size: 13px;
     line-height: 1.5;
 }
-
-.lock-reason {
+.lock-msg {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
-    background: #f3f4f6;
+    padding: 10px 12px;
+    background: #f5f5f5;
     border-radius: 6px;
     font-size: 12px;
-    color: #4b5563;
-    margin-bottom: 10px;
+    color: #666;
+    margin-bottom: 12px;
 }
-.lock-icon { font-size: 14px; }
-
 .quiz-meta {
     display: flex;
-    gap: 14px;
+    gap: 16px;
     flex-wrap: wrap;
+}
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 12px;
     color: #666;
 }
+.meta-item svg { color: #1B4D3E; }
 
 .quiz-side {
     width: 200px;
-    padding: 18px;
+    padding: 20px;
     background: #fafafa;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     justify-content: center;
     gap: 10px;
-    border-left: 1px solid #e5e5e5;
+    border-left: 1px solid #e8e8e8;
 }
-
 .score-box {
     text-align: center;
-    padding: 12px;
+    padding: 14px;
     border-radius: 8px;
 }
-.score-box.passed { background: #dcfce7; }
-.score-box.failed { background: #fee2e2; }
+.score-box.passed { background: #E8F5E9; }
+.score-box.failed { background: #FFEBEE; }
 .score-label {
     display: block;
     font-size: 10px;
     color: #666;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     font-weight: 600;
     text-transform: uppercase;
 }
 .score-value {
     font-size: 24px;
-    font-weight: 800;
+    font-weight: 700;
     display: block;
-    color: #16a34a;
+    color: #1B4D3E;
 }
-.score-box.failed .score-value { color: #dc2626; }
+.score-box.failed .score-value { color: #C62828; }
 
 .attempts-info {
     text-align: center;
     font-size: 11px;
     color: #666;
 }
-
 .quiz-actions {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 .btn-take {
-    display: block;
-    padding: 10px 16px;
-    background: #16a34a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: #1B4D3E;
     color: #fff;
     border-radius: 8px;
     text-decoration: none;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 13px;
-    text-align: center;
     transition: all 0.2s;
 }
-.btn-take:hover { background: #15803d; }
+.btn-take:hover { background: #2D6A4F; }
 .btn-locked, .btn-disabled {
     display: block;
-    padding: 10px 16px;
-    background: #e5e7eb;
-    color: #6b7280;
+    padding: 12px 16px;
+    background: #e8e8e8;
+    color: #999;
     border-radius: 8px;
     font-weight: 600;
     font-size: 12px;
@@ -813,20 +924,22 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
     cursor: not-allowed;
 }
 .btn-completed {
-    display: block;
-    padding: 10px 16px;
-    background: #dcfce7;
-    color: #16a34a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: #E8F5E9;
+    color: #1B4D3E;
     border-radius: 8px;
     font-weight: 600;
     font-size: 12px;
-    text-align: center;
 }
 .btn-results {
     display: block;
-    padding: 8px 16px;
+    padding: 10px 16px;
     background: #fff;
-    border: 1px solid #e5e5e5;
+    border: 1px solid #e8e8e8;
     color: #666;
     border-radius: 8px;
     text-decoration: none;
@@ -835,44 +948,55 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
     text-align: center;
     transition: all 0.2s;
 }
-.btn-results:hover { border-color: #16a34a; color: #16a34a; }
+.btn-results:hover {
+    border-color: #1B4D3E;
+    color: #1B4D3E;
+}
 
 /* Empty State */
-.empty-box {
+.empty-state {
     text-align: center;
-    padding: 60px 40px;
-    background: #fff;
-    border: 2px dashed #e5e5e5;
-    border-radius: 14px;
+    padding: 60px 24px;
+    background: #fafafa;
+    border: 1px dashed #ddd;
+    border-radius: 12px;
 }
-.empty-box span { font-size: 48px; display: block; margin-bottom: 14px; opacity: 0.5; }
-.empty-box h3 { font-size: 18px; color: #1a1a1a; margin: 0 0 8px; }
-.empty-box p { color: #666; margin: 0; font-size: 14px; }
+.empty-state svg {
+    color: #ccc;
+    margin-bottom: 16px;
+}
+.empty-state h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 8px;
+}
+.empty-state p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
 
 /* Responsive */
 @media (max-width: 900px) {
+    .quizzes-wrap { padding: 16px; }
     .subject-header { flex-direction: column; text-align: center; }
-    .subject-header-accordion { flex-direction: column; align-items: flex-start; }
-    .subject-stats { margin-top: 10px; }
-    .subject-actions { width: 100%; justify-content: space-between; margin-top: 10px; }
+    .btn-hub { width: 100%; justify-content: center; }
+    .section-header { flex-direction: column; align-items: flex-start; }
+    .section-stats { margin-top: 10px; }
+    .section-actions { width: 100%; justify-content: space-between; margin-top: 10px; }
     .quiz-card { flex-direction: column; }
-    .quiz-side { width: 100%; border-left: none; border-top: 1px solid #e5e5e5; }
+    .quiz-side { width: 100%; border-left: none; border-top: 1px solid #e8e8e8; }
     .nav-tabs { flex-wrap: wrap; }
-    .nav-tab { min-width: 45%; }
+    .tab { min-width: 45%; }
 }
 </style>
 
 <script>
-function toggleSubject(header) {
+function toggleSection(header) {
     const section = header.closest('.subject-section');
     section.classList.toggle('collapsed');
 }
-
-// Expand all sections by default on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // All sections are expanded by default
-    // User can click to collapse
-});
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

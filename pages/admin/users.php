@@ -88,7 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteId = (int)$_POST['user_id'];
         // Don't allow deleting yourself
         if ($deleteId !== Auth::id()) {
-            db()->execute("DELETE FROM users WHERE users_id = ?", [$deleteId]);
+            // Soft delete - set status to inactive instead of removing record
+            db()->execute("UPDATE users SET status = 'inactive', updated_at = NOW() WHERE users_id = ?", [$deleteId]);
             header("Location: users.php?success=deleted");
             exit;
         } else {

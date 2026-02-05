@@ -74,12 +74,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($postAction === 'delete') {
         $deleteId = (int)$_POST['offering_id'];
-        $hasSections = db()->fetchOne("SELECT COUNT(*) as count FROM section WHERE subject_offered_id = ?", [$deleteId])['count'];
+        $hasSections = db()->fetchOne("SELECT COUNT(*) as count FROM section WHERE subject_offered_id = ? AND status = 'active'", [$deleteId])['count'];
         if ($hasSections > 0) {
-            $error = "Cannot delete offering with $hasSections sections.";
+            $error = "Cannot delete offering with $hasSections active sections.";
         } else {
-            db()->execute("DELETE FROM faculty_subject WHERE subject_offered_id = ?", [$deleteId]);
-            db()->execute("DELETE FROM subject_offered WHERE subject_offered_id = ?", [$deleteId]);
+            // Soft delete - set status to cancelled instead of removing records
+            db()->execute("UPDATE faculty_subject SET status = 'inactive' WHERE subject_offered_id = ?", [$deleteId]);
+            db()->execute("UPDATE subject_offered SET status = 'cancelled', updated_at = NOW() WHERE subject_offered_id = ?", [$deleteId]);
             header("Location: subject-offerings.php?success=deleted");
             exit;
         }

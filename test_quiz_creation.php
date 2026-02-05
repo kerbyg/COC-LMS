@@ -28,7 +28,7 @@ try {
 
     // Execute the same INSERT as quiz-edit.php line 89
     db()->execute(
-        "INSERT INTO quiz (subject_id, lesson_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, due_date, status, created_at, updated_at)
+        "INSERT INTO quiz (subject_id, lessons_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, due_date, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
         [$subjectId, $lessonId, $teacherId, $quizTitle, $description, $timeLimit, $passingRate, $dueDate, $status]
     );
@@ -52,7 +52,7 @@ try {
         echo "  Quiz ID: {$quiz['quiz_id']}\n";
         echo "  Title: {$quiz['quiz_title']}\n";
         echo "  Subject: {$quiz['subject_code']} - {$quiz['subject_name']}\n";
-        echo "  Lesson ID: " . ($quiz['lesson_id'] ? $quiz['lesson_id'] : 'NULL (independent)') . "\n";
+        echo "  Lesson ID: " . ($quiz['lessons_id'] ? $quiz['lessons_id'] : 'NULL (independent)') . "\n";
         echo "  Time Limit: {$quiz['time_limit']} minutes\n";
         echo "  Passing Rate: {$quiz['passing_rate']}%\n";
         echo "  Status: {$quiz['status']}\n";

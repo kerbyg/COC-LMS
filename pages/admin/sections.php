@@ -124,11 +124,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($postAction === 'delete') {
         $deleteId = (int)$_POST['section_id'];
-        $hasStudents = db()->fetchOne("SELECT COUNT(*) as count FROM student_subject WHERE section_id = ?", [$deleteId])['count'];
+        $hasStudents = db()->fetchOne("SELECT COUNT(*) as count FROM student_subject WHERE section_id = ? AND status = 'enrolled'", [$deleteId])['count'];
         if ($hasStudents > 0) {
             $error = "Cannot delete section with $hasStudents enrolled students.";
         } else {
-            db()->execute("DELETE FROM section WHERE section_id = ?", [$deleteId]);
+            // Soft delete - set status to inactive instead of removing record
+            db()->execute("UPDATE section SET status = 'inactive' WHERE section_id = ?", [$deleteId]);
             header("Location: sections.php?success=deleted");
             exit;
         }

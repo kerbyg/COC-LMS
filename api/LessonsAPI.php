@@ -41,7 +41,7 @@ function getLessons() {
         // FIXED: Column changed to 'user_student_id'
         $lessons = db()->fetchAll(
             "SELECT 
-                l.lesson_id,
+                l.lessons_id,
                 l.lesson_title as title,
                 l.lesson_description as description,
                 l.lesson_order as order_number,
@@ -50,7 +50,7 @@ function getLessons() {
                 sp.completed_at
             FROM lessons l
             LEFT JOIN student_progress sp 
-                ON l.lesson_id = sp.lesson_id AND sp.user_student_id = ?
+                ON l.lessons_id = sp.lessons_id AND sp.user_student_id = ?
             WHERE l.subject_id = (SELECT subject_id FROM subject_offered WHERE subject_offered_id = ?) 
             AND l.status = 'published'
             ORDER BY l.lesson_order",
@@ -75,7 +75,7 @@ function markComplete() {
     }
     
     $input = json_decode(file_get_contents('php://input'), true);
-    $lessonId = $input['lesson_id'] ?? 0;
+    $lessonId = $input['lessons_id'] ?? 0;
     $userId = Auth::id();
     
     try {
@@ -84,7 +84,7 @@ function markComplete() {
             "SELECT ss.* FROM student_subject ss
              JOIN subject_offered so ON ss.subject_offered_id = so.subject_offered_id
              JOIN lessons l ON so.subject_id = l.subject_id
-             WHERE l.lesson_id = ? AND ss.user_student_id = ? AND ss.status = 'enrolled'",
+             WHERE l.lessons_id = ? AND ss.user_student_id = ? AND ss.status = 'enrolled'",
             [$lessonId, $userId]
         );
         
@@ -95,7 +95,7 @@ function markComplete() {
         
         // 2. FIXED: Check 'student_progress' using 'user_student_id'
         $existing = db()->fetchOne(
-            "SELECT * FROM student_progress WHERE user_student_id = ? AND lesson_id = ?",
+            "SELECT * FROM student_progress WHERE user_student_id = ? AND lessons_id = ?",
             [$userId, $lessonId]
         );
         
@@ -105,17 +105,17 @@ function markComplete() {
         }
         
         // Get subject_id from lesson
-        $lesson = db()->fetchOne("SELECT subject_id FROM lessons WHERE lesson_id = ?", [$lessonId]);
+        $lesson = db()->fetchOne("SELECT subject_id FROM lessons WHERE lessons_id = ?", [$lessonId]);
 
         if ($existing) {
             db()->execute(
                 "UPDATE student_progress SET status = 'completed', completed_at = NOW()
-                 WHERE user_student_id = ? AND lesson_id = ?",
+                 WHERE user_student_id = ? AND lessons_id = ?",
                 [$userId, $lessonId]
             );
         } else {
             db()->execute(
-                "INSERT INTO student_progress (user_student_id, lesson_id, subject_id, status, completed_at, started_at)
+                "INSERT INTO student_progress (user_student_id, lessons_id, subject_id, status, completed_at, started_at)
                  VALUES (?, ?, ?, 'completed', NOW(), NOW())",
                 [$userId, $lessonId, $lesson['subject_id']]
             );
@@ -123,20 +123,20 @@ function markComplete() {
 
         // Also update lesson_progress table for pre-test/post-test workflow
         $lessonProgress = db()->fetchOne(
-            "SELECT * FROM lesson_progress WHERE user_student_id = ? AND lesson_id = ?",
+            "SELECT * FROM lesson_progress WHERE user_student_id = ? AND lessons_id = ?",
             [$userId, $lessonId]
         );
 
         if ($lessonProgress) {
             db()->execute(
                 "UPDATE lesson_progress SET completion_percentage = 100, is_completed = 1, completed_at = NOW()
-                 WHERE user_student_id = ? AND lesson_id = ?",
+                 WHERE user_student_id = ? AND lessons_id = ?",
                 [$userId, $lessonId]
             );
         } else {
             // Get subject_offered_id from enrollment
             db()->execute(
-                "INSERT INTO lesson_progress (user_student_id, lesson_id, subject_offered_id, completion_percentage, is_completed, first_accessed, completed_at)
+                "INSERT INTO lesson_progress (user_student_id, lessons_id, subject_offered_id, completion_percentage, is_completed, first_accessed, completed_at)
                  VALUES (?, ?, ?, 100, 1, NOW(), NOW())",
                 [$userId, $lessonId, $enrollment['subject_offered_id']]
             );

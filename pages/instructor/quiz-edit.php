@@ -27,11 +27,12 @@ $existingColumns = array_column($quizColumns, 'column_name');
 $hasQuizType = in_array('quiz_type', $existingColumns);
 $hasLinkedQuizId = in_array('linked_quiz_id', $existingColumns);
 $hasRequireLessons = in_array('require_lessons', $existingColumns);
+$hasQuestionCount = in_array('question_count', $existingColumns);
 
 // Initialize quiz defaults
 $quiz = [
     'subject_id' => $subjectId,
-    'lesson_id' => null,  // NULL for independent quizzes (foreign key constraint)
+    'lessons_id' => null,  // NULL for independent quizzes (foreign key constraint)
     'quiz_title' => '',
     'description' => '',
     'time_limit' => 30,
@@ -40,7 +41,8 @@ $quiz = [
     'status' => 'published',
     'quiz_type' => 'graded',
     'linked_quiz_id' => null,
-    'require_lessons' => 0
+    'require_lessons' => 0,
+    'question_count' => 0
 ];
 
 // Fetch instructor's active subjects for the dropdown
@@ -68,7 +70,7 @@ if ($isEdit) {
 
 // Fetch lessons for the selected subject to allow linking a quiz to a module
 $lessons = $subjectId ? db()->fetchAll(
-    "SELECT lesson_id, lesson_title, lesson_order FROM lessons
+    "SELECT lessons_id, lesson_title, lesson_order FROM lessons
      WHERE subject_id = ? AND user_teacher_id = ?
      ORDER BY lesson_order",
     [$subjectId, $userId]
@@ -98,8 +100,8 @@ if ($subjectId && $hasQuizType && $hasLinkedQuizId) {
 // Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $quiz['subject_id'] = $_POST['subject_id'] ?? '';
-    // lesson_id has foreign key constraint - use NULL for independent quizzes (not 0)
-    $quiz['lesson_id'] = !empty($_POST['lesson_id']) ? (int)$_POST['lesson_id'] : null;
+    // lessons_id has foreign key constraint - use NULL for independent quizzes (not 0)
+    $quiz['lessons_id'] = !empty($_POST['lessons_id']) ? (int)$_POST['lessons_id'] : null;
     $quiz['quiz_title'] = trim($_POST['quiz_title'] ?? '');
     $quiz['description'] = trim($_POST['description'] ?? '');
     $quiz['time_limit'] = (int)($_POST['time_limit'] ?? 30);
@@ -109,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $quiz['quiz_type'] = $_POST['quiz_type'] ?? 'graded';
     $quiz['linked_quiz_id'] = !empty($_POST['linked_quiz_id']) ? (int)$_POST['linked_quiz_id'] : null;
     $quiz['require_lessons'] = isset($_POST['require_lessons']) ? 1 : 0;
+    $quiz['question_count'] = (int)($_POST['question_count'] ?? 0);
 
     if (empty($quiz['subject_id']) || empty($quiz['quiz_title'])) {
         $error = 'Subject selection and Quiz Title are required.';
@@ -120,8 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Build dynamic SQL based on which columns exist
-        $baseColumns = ['subject_id', 'lesson_id', 'quiz_title', 'quiz_description', 'time_limit', 'passing_rate', 'max_attempts', 'due_date', 'status'];
-        $baseValues = [$quiz['subject_id'], $quiz['lesson_id'], $quiz['quiz_title'], $quiz['description'], $quiz['time_limit'], $quiz['passing_rate'], $maxAttempts, $quiz['due_date'], $quiz['status']];
+        $baseColumns = ['subject_id', 'lessons_id', 'quiz_title', 'quiz_description', 'time_limit', 'passing_rate', 'max_attempts', 'due_date', 'status'];
+        $baseValues = [$quiz['subject_id'], $quiz['lessons_id'], $quiz['quiz_title'], $quiz['description'], $quiz['time_limit'], $quiz['passing_rate'], $maxAttempts, $quiz['due_date'], $quiz['status']];
 
         // Add optional columns if they exist
         if ($hasQuizType) {
@@ -136,19 +139,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $baseColumns[] = 'require_lessons';
             $baseValues[] = $quiz['require_lessons'];
         }
+        if ($hasQuestionCount) {
+            $baseColumns[] = 'question_count';
+            $baseValues[] = $quiz['question_count'];
+        }
+
+        // Remove lessons_id from INSERT/UPDATE if it's null (independent quiz)
+        if ($quiz['lessons_id'] === null) {
+            $keyIndex = array_search('lessons_id', $baseColumns);
+            if ($keyIndex !== false) {
+                array_splice($baseColumns, $keyIndex, 1);
+                array_splice($baseValues, $keyIndex, 1);
+            }
+        }
 
         if ($isEdit) {
             // Build UPDATE query
             $setParts = array_map(fn($col) => "$col = ?", $baseColumns);
+            // If lessons_id was removed but we need to set it to NULL for edit
+            if ($quiz['lessons_id'] === null) {
+                $setParts[] = "lessons_id = NULL";
+            }
             $setParts[] = "updated_at = NOW()";
             $sql = "UPDATE quiz SET " . implode(', ', $setParts) . " WHERE quiz_id = ? AND user_teacher_id = ?";
             $params = array_merge($baseValues, [$quizId, $userId]);
 
-            $updateSuccess = db()->execute($sql, $params);
+            try {
+                $stmt = pdo()->prepare($sql);
+                $updateSuccess = $stmt->execute($params);
+            } catch (PDOException $e) {
+                $updateSuccess = false;
+                $error = 'Failed to update quiz: ' . $e->getMessage();
+            }
 
-            if (!$updateSuccess) {
+            if (!$updateSuccess && empty($error)) {
                 $error = 'Failed to update quiz. Please try again.';
-            } else {
+            } elseif ($updateSuccess) {
                 // If this quiz is linked, update the linked quiz to point back
                 if ($hasLinkedQuizId && $quiz['linked_quiz_id']) {
                     db()->execute(
@@ -170,15 +196,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sql = "INSERT INTO quiz (" . implode(', ', $insertColumns) . ") VALUES (" . implode(', ', $placeholders) . ")";
 
             try {
-                $insertSuccess = db()->execute($sql, $insertValues);
-            } catch (Exception $e) {
+                $stmt = pdo()->prepare($sql);
+                $insertSuccess = $stmt->execute($insertValues);
+            } catch (PDOException $e) {
                 $insertSuccess = false;
                 $error = 'Database error: ' . $e->getMessage();
             }
 
             if (!$insertSuccess && empty($error)) {
                 $error = 'Failed to create quiz. Please check database connection and try again.';
-            } else {
+            } elseif ($insertSuccess) {
                 $newQuizId = db()->lastInsertId();
 
                 // If this quiz is linked to another, update the linked quiz to point back
@@ -240,10 +267,10 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                         </div>
                         <div class="form-group">
                             <label class="field-label">Linked Lesson (Optional)</label>
-                            <select name="lesson_id" class="field-input">
+                            <select name="lessons_id" class="field-input">
                                 <option value="">Independent Quiz (Not tied to a lesson)</option>
                                 <?php foreach ($lessons as $l): ?>
-                                    <option value="<?= $l['lesson_id'] ?>" <?= $quiz['lesson_id'] == $l['lesson_id'] ? 'selected' : '' ?>>
+                                    <option value="<?= $l['lessons_id'] ?>" <?= $quiz['lessons_id'] == $l['lessons_id'] ? 'selected' : '' ?>>
                                         Module <?= $l['lesson_order'] ?>: <?= e($l['lesson_title']) ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -320,7 +347,12 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
             <div class="panel mt-4">
                 <div class="panel-head"><h3>⚙️ Examination Settings</h3></div>
                 <div class="panel-body">
-                    <div class="grid-3col">
+                    <div class="grid-4col">
+                        <div class="form-group">
+                            <label class="field-label">Number of Items</label>
+                            <input type="number" name="question_count" class="field-input" value="<?= (int)($quiz['question_count'] ?? 0) ?>" min="0" max="200">
+                            <span class="field-hint">Total questions in this quiz</span>
+                        </div>
                         <div class="form-group">
                             <label class="field-label">Time Limit (Mins)</label>
                             <input type="number" name="time_limit" class="field-input" value="<?= $quiz['time_limit'] ?>" min="5" max="180">
@@ -380,6 +412,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 
 .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .grid-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.grid-4col { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 
 .form-group { margin-bottom: 20px; }
 .field-label { display: block; font-size: 12px; font-weight: 700; color: #78716c; margin-bottom: 8px; text-transform: uppercase; }
@@ -401,7 +434,8 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 .alert-error { background: #fee2e2; color: #b91c1c; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
 .mt-4 { margin-top: 24px; }
 
-@media (max-width: 768px) { .grid-2col, .grid-3col { grid-template-columns: 1fr; } }
+@media (max-width: 768px) { .grid-2col, .grid-3col, .grid-4col { grid-template-columns: 1fr; } }
+@media (min-width: 769px) and (max-width: 1024px) { .grid-4col { grid-template-columns: repeat(2, 1fr); } }
 
 /* New styles for pre-test/post-test section */
 .checkbox-item { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }

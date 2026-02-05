@@ -1,9 +1,7 @@
 <?php
 /**
- * CIT-LMS - Lessons Page
- * Shows all lessons for a specific subject with real-time progress
+ * Lessons Page - Clean Green Theme
  */
-
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/auth.php';
 
@@ -12,12 +10,10 @@ Auth::requireRole('student');
 $userId = Auth::id();
 $subjectOfferingId = $_GET['id'] ?? null;
 
-// If no subject ID provided, show all lessons from all enrolled subjects
 if (!$subjectOfferingId) {
-    // Get all lessons from all enrolled subjects
     $lessons = db()->fetchAll(
         "SELECT
-            l.lesson_id,
+            l.lessons_id,
             l.lesson_title as title,
             l.lesson_description as description,
             l.lesson_order as order_number,
@@ -31,8 +27,7 @@ if (!$subjectOfferingId) {
         JOIN subject s ON l.subject_id = s.subject_id
         JOIN subject_offered so ON so.subject_id = s.subject_id
         JOIN student_subject ss ON ss.subject_offered_id = so.subject_offered_id
-        LEFT JOIN student_progress sp
-            ON l.lesson_id = sp.lesson_id AND sp.user_student_id = ?
+        LEFT JOIN student_progress sp ON l.lessons_id = sp.lessons_id AND sp.user_student_id = ?
         WHERE ss.user_student_id = ? AND ss.status = 'enrolled' AND l.status = 'published'
         ORDER BY s.subject_code, l.lesson_order ASC",
         [$userId, $userId]
@@ -43,7 +38,6 @@ if (!$subjectOfferingId) {
     $subject = null;
     $progress = 0;
 } else {
-    // Show lessons for specific subject
     $enrollment = db()->fetchOne(
         "SELECT ss.* FROM student_subject ss
          WHERE ss.user_student_id = ? AND ss.subject_offered_id = ? AND ss.status = 'enrolled'",
@@ -74,7 +68,7 @@ if (!$subjectOfferingId) {
 
     $lessons = db()->fetchAll(
         "SELECT
-            l.lesson_id,
+            l.lessons_id,
             l.lesson_title as title,
             l.lesson_description as description,
             l.lesson_order as order_number,
@@ -82,14 +76,12 @@ if (!$subjectOfferingId) {
             CASE WHEN sp.status = 'completed' THEN 1 ELSE 0 END as is_completed,
             sp.completed_at
         FROM lessons l
-        LEFT JOIN student_progress sp
-            ON l.lesson_id = sp.lesson_id AND sp.user_student_id = ?
+        LEFT JOIN student_progress sp ON l.lessons_id = sp.lessons_id AND sp.user_student_id = ?
         WHERE l.subject_id = ? AND l.status = 'published'
         ORDER BY l.lesson_order ASC",
         [$userId, $subject['subject_id']]
     );
 
-    // Calculate real progress percentage for the progress bar
     $totalLessons = count($lessons);
     $completedLessons = count(array_filter($lessons, fn($l) => $l['is_completed']));
     $progress = $totalLessons > 0 ? round(($completedLessons / $totalLessons) * 100) : 0;
@@ -105,450 +97,510 @@ include __DIR__ . '/../../includes/sidebar.php';
 <main class="main-content">
     <?php include __DIR__ . '/../../includes/topbar.php'; ?>
 
-    <div class="page-content">
+    <div class="lessons-wrap">
 
         <?php if ($subject): ?>
-            <!-- Back Link -->
-            <div class="page-top">
-                <a href="my-subjects.php" class="back-link">← Back to Subjects</a>
-            </div>
+        <!-- Back Link -->
+        <a href="my-subjects.php" class="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Back to Subjects
+        </a>
 
-            <!-- Subject Header with Progress -->
-            <div class="subject-header">
-                <div class="header-left">
-                    <span class="subj-code"><?= e($subject['subject_code']) ?></span>
-                    <h1 class="subject-title"><?= e($subject['subject_name']) ?></h1>
-                    <p class="instructor-info">👨‍🏫 Instructor: <?= e($subject['instructor_name'] ?? 'TBA') ?></p>
-                </div>
-                <div class="header-right">
-                    <span class="modules-completed"><?= $completedLessons ?>/<?= $totalLessons ?> Modules Completed</span>
-                    <span class="completion-percent"><?= $progress ?>%</span>
-                    <div class="progress-bar-wrapper">
-                        <div class="progress-bar-fill" style="width: <?= $progress ?>%"></div>
-                    </div>
+        <!-- Subject Header -->
+        <div class="subject-header">
+            <div class="header-info">
+                <span class="subject-code"><?= e($subject['subject_code']) ?></span>
+                <h1><?= e($subject['subject_name']) ?></h1>
+                <div class="instructor">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <?= e($subject['instructor_name'] ?? 'TBA') ?>
                 </div>
             </div>
+            <div class="header-progress">
+                <div class="progress-stats">
+                    <span class="progress-text"><?= $completedLessons ?>/<?= $totalLessons ?> Completed</span>
+                    <span class="progress-percent"><?= $progress ?>%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: <?= $progress ?>%"></div>
+                </div>
+            </div>
+        </div>
 
-            <!-- Navigation Tabs -->
-            <div class="nav-tabs">
-                <a href="learning-hub.php?id=<?= $subjectOfferingId ?>" class="nav-tab">
-                    <span class="tab-icon">🎯</span>
-                    <span class="tab-text">Learning Hub</span>
-                </a>
-                <a href="lessons.php?id=<?= $subjectOfferingId ?>" class="nav-tab active">
-                    <span class="tab-icon">📖</span>
-                    <span class="tab-text">Lessons</span>
-                </a>
-                <a href="quizzes.php?id=<?= $subjectOfferingId ?>" class="nav-tab">
-                    <span class="tab-icon">📝</span>
-                    <span class="tab-text">Quizzes</span>
-                </a>
-                <a href="announcements.php?id=<?= $subjectOfferingId ?>" class="nav-tab">
-                    <span class="tab-icon">📢</span>
-                    <span class="tab-text">Announcements</span>
-                </a>
-            </div>
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <a href="learning-hub.php?id=<?= $subjectOfferingId ?>" class="tab">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polygon points="10 8 16 12 10 16 10 8"/>
+                </svg>
+                Learning Hub
+            </a>
+            <a href="lessons.php?id=<?= $subjectOfferingId ?>" class="tab active">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                Lessons
+            </a>
+            <a href="quizzes.php?id=<?= $subjectOfferingId ?>" class="tab">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                Quizzes
+            </a>
+            <a href="announcements.php?id=<?= $subjectOfferingId ?>" class="tab">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                Announcements
+            </a>
+        </div>
         <?php else: ?>
-            <!-- All Lessons View -->
-            <div class="page-head">
-                <h1>📖 All Lessons</h1>
-                <p>View all lessons from your enrolled subjects</p>
-            </div>
+        <!-- All Lessons Header -->
+        <div class="page-header">
+            <h1>All Lessons</h1>
+            <p>Lessons from all your enrolled subjects</p>
+        </div>
         <?php endif; ?>
 
-        <!-- Lessons Content -->
-        <div class="lessons-container">
-            <?php if (empty($lessons)): ?>
-                <div class="empty-state">
-                    <span class="empty-icon">📖</span>
-                    <h3>No Lessons Available</h3>
-                    <p>Your instructors haven't published any lessons yet.</p>
-                </div>
-            <?php else: ?>
-                <div class="lessons-grid">
-                    <?php
-                    $lessonNumber = 1;
-                    foreach ($lessons as $lesson):
-                        $isCompleted = $lesson['is_completed'];
-                    ?>
-                    <div class="lesson-module <?= $isCompleted ? 'completed' : '' ?>">
-                        <div class="module-status">
-                            <?php if ($isCompleted): ?>
-                                <span class="status-icon completed">✓</span>
-                            <?php else: ?>
-                                <span class="status-number"><?= $lessonNumber ?></span>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="module-info">
-                            <h3 class="module-title"><?= e($lesson['title']) ?></h3>
-                            <p class="module-desc"><?= e($lesson['description'] ?: 'Learn computer basics') ?></p>
-
-                            <div class="module-footer">
-                                <?php if ($isCompleted): ?>
-                                    <span class="completion-badge">✓ Finished on <?= date('M d, Y', strtotime($lesson['completed_at'])) ?></span>
-                                <?php else: ?>
-                                    <span class="availability-badge">Module Available</span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <div class="module-action">
-                            <a href="lesson-view.php?id=<?= $lesson['lesson_id'] ?>"
-                               class="action-btn <?= $isCompleted ? 'review-btn' : 'start-btn' ?>">
-                                <?= $isCompleted ? 'Review Content' : 'Start Lesson →' ?>
-                            </a>
-                        </div>
-                    </div>
-                    <?php
-                        $lessonNumber++;
-                    endforeach; ?>
-                </div>
-            <?php endif; ?>
+        <!-- Lessons List -->
+        <?php if (empty($lessons)): ?>
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            <h3>No Lessons Available</h3>
+            <p>Your instructor hasn't published any lessons yet</p>
         </div>
+        <?php else: ?>
+        <div class="lessons-list">
+            <?php $num = 1; foreach ($lessons as $lesson): ?>
+            <div class="lesson-card <?= $lesson['is_completed'] ? 'completed' : '' ?>">
+                <div class="lesson-number">
+                    <?php if ($lesson['is_completed']): ?>
+                    <div class="check-circle">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                    </div>
+                    <?php else: ?>
+                    <div class="num-circle"><?= $num ?></div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="lesson-content">
+                    <h3><?= e($lesson['title']) ?></h3>
+                    <?php if ($lesson['description']): ?>
+                    <p><?= e($lesson['description']) ?></p>
+                    <?php endif; ?>
+                    <div class="lesson-meta">
+                        <?php if ($lesson['is_completed']): ?>
+                        <span class="badge completed">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                            </svg>
+                            Completed <?= date('M j, Y', strtotime($lesson['completed_at'])) ?>
+                        </span>
+                        <?php else: ?>
+                        <span class="badge available">Available</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="lesson-action">
+                    <a href="lesson-view.php?id=<?= $lesson['lessons_id'] ?>" class="btn-lesson <?= $lesson['is_completed'] ? 'review' : 'start' ?>">
+                        <?= $lesson['is_completed'] ? 'Review' : 'Start' ?>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <?php $num++; endforeach; ?>
+        </div>
+        <?php endif; ?>
+
     </div>
 </main>
 
 <style>
-/* Modern Lessons Page Styles */
+/* Lessons Page - Green/Cream Theme */
+.lessons-wrap {
+    padding: 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
 
 /* Back Link */
-.page-top {
-    margin-bottom: 20px;
-}
 .back-link {
-    color: #16a34a;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #1B4D3E;
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
-    transition: color 0.2s;
+    margin-bottom: 20px;
+    transition: opacity 0.2s;
 }
+
 .back-link:hover {
-    color: #15803d;
+    opacity: 0.7;
 }
 
 /* Subject Header */
 .subject-header {
-    background: linear-gradient(135deg, #fdfbf7 0%, #f5f0e8 100%);
-    border: 1px solid #f5f0e8;
-    border-radius: 16px;
-    padding: 28px;
-    margin-bottom: 24px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 32px;
+    gap: 24px;
 }
 
-.header-left {
-    flex: 1;
-}
-
-.subj-code {
-    background: #16a34a;
-    color: #fff;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 700;
+.header-info .subject-code {
     display: inline-block;
-    margin-bottom: 12px;
-    text-transform: uppercase;
+    background: #1B4D3E;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 10px;
 }
 
-.subject-title {
-    font-size: 26px;
-    color: #1c1917;
-    margin: 0 0 8px;
+.header-info h1 {
+    font-size: 22px;
     font-weight: 700;
+    color: #333;
+    margin: 0 0 10px;
 }
 
-.instructor-info {
-    color: #57534e;
-    margin: 0;
+.instructor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 14px;
+    color: #666;
 }
 
-.header-right {
-    text-align: right;
+.instructor svg {
+    color: #1B4D3E;
+}
+
+.header-progress {
     min-width: 200px;
+    text-align: right;
 }
 
-.modules-completed {
-    display: block;
-    font-size: 13px;
-    color: #78716c;
-    margin-bottom: 4px;
-}
-
-.completion-percent {
-    display: block;
-    font-size: 24px;
-    font-weight: 800;
-    color: #16a34a;
+.progress-stats {
+    display: flex;
+    justify-content: space-between;
     margin-bottom: 8px;
 }
 
-.progress-bar-wrapper {
-    height: 10px;
-    background: #e7e5e4;
-    border-radius: 10px;
+.progress-text {
+    font-size: 13px;
+    color: #666;
+}
+
+.progress-percent {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1B4D3E;
+}
+
+.progress-bar {
+    height: 6px;
+    background: #e8e8e8;
+    border-radius: 3px;
     overflow: hidden;
 }
 
-.progress-bar-fill {
+.progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
-    border-radius: 10px;
-    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #1B4D3E;
+    border-radius: 3px;
+    transition: width 0.3s;
 }
 
 /* Navigation Tabs */
 .nav-tabs {
     display: flex;
     gap: 8px;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
     background: #fff;
-    border: 1px solid #f5f0e8;
-    border-radius: 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 10px;
     padding: 6px;
 }
 
-.nav-tab {
+.tab {
     flex: 1;
-    padding: 14px 20px;
-    border-radius: 10px;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
-    color: #57534e;
-    text-align: center;
-    transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-}
-
-.nav-tab:hover {
-    background: #fdfbf7;
-    color: #16a34a;
-}
-
-.nav-tab.active {
-    background: #16a34a;
-    color: #fff;
-}
-
-.tab-icon {
-    font-size: 16px;
-}
-
-.tab-text {
-    font-size: 14px;
-}
-
-/* Lessons Grid */
-.lessons-container {
-    margin-top: 24px;
-}
-
-.lessons-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.lesson-module {
-    background: #fff;
-    border: 2px solid #f5f0e8;
-    border-radius: 16px;
-    padding: 24px;
-    display: flex;
-    align-items: flex-start;
-    gap: 20px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.lesson-module:hover {
-    border-color: #16a34a;
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(22, 163, 74, 0.12);
-}
-
-.lesson-module.completed {
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-    border-color: #bbf7d0;
-}
-
-/* Module Status (Left Circle) */
-.module-status {
-    flex-shrink: 0;
-}
-
-.status-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    font-weight: 700;
-}
-
-.status-icon.completed {
-    background: #16a34a;
-    color: #fff;
-}
-
-.status-number {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: #f5f5f4;
-    color: #78716c;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: 700;
-}
-
-/* Module Info (Middle) */
-.module-info {
-    flex: 1;
-}
-
-.module-title {
-    font-size: 18px;
-    color: #1c1917;
-    margin: 0 0 8px;
-    font-weight: 700;
-}
-
-.module-desc {
-    color: #78716c;
-    margin: 0 0 12px;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.module-footer {
-    margin-top: 12px;
-}
-
-.completion-badge {
-    display: inline-block;
-    padding: 6px 12px;
-    background: #dcfce7;
-    color: #16a34a;
+    padding: 12px 16px;
     border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.availability-badge {
-    display: inline-block;
-    padding: 6px 12px;
-    background: #f5f5f4;
-    color: #78716c;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-/* Module Action (Right Button) */
-.module-action {
-    flex-shrink: 0;
-}
-
-.action-btn {
-    display: inline-block;
-    padding: 14px 24px;
-    border-radius: 10px;
     text-decoration: none;
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 500;
+    color: #666;
     transition: all 0.2s;
-    white-space: nowrap;
 }
 
-.start-btn {
-    background: #16a34a;
+.tab:hover {
+    background: #fafafa;
+    color: #1B4D3E;
+}
+
+.tab.active {
+    background: #1B4D3E;
     color: #fff;
 }
 
-.start-btn:hover {
-    background: #15803d;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+.tab svg {
+    flex-shrink: 0;
 }
 
-.review-btn {
+/* Page Header (All Lessons) */
+.page-header {
+    margin-bottom: 24px;
+}
+
+.page-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1B4D3E;
+    margin: 0 0 4px;
+}
+
+.page-header p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+/* Lessons List */
+.lessons-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lesson-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
     background: #fff;
-    color: #16a34a;
-    border: 2px solid #16a34a;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s ease;
 }
 
-.review-btn:hover {
-    background: #16a34a;
+.lesson-card:hover {
+    border-color: #1B4D3E;
+    box-shadow: 0 4px 12px rgba(27, 77, 62, 0.1);
+}
+
+.lesson-card.completed {
+    background: #f8fdf9;
+    border-color: #c8e6c9;
+}
+
+/* Lesson Number */
+.lesson-number {
+    flex-shrink: 0;
+}
+
+.num-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #f5f5f5;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.check-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #1B4D3E;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Lesson Content */
+.lesson-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.lesson-content h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 6px;
+}
+
+.lesson-content p {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 10px;
+    line-height: 1.4;
+}
+
+.lesson-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.badge.completed {
+    background: #E8F5E9;
+    color: #1B4D3E;
+}
+
+.badge.available {
+    background: #f5f5f5;
+    color: #666;
+}
+
+/* Lesson Action */
+.lesson-action {
+    flex-shrink: 0;
+}
+
+.btn-lesson {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-lesson.start {
+    background: #1B4D3E;
+    color: #fff;
+}
+
+.btn-lesson.start:hover {
+    background: #2D6A4F;
+}
+
+.btn-lesson.review {
+    background: #E8F5E9;
+    color: #1B4D3E;
+}
+
+.btn-lesson.review:hover {
+    background: #1B4D3E;
     color: #fff;
 }
 
 /* Empty State */
 .empty-state {
     text-align: center;
-    padding: 80px 40px;
-    background: #fff;
-    border: 2px dashed #e7e5e4;
-    border-radius: 16px;
+    padding: 60px 24px;
+    background: #fafafa;
+    border: 1px dashed #ddd;
+    border-radius: 12px;
 }
 
-.empty-icon {
-    font-size: 64px;
-    display: block;
+.empty-state svg {
+    color: #ccc;
     margin-bottom: 16px;
-    opacity: 0.5;
 }
 
 .empty-state h3 {
-    font-size: 20px;
-    color: #1c1917;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
     margin: 0 0 8px;
 }
 
 .empty-state p {
-    color: #78716c;
-    margin: 0;
     font-size: 14px;
+    color: #666;
+    margin: 0;
 }
 
-/* Responsive Design */
+/* Responsive */
 @media (max-width: 768px) {
-    .subject-header {
-        flex-direction: column;
-        gap: 20px;
+    .lessons-wrap {
+        padding: 16px;
     }
 
-    .header-right {
+    .subject-header {
+        flex-direction: column;
+    }
+
+    .header-progress {
         width: 100%;
         text-align: left;
     }
 
-    .lesson-module {
+    .nav-tabs {
+        flex-wrap: wrap;
+    }
+
+    .tab {
+        flex: 1 1 45%;
+    }
+
+    .lesson-card {
         flex-direction: column;
         align-items: stretch;
-    }
-
-    .module-action {
-        width: 100%;
-    }
-
-    .action-btn {
-        display: block;
         text-align: center;
+    }
+
+    .lesson-number {
+        display: flex;
+        justify-content: center;
+    }
+
+    .lesson-action {
         width: 100%;
+    }
+
+    .btn-lesson {
+        width: 100%;
+        justify-content: center;
     }
 }
 </style>

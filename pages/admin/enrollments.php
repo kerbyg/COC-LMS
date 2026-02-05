@@ -86,7 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($postAction === 'unenroll') {
         $enrollmentId = (int)$_POST['enrollment_id'];
-        db()->execute("DELETE FROM student_subject WHERE student_subject_id = ?", [$enrollmentId]);
+        // Soft delete - set status to dropped instead of removing record
+        db()->execute("UPDATE student_subject SET status = 'dropped', updated_at = NOW() WHERE student_subject_id = ?", [$enrollmentId]);
         header("Location: enrollments.php?section_id=" . $_POST['redirect_section'] . "&success=unenrolled");
         exit;
     }

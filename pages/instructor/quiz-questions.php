@@ -60,7 +60,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($text)) {
             // Check for duplicate question text in this quiz
             $duplicate = db()->fetchOne(
-                "SELECT question_id FROM quiz_questions WHERE quiz_id = ? AND question_text = ?",
+                "SELECT qq.quiz_questions_id
+                 FROM quiz_questions qq
+                 JOIN questions qs ON qq.questions_id = qs.questions_id
+                 WHERE qq.quiz_id = ? AND qs.question_text = ?",
                 [$quizId, $text]
             );
 
@@ -71,24 +74,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Get the next question order number
             $maxOrder = db()->fetchOne(
-                "SELECT COALESCE(MAX(order_number), 0) as max_order FROM quiz_questions WHERE quiz_id = ?",
+                "SELECT COALESCE(MAX(qs.question_order), 0) as max_order
+                 FROM quiz_questions qq
+                 JOIN questions qs ON qq.questions_id = qs.questions_id
+                 WHERE qq.quiz_id = ?",
                 [$quizId]
             );
             $nextOrder = ($maxOrder['max_order'] ?? 0) + 1;
 
-            // Insert question with proper order (matches Phase 1 migration structure)
+            // Insert into questions master table
             db()->execute(
-                "INSERT INTO quiz_questions (quiz_id, question_text, question_type, points, order_number, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
-                [$quizId, $text, $type, $points, $nextOrder]
+                "INSERT INTO questions (question_text, question_type, points, question_order, users_id, lessons_id) VALUES (?, ?, ?, ?, ?, ?)",
+                [$text, $type, $points, $nextOrder, $userId, $quiz['lessons_id']]
             );
 
             $qId = db()->lastInsertId();
 
-            // Insert the 4 multiple choice options (matches Phase 1 migration structure)
+            // Link question to quiz via quiz_questions junction table
+            db()->execute(
+                "INSERT INTO quiz_questions (quiz_id, questions_id, lessons_id) VALUES (?, ?, ?)",
+                [$quizId, $qId, $quiz['lessons_id']]
+            );
+
+            // Insert the multiple choice options
             foreach ($options as $i => $opt) {
                 if (!empty(trim($opt))) {
                     db()->execute(
-                        "INSERT INTO question_option (quiz_question_id, option_text, is_correct, order_number) VALUES (?, ?, ?, ?)",
+                        "INSERT INTO question_option (questions_id, option_text, is_correct, option_order) VALUES (?, ?, ?, ?)",
                         [$qId, trim($opt), ($i == $correct ? 1 : 0), ($i + 1)]
                     );
                 }
@@ -102,19 +114,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['delete_question'])) {
         $qId = (int)$_POST['delete_question'];
 
-        // Order matters to avoid foreign key errors (matches Phase 1 migration FK names)
-        db()->execute("DELETE FROM question_option WHERE quiz_question_id = ?", [$qId]);
-        db()->execute("DELETE FROM quiz_questions WHERE question_id = ? AND quiz_id = ?", [$qId, $quizId]);
+        // Order matters to avoid foreign key errors
+        db()->execute("DELETE FROM question_option WHERE questions_id = ?", [$qId]);
+        db()->execute("DELETE FROM quiz_questions WHERE questions_id = ? AND quiz_id = ?", [$qId, $quizId]);
+        db()->execute("DELETE FROM questions WHERE questions_id = ?", [$qId]);
 
         // Re-sequence question orders to prevent gaps
         $remainingQuestions = db()->fetchAll(
-            "SELECT question_id FROM quiz_questions WHERE quiz_id = ? ORDER BY order_number ASC, question_id ASC",
+            "SELECT qs.questions_id
+             FROM quiz_questions qq
+             JOIN questions qs ON qq.questions_id = qs.questions_id
+             WHERE qq.quiz_id = ?
+             ORDER BY qs.question_order ASC, qs.questions_id ASC",
             [$quizId]
         );
         foreach ($remainingQuestions as $index => $q) {
             db()->execute(
-                "UPDATE quiz_questions SET order_number = ? WHERE question_id = ?",
-                [($index + 1), $q['question_id']]
+                "UPDATE questions SET question_order = ? WHERE questions_id = ?",
+                [($index + 1), $q['questions_id']]
             );
         }
 
@@ -123,11 +140,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all existing questions with their options for this quiz (matches Phase 1 migration structure)
-$questions = db()->fetchAll("SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY order_number ASC, question_id ASC", [$quizId]);
+// Fetch all existing questions with their options for this quiz
+$questions = db()->fetchAll(
+    "SELECT qs.* FROM quiz_questions qq
+     JOIN questions qs ON qq.questions_id = qs.questions_id
+     WHERE qq.quiz_id = ?
+     ORDER BY qs.question_order ASC, qs.questions_id ASC",
+    [$quizId]
+);
 
 foreach ($questions as &$q) {
-    $q['options'] = db()->fetchAll("SELECT * FROM question_option WHERE quiz_question_id = ? ORDER BY order_number ASC", [$q['question_id']]);
+    $q['options'] = db()->fetchAll("SELECT * FROM question_option WHERE questions_id = ? ORDER BY option_order ASC", [$q['questions_id']]);
 }
 unset($q); // CRITICAL: Destroy the reference to prevent bugs in subsequent loops
 
@@ -285,7 +308,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 
                         <div class="q-card-footer">
                             <form method="POST" onsubmit="return confirm('Permanently remove this question?')">
-                                <input type="hidden" name="delete_question" value="<?= $q['question_id'] ?>">
+                                <input type="hidden" name="delete_question" value="<?= $q['questions_id'] ?>">
                                 <button class="btn-delete-q">Delete Question</button>
                             </form>
                         </div>

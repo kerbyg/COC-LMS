@@ -59,7 +59,7 @@ foreach ($quizzes as $quiz) {
 
     // Find duplicate question texts in this quiz
     $duplicates = db()->fetchAll(
-        "SELECT question_text, COUNT(*) as count, GROUP_CONCAT(question_id ORDER BY question_id) as question_ids
+        "SELECT question_text, COUNT(*) as count, GROUP_CONCAT(questions_id ORDER BY questions_id) as questions_ids
          FROM quiz_questions
          WHERE quiz_id = ?
          GROUP BY question_text
@@ -72,7 +72,7 @@ foreach ($quizzes as $quiz) {
 
         foreach ($duplicates as $dup) {
             $totalDuplicatesFound++;
-            $ids = explode(',', $dup['question_ids']);
+            $ids = explode(',', $dup['questions_ids']);
             $keepId = $ids[0];
             $removeIds = array_slice($ids, 1);
 
@@ -86,8 +86,8 @@ foreach ($quizzes as $quiz) {
 
                 if (!$dryRun) {
                     // Delete the duplicate question and its options
-                    db()->execute("DELETE FROM question_option WHERE question_id = ?", [(int)$removeId]);
-                    db()->execute("DELETE FROM quiz_questions WHERE question_id = ?", [(int)$removeId]);
+                    db()->execute("DELETE FROM question_option WHERE questions_id = ?", [(int)$removeId]);
+                    db()->execute("DELETE FROM quiz_questions WHERE questions_id = ?", [(int)$removeId]);
                     $totalDuplicatesRemoved++;
                 }
             }
@@ -97,13 +97,13 @@ foreach ($quizzes as $quiz) {
         // Re-sequence question orders for this quiz if not dry run
         if (!$dryRun) {
             $remainingQuestions = db()->fetchAll(
-                "SELECT question_id FROM quiz_questions WHERE quiz_id = ? ORDER BY question_order ASC, question_id ASC",
+                "SELECT questions_id FROM quiz_questions WHERE quiz_id = ? ORDER BY question_order ASC, questions_id ASC",
                 [$qid]
             );
             foreach ($remainingQuestions as $index => $q) {
                 db()->execute(
-                    "UPDATE quiz_questions SET question_order = ? WHERE question_id = ?",
-                    [($index + 1), $q['question_id']]
+                    "UPDATE quiz_questions SET question_order = ? WHERE questions_id = ?",
+                    [($index + 1), $q['questions_id']]
                 );
             }
             echo "<div class='stats'>✅ Re-sequenced " . count($remainingQuestions) . " remaining questions</div>";
