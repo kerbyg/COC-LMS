@@ -52,17 +52,18 @@ $search = $_GET['search'] ?? '';
 
 // Get instructor's subjects for filter dropdown
 $mySubjects = db()->fetchAll(
-    "SELECT 
+    "SELECT
         so.subject_offered_id,
         s.subject_code,
         s.subject_name,
-        so.academic_year,
-        so.semester
+        sem.academic_year,
+        sem.semester_name
     FROM faculty_subject fs
     JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
     JOIN subject s ON so.subject_id = s.subject_id
+    LEFT JOIN semester sem ON so.semester_id = sem.semester_id
     WHERE fs.user_teacher_id = ? AND fs.status = 'active'
-    ORDER BY so.academic_year DESC, s.subject_code",
+    ORDER BY sem.academic_year DESC, s.subject_code",
     [$userId]
 );
 
@@ -89,7 +90,6 @@ $students = db()->fetchAll(
         u.first_name,
         u.last_name,
         u.email,
-        u.profile_image,
         s.subject_id,
         s.subject_code,
         s.subject_name,

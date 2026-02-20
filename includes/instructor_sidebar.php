@@ -54,6 +54,14 @@ $currentPage = $currentPage ?? '';
                 <span class="nav-icon">📈</span>
                 <span class="nav-text">Analytics</span>
             </a>
+            <a href="remedials.php" class="nav-item <?= $currentPage === 'remedials' ? 'active' : '' ?>">
+                <span class="nav-icon">📌</span>
+                <span class="nav-text">Remedials</span>
+            </a>
+            <a href="essay-grading.php" class="nav-item <?= $currentPage === 'essay-grading' ? 'active' : '' ?>">
+                <span class="nav-icon">✏️</span>
+                <span class="nav-text">Essay Grading</span>
+            </a>
         </div>
         
         <div class="nav-section">
@@ -78,7 +86,7 @@ $currentPage = $currentPage ?? '';
     </nav>
     
     <div class="sidebar-footer">
-        <?php 
+        <?php
         $user = Auth::user();
         $initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_name'], 0, 1));
         ?>

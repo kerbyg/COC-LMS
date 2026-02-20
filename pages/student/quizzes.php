@@ -12,14 +12,6 @@ Auth::requireRole('student');
 $userId = Auth::id();
 $subjectOfferingId = $_GET['id'] ?? null;
 
-// Check which quiz columns exist
-$quizCols = array_column(db()->fetchAll("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'quiz'") ?: [], 'column_name');
-$hasQuizType = in_array('quiz_type', $quizCols);
-$hasLinkedQuizId = in_array('linked_quiz_id', $quizCols);
-
-// Build quiz type select clause
-$quizTypeSelect = $hasQuizType ? "q.quiz_type," : "'regular' as quiz_type,";
-$linkedQuizSelect = $hasLinkedQuizId ? "q.linked_quiz_id," : "NULL as linked_quiz_id,";
 
 if (!$subjectOfferingId) {
     // Get all quizzes from all enrolled subjects
@@ -33,12 +25,12 @@ if (!$subjectOfferingId) {
             q.max_attempts,
             q.subject_id,
             q.created_at,
-            $quizTypeSelect
-            $linkedQuizSelect
+            q.quiz_type,
+            q.linked_quiz_id,
             s.subject_code,
             s.subject_name,
             so.subject_offered_id,
-            (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
+            (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as no_of_items,
             (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
             (SELECT MAX(percentage) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? AND status = 'completed') as best_score,
             (SELECT attempt_id FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? AND status = 'completed' ORDER BY percentage DESC LIMIT 1) as best_attempt_id
@@ -112,9 +104,9 @@ if (!$subjectOfferingId) {
             q.max_attempts,
             q.subject_id,
             q.created_at,
-            $quizTypeSelect
-            $linkedQuizSelect
-            (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
+            q.quiz_type,
+            q.linked_quiz_id,
+            (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as no_of_items,
             (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
             (SELECT MAX(percentage) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? AND status = 'completed') as best_score,
             (SELECT attempt_id FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? AND status = 'completed' ORDER BY percentage DESC LIMIT 1) as best_attempt_id
@@ -439,7 +431,7 @@ function renderQuizCard($quiz, $userId, $allQuizzes, $subjectId) {
                         <line x1="16" y1="13" x2="8" y2="13"/>
                         <line x1="16" y1="17" x2="8" y2="17"/>
                     </svg>
-                    <?= $quiz['question_count'] ?> Questions
+                    <?= $quiz['no_of_items'] ?> Questions
                 </span>
                 <span class="meta-item">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

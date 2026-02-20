@@ -49,7 +49,15 @@ switch ($action) {
     case 'me':
         handleGetCurrentUser();
         break;
-    
+
+    case 'update-profile':
+        handleUpdateProfile();
+        break;
+
+    case 'change-password':
+        handleChangePassword();
+        break;
+
     default:
         jsonResponse(false, 'Invalid action', null, 400);
 }
@@ -200,10 +208,8 @@ function handleGetCurrentUser() {
                 u.first_name,
                 u.last_name,
                 u.middle_name,
-                u.gender,
                 u.role,
                 u.status,
-                u.profile_image,
                 u.department_id,
                 u.program_id,
                 u.year_level,
@@ -227,6 +233,94 @@ function handleGetCurrentUser() {
     } catch (Exception $e) {
         error_log('Get user error: ' . $e->getMessage());
         jsonResponse(false, 'Failed to get user data', null, 500);
+    }
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────
+ * HANDLE UPDATE PROFILE
+ * ─────────────────────────────────────────────────────────────
+ */
+function handleUpdateProfile() {
+    if (!Auth::check()) {
+        jsonResponse(false, 'Not authenticated', null, 401);
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $firstName = trim($input['first_name'] ?? '');
+    $lastName = trim($input['last_name'] ?? '');
+    $email = trim($input['email'] ?? '');
+    $userId = Auth::id();
+
+    if (!$firstName || !$lastName || !$email) {
+        jsonResponse(false, 'All fields are required');
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        jsonResponse(false, 'Invalid email format');
+    }
+
+    try {
+        // Check email uniqueness
+        $existing = db()->fetchOne(
+            "SELECT users_id FROM users WHERE email = ? AND users_id != ?",
+            [$email, $userId]
+        );
+        if ($existing) {
+            jsonResponse(false, 'Email is already in use');
+        }
+
+        db()->execute(
+            "UPDATE users SET first_name = ?, last_name = ?, email = ?, updated_at = NOW() WHERE users_id = ?",
+            [$firstName, $lastName, $email, $userId]
+        );
+
+        jsonResponse(true, 'Profile updated successfully');
+    } catch (Exception $e) {
+        error_log('Profile update error: ' . $e->getMessage());
+        jsonResponse(false, 'Failed to update profile', null, 500);
+    }
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────
+ * HANDLE CHANGE PASSWORD
+ * ─────────────────────────────────────────────────────────────
+ */
+function handleChangePassword() {
+    if (!Auth::check()) {
+        jsonResponse(false, 'Not authenticated', null, 401);
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $currentPassword = $input['current_password'] ?? '';
+    $newPassword = $input['new_password'] ?? '';
+    $userId = Auth::id();
+
+    if (!$currentPassword || !$newPassword) {
+        jsonResponse(false, 'Current and new password are required');
+    }
+
+    if (strlen($newPassword) < 6) {
+        jsonResponse(false, 'New password must be at least 6 characters');
+    }
+
+    try {
+        $user = db()->fetchOne("SELECT password FROM users WHERE users_id = ?", [$userId]);
+        if (!$user || !Auth::verifyPassword($currentPassword, $user['password'])) {
+            jsonResponse(false, 'Current password is incorrect');
+        }
+
+        $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
+        db()->execute(
+            "UPDATE users SET password = ?, updated_at = NOW() WHERE users_id = ?",
+            [$hashed, $userId]
+        );
+
+        jsonResponse(true, 'Password changed successfully');
+    } catch (Exception $e) {
+        error_log('Password change error: ' . $e->getMessage());
+        jsonResponse(false, 'Failed to change password', null, 500);
     }
 }
 

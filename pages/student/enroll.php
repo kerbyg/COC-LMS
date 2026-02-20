@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enrollment_code'])) {
             "SELECT sec.*,
                 so.subject_id,
                 so.subject_offered_id,
-                so.academic_year,
-                so.semester as offering_semester,
+                sem.academic_year,
+                sem.semester_name as offering_semester,
                 s.subject_code,
                 s.subject_name,
                 s.units,
@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enrollment_code'])) {
              FROM section sec
              JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
              JOIN subject s ON so.subject_id = s.subject_id
+             LEFT JOIN semester sem ON so.semester_id = sem.semester_id
              LEFT JOIN faculty_subject fs ON sec.section_id = fs.section_id AND fs.status = 'active'
              LEFT JOIN users u ON fs.user_teacher_id = u.users_id
              WHERE sec.enrollment_code = ? AND sec.status = 'active'

@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($postAction === 'delete') {
         $deleteId = (int)$_POST['department_id'];
         // Check if department has active programs
-        $hasPrograms = db()->fetchOne("SELECT COUNT(*) as count FROM program WHERE department_id = ? AND status = 'active'", [$deleteId])['count'];
+        $hasPrograms = db()->fetchOne("SELECT COUNT(*) as count FROM department_program dp JOIN program p ON dp.program_id = p.program_id WHERE dp.department_id = ? AND p.status = 'active'", [$deleteId])['count'];
         if ($hasPrograms > 0) {
             $error = "Cannot delete department with $hasPrograms active programs.";
         } else {
@@ -102,7 +102,7 @@ if ($action === 'edit' && $departmentId) {
 // Get all departments with campus info and program count
 $departments = db()->fetchAll(
     "SELECT d.*, c.campus_name,
-        (SELECT COUNT(*) FROM program p WHERE p.department_id = d.department_id) as program_count
+        (SELECT COUNT(*) FROM department_program dp WHERE dp.department_id = d.department_id) as program_count
      FROM department d
      LEFT JOIN campus c ON d.campus_id = c.campus_id
      ORDER BY d.department_name"
@@ -130,57 +130,60 @@ include __DIR__ . '/../../includes/sidebar.php';
 
         <!-- Departments Table -->
         <div class="card">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Department Code</th>
-                                <th>Department Name</th>
-                                <th>Campus</th>
-                                <th>Programs</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($departments)): ?>
-                            <tr>
-                                <td colspan="6" class="text-center empty-message">No departments found</td>
-                            </tr>
-                            <?php else: ?>
-                            <?php foreach ($departments as $dept): ?>
-                            <tr>
-                                <td><span class="badge badge-code"><?= e($dept['department_code']) ?></span></td>
-                                <td>
-                                    <strong><?= e($dept['department_name']) ?></strong>
-                                    <?php if ($dept['description']): ?>
-                                    <br><small class="text-muted"><?= e($dept['description']) ?></small>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?= e($dept['campus_name'] ?? 'N/A') ?></td>
-                                <td><span class="badge badge-info"><?= $dept['program_count'] ?> programs</span></td>
-                                <td>
-                                    <span class="badge badge-<?= $dept['status'] === 'active' ? 'success' : 'secondary' ?>">
-                                        <?= ucfirst($dept['status']) ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="action-buttons">
-                                        <button class="btn-action btn-edit" onclick='editDepartment(<?= json_encode($dept) ?>)' title="Edit">
-                                            ✏️
+            <div class="card-header">
+                <h3 class="card-title">All Departments <span class="badge-count"><?= count($departments) ?></span></h3>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Department</th>
+                            <th>Campus</th>
+                            <th>Programs</th>
+                            <th>Status</th>
+                            <th style="width: 60px; text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($departments)): ?>
+                        <tr><td colspan="6" class="text-center text-muted" style="padding:40px;">No departments found</td></tr>
+                        <?php else: ?>
+                        <?php foreach ($departments as $dept): ?>
+                        <tr>
+                            <td><span class="dept-code"><?= e($dept['department_code']) ?></span></td>
+                            <td>
+                                <div class="dept-name"><?= e($dept['department_name']) ?></div>
+                                <?php if ($dept['description']): ?>
+                                <div class="dept-desc"><?= e($dept['description']) ?></div>
+                                <?php endif; ?>
+                            </td>
+                            <td><span class="campus-text"><?= e($dept['campus_name'] ?? '—') ?></span></td>
+                            <td><span class="program-badge"><?= $dept['program_count'] ?> programs</span></td>
+                            <td><span class="status-badge status-<?= $dept['status'] ?>"><?= ucfirst($dept['status']) ?></span></td>
+                            <td>
+                                <div class="actions-cell">
+                                    <button class="btn-actions-toggle" onclick="toggleActions(this)" title="Actions">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.5" fill="currentColor"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/></svg>
+                                    </button>
+                                    <div class="actions-dropdown">
+                                        <button class="action-item" onclick='editDepartment(<?= json_encode($dept) ?>)'>
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                            Edit Department
                                         </button>
-                                        <button class="btn-action btn-delete" onclick="confirmDelete(<?= $dept['department_id'] ?>, '<?= e($dept['department_name']) ?>')" title="Delete">
-                                            🗑️
+                                        <div class="action-divider"></div>
+                                        <button class="action-item action-danger" onclick="confirmDelete(<?= $dept['department_id'] ?>, '<?= e($dept['department_name']) ?>')">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                                            Deactivate
                                         </button>
                                     </div>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -250,66 +253,271 @@ include __DIR__ . '/../../includes/sidebar.php';
 </form>
 
 <style>
-.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
-.page-header h2{font-size:28px;font-weight:800;margin:0 0 6px;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.text-muted{color:var(--gray-500);margin:0;font-size:15px}
+/* Page Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+.page-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1B4D3E;
+    margin: 0 0 4px;
+}
+.text-muted { color: #6b7280; margin: 0; font-size: 14px; }
 
-.card{background:linear-gradient(135deg,#ffffff 0%,#f9fafb 100%);border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden}
-.card-body{padding:28px}
+/* Card & Table */
+.card {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    overflow: visible;
+}
+.card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e8e8e8;
+}
+.card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1B4D3E;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.badge-count {
+    background: #E8F5E9;
+    color: #1B4D3E;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.table-responsive { overflow-x: auto; overflow-y: visible; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th, .data-table td { padding: 14px 18px; text-align: left; border-bottom: 1px solid #f3f4f6; }
+.data-table th {
+    background: #f8faf9;
+    font-weight: 600;
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.data-table tbody tr { transition: background 0.15s ease; }
+.data-table tbody tr:hover { background: #f8faf9; }
+.data-table tbody tr:last-child td { border-bottom: none; }
 
-.data-table{width:100%;border-collapse:collapse}
-.data-table thead{background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%)}
-.data-table th{padding:16px;text-align:left;font-size:13px;font-weight:800;color:#ffffff;text-transform:uppercase;letter-spacing:0.05em}
-.data-table tbody tr{border-bottom:1px solid #f3f4f6;transition:all 0.2s cubic-bezier(0.4,0,0.2,1)}
-.data-table tbody tr:hover{background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%)}
-.data-table td{padding:16px;font-size:14px;color:#374151}
-.empty-message{padding:48px 24px;text-align:center;color:#9ca3af;font-weight:600}
+/* Department cells */
+.dept-code {
+    background: #E8F5E9;
+    color: #1B4D3E;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: monospace;
+    letter-spacing: 0.03em;
+}
+.dept-name { font-weight: 600; color: #111827; font-size: 14px; }
+.dept-desc { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+.campus-text { font-size: 13px; color: #374151; }
+.program-badge {
+    background: #DBEAFE;
+    color: #1e40af;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+}
 
-.badge{display:inline-block;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700}
-.badge-code{background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);color:#1e3a8a}
-.badge-info{background:linear-gradient(135deg,#dbeafe 0%,#bfdbfe 100%);color:#1e3a8a}
-.badge-success{background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%);color:#065f46}
-.badge-secondary{background:#e5e7eb;color:#6b7280}
+/* Status Badges */
+.status-badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-block;
+}
+.status-active { background: #E8F5E9; color: #15803d; }
+.status-inactive { background: #FEE2E2; color: #b91c1c; }
 
-.action-buttons{display:flex;gap:8px}
-.btn-action{background:transparent;border:none;font-size:18px;cursor:pointer;padding:6px;border-radius:6px;transition:all 0.2s}
-.btn-action:hover{background:#f3f4f6;transform:scale(1.1)}
+/* Actions Dropdown */
+.actions-cell {
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+.btn-actions-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e8e8e8;
+    background: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s;
+}
+.btn-actions-toggle:hover { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
+.btn-actions-toggle.active { background: #f3f4f6; border-color: #1B4D3E; color: #1B4D3E; }
+.actions-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    min-width: 180px;
+    z-index: 100;
+    padding: 6px;
+}
+.actions-dropdown.show { display: block; }
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+    text-decoration: none;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+.action-item:hover { background: #f3f4f6; color: #111827; }
+.action-item svg { flex-shrink: 0; opacity: 0.6; }
+.action-item:hover svg { opacity: 1; }
+.action-divider { height: 1px; background: #e8e8e8; margin: 4px 0; }
+.action-item.action-danger { color: #dc2626; }
+.action-item.action-danger:hover { background: #fef2f2; }
+.action-item.action-danger svg { stroke: #dc2626; }
 
-.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center}
-.modal.active{display:flex}
-.modal-content{background:#ffffff;border-radius:16px;width:90%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,0.2)}
-.modal-header{display:flex;justify-content:space-between;align-items:center;padding:24px;border-bottom:2px solid #f3f4f6}
-.modal-header h3{margin:0;font-size:20px;font-weight:800;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.modal-close{background:transparent;border:none;font-size:28px;color:#9ca3af;cursor:pointer;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:6px}
-.modal-close:hover{background:#f3f4f6}
-.modal-body{padding:24px}
-.modal-footer{display:flex;gap:12px;justify-content:flex-end;padding:24px;border-top:2px solid #f3f4f6}
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+.modal.active { display: flex; }
+.modal-content {
+    background: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e8e8e8;
+}
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1B4D3E;
+}
+.modal-close {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: #9ca3af;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+.modal-close:hover { background: #f3f4f6; color: #374151; }
+.modal-body { padding: 24px; }
+.modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 16px 24px;
+    border-top: 1px solid #e8e8e8;
+    background: #f8faf9;
+    border-radius: 0 0 12px 12px;
+}
 
-.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
-.form-group{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
-.form-group label{font-size:13px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.025em}
-.required{color:#ef4444}
-.form-control{padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:14px;transition:all 0.2s;font-family:inherit}
-.form-control:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-textarea.form-control{resize:vertical;min-height:80px}
+/* Form */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.required { color: #dc2626; font-weight: 700; }
+textarea.form-control { resize: vertical; min-height: 80px; }
 
-.btn{padding:12px 24px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);display:inline-flex;align-items:center;gap:8px}
-.btn-success{background:linear-gradient(135deg,#059669 0%,#10b981 100%);color:#ffffff;box-shadow:0 4px 6px rgba(16,185,129,0.25)}
-.btn-success:hover{transform:translateY(-2px);box-shadow:0 8px 12px rgba(16,185,129,0.3)}
-.btn-secondary{background:#e5e7eb;color:#374151}
-.btn-secondary:hover{background:#d1d5db}
+/* Alerts */
+.alert {
+    padding: 14px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+.alert-success { background: #E8F5E9; color: #1B4D3E; border-left: 4px solid #2D6A4F; }
+.alert-danger { background: #FEE2E2; color: #991b1b; border-left: 4px solid #ef4444; }
 
-.alert{padding:18px 24px;border-radius:12px;margin-bottom:24px;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-.alert-success{background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%);color:#065f46;border-left:5px solid #10b981}
-.alert-danger{background:linear-gradient(135deg,#fee2e2 0%,#fecaca 100%);color:#991b1b;border-left:5px solid #ef4444}
-
-@media(max-width:768px){
-    .form-grid{grid-template-columns:1fr}
-    .page-header{flex-direction:column;align-items:flex-start;gap:16px}
+@media (max-width: 768px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
 </style>
 
 <script>
+/* Actions dropdown toggle */
+function toggleActions(btn) {
+    const dropdown = btn.nextElementSibling;
+    const isOpen = dropdown.classList.contains('show');
+    document.querySelectorAll('.actions-dropdown.show').forEach(d => {
+        d.classList.remove('show');
+        d.previousElementSibling.classList.remove('active');
+    });
+    if (!isOpen) {
+        dropdown.classList.add('show');
+        btn.classList.add('active');
+    }
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.actions-cell')) {
+        document.querySelectorAll('.actions-dropdown.show').forEach(d => {
+            d.classList.remove('show');
+            d.previousElementSibling.classList.remove('active');
+        });
+    }
+});
+
 function openModal() {
     document.getElementById('departmentModal').classList.add('active');
     document.getElementById('modalTitle').textContent = 'Add Department';

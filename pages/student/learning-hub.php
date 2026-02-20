@@ -42,31 +42,24 @@ $subject = db()->fetchOne(
     [$subjectOfferingId, $subjectId]
 );
 
-// Check which quiz columns exist
-$quizCols = array_column(db()->fetchAll("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'quiz'") ?: [], 'column_name');
-$hasQuizType = in_array('quiz_type', $quizCols);
-$hasLinkedQuizId = in_array('linked_quiz_id', $quizCols);
-
 // Get Pre-Test quiz (if exists)
 $preTest = null;
 $preTestAttempt = null;
 $preTestPassed = false;
 
-if ($hasQuizType) {
-    $preTest = db()->fetchOne(
-        "SELECT * FROM quiz WHERE subject_id = ? AND quiz_type = 'pre_test' AND status = 'published' LIMIT 1",
-        [$subjectId]
-    );
+$preTest = db()->fetchOne(
+    "SELECT * FROM quiz WHERE subject_id = ? AND quiz_type = 'pre_test' AND status = 'published' LIMIT 1",
+    [$subjectId]
+);
 
-    if ($preTest) {
-        $preTestAttempt = db()->fetchOne(
-            "SELECT * FROM student_quiz_attempts
-             WHERE quiz_id = ? AND user_student_id = ? AND status = 'completed'
-             ORDER BY percentage DESC LIMIT 1",
-            [$preTest['quiz_id'], $userId]
-        );
-        $preTestPassed = $preTestAttempt && $preTestAttempt['percentage'] >= $preTest['passing_rate'];
-    }
+if ($preTest) {
+    $preTestAttempt = db()->fetchOne(
+        "SELECT * FROM student_quiz_attempts
+         WHERE quiz_id = ? AND user_student_id = ? AND status = 'completed'
+         ORDER BY percentage DESC LIMIT 1",
+        [$preTest['quiz_id'], $userId]
+    );
+    $preTestPassed = $preTestAttempt && $preTestAttempt['percentage'] >= $preTest['passing_rate'];
 }
 
 // Get Post-Test quiz (if exists)
@@ -74,21 +67,19 @@ $postTest = null;
 $postTestAttempt = null;
 $postTestPassed = false;
 
-if ($hasQuizType) {
-    $postTest = db()->fetchOne(
-        "SELECT * FROM quiz WHERE subject_id = ? AND quiz_type = 'post_test' AND status = 'published' LIMIT 1",
-        [$subjectId]
-    );
+$postTest = db()->fetchOne(
+    "SELECT * FROM quiz WHERE subject_id = ? AND quiz_type = 'post_test' AND status = 'published' LIMIT 1",
+    [$subjectId]
+);
 
-    if ($postTest) {
-        $postTestAttempt = db()->fetchOne(
-            "SELECT * FROM student_quiz_attempts
-             WHERE quiz_id = ? AND user_student_id = ? AND status = 'completed'
-             ORDER BY percentage DESC LIMIT 1",
-            [$postTest['quiz_id'], $userId]
-        );
-        $postTestPassed = $postTestAttempt && $postTestAttempt['percentage'] >= $postTest['passing_rate'];
-    }
+if ($postTest) {
+    $postTestAttempt = db()->fetchOne(
+        "SELECT * FROM student_quiz_attempts
+         WHERE quiz_id = ? AND user_student_id = ? AND status = 'completed'
+         ORDER BY percentage DESC LIMIT 1",
+        [$postTest['quiz_id'], $userId]
+    );
+    $postTestPassed = $postTestAttempt && $postTestAttempt['percentage'] >= $postTest['passing_rate'];
 }
 
 // Get all lessons for this subject

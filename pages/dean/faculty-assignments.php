@@ -58,7 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $validOffering = db()->fetchOne(
             "SELECT so.subject_offered_id FROM subject_offered so
              JOIN subject s ON so.subject_id = s.subject_id
-             WHERE so.subject_offered_id = ? AND s.department_id = ?",
+             JOIN department_program dp ON s.program_id = dp.program_id
+             WHERE so.subject_offered_id = ? AND dp.department_id = ?",
             [$subjectOfferedId, $deptId]
         );
 
@@ -108,7 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "SELECT fs.faculty_subject_id FROM faculty_subject fs
              JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
              JOIN subject s ON so.subject_id = s.subject_id
-             WHERE fs.faculty_subject_id = ? AND s.department_id = ?",
+             JOIN department_program dp ON s.program_id = dp.program_id
+             WHERE fs.faculty_subject_id = ? AND dp.department_id = ?",
             [$assignmentId, $deptId]
         );
 
@@ -127,7 +129,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "SELECT fs.faculty_subject_id FROM faculty_subject fs
              JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
              JOIN subject s ON so.subject_id = s.subject_id
-             WHERE fs.faculty_subject_id = ? AND s.department_id = ?",
+             JOIN department_program dp ON s.program_id = dp.program_id
+             WHERE fs.faculty_subject_id = ? AND dp.department_id = ?",
             [$assignmentId, $deptId]
         );
 
@@ -139,20 +142,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Build query for offerings - FILTER BY DEAN'S DEPARTMENT
-$whereClause = "WHERE s.department_id = ?";
+$whereClause = "WHERE dp.department_id = ?";
 $params = [$deptId];
 
-if ($yearFilter) { $whereClause .= " AND so.academic_year = ?"; $params[] = $yearFilter; }
-if ($semesterFilter) { $whereClause .= " AND so.semester = ?"; $params[] = $semesterFilter; }
+if ($yearFilter) { $whereClause .= " AND sem.academic_year = ?"; $params[] = $yearFilter; }
+if ($semesterFilter) { $whereClause .= " AND sem.semester_name = ?"; $params[] = $semesterFilter; }
 
 $offerings = db()->fetchAll(
-    "SELECT so.*, s.subject_code, s.subject_name, s.units,
+    "SELECT so.*, sem.academic_year, sem.semester_name as semester, s.subject_code, s.subject_name, s.units,
         (SELECT COUNT(*) FROM section sec WHERE sec.subject_offered_id = so.subject_offered_id) as section_count,
         (SELECT COUNT(*) FROM faculty_subject fs WHERE fs.subject_offered_id = so.subject_offered_id AND fs.status = 'active') as instructor_count
      FROM subject_offered so
      JOIN subject s ON so.subject_id = s.subject_id
+     JOIN department_program dp ON s.program_id = dp.program_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      $whereClause
-     ORDER BY so.academic_year DESC, so.semester DESC, s.subject_code",
+     ORDER BY sem.academic_year DESC, sem.semester_name DESC, s.subject_code",
     $params
 );
 
@@ -180,16 +185,18 @@ foreach ($offerings as $off) {
 
 // Get all assignments for the dean's department
 $assignments = db()->fetchAll(
-    "SELECT fs.*, so.academic_year, so.semester, s.subject_code, s.subject_name,
+    "SELECT fs.*, sem.academic_year, sem.semester_name as semester, s.subject_code, s.subject_name,
         u.first_name, u.last_name, u.employee_id, u.email,
         sec.section_name
      FROM faculty_subject fs
      JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      JOIN users u ON fs.user_teacher_id = u.users_id
      LEFT JOIN section sec ON fs.section_id = sec.section_id
-     WHERE s.department_id = ?
-     ORDER BY so.academic_year DESC, s.subject_code, sec.section_name, u.last_name",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ?
+     ORDER BY sem.academic_year DESC, s.subject_code, sec.section_name, u.last_name",
     [$deptId]
 );
 

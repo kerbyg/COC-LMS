@@ -127,7 +127,7 @@ class Auth {
      * @return string
      */
     public static function avatar() {
-        return $_SESSION['user_avatar'] ?? BASE_URL . '/assets/images/default-avatar.svg';
+        return BASE_URL . '/assets/images/default-avatar.svg';
     }
     
     /**
@@ -172,7 +172,6 @@ class Auth {
         $_SESSION['last_name'] = $user['last_name'];
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_role'] = $user['role'];
-        $_SESSION['user_avatar'] = $user['profile_image'] ?? null;
         $_SESSION['login_time'] = time();
         $_SESSION['last_activity'] = time();
         

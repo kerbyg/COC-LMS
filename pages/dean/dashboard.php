@@ -2,6 +2,7 @@
 /**
  * Dean - Dashboard
  * Academic oversight and department statistics
+ * Shows data ONLY for the dean's assigned department
  */
 
 require_once __DIR__ . '/../../config/database.php';
@@ -11,46 +12,100 @@ Auth::requireRole('dean');
 
 $pageTitle = 'Dean Dashboard';
 $currentPage = 'dashboard';
+$userId = Auth::id();
 
-// Get academic statistics
-$totalInstructors = db()->fetchOne("SELECT COUNT(*) as count FROM users WHERE role = 'instructor' AND status = 'active'")['count'] ?? 0;
-$totalStudents = db()->fetchOne("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND status = 'active'")['count'] ?? 0;
-$totalSubjects = db()->fetchOne("SELECT COUNT(*) as count FROM subject WHERE status = 'active'")['count'] ?? 0;
-$totalSections = db()->fetchOne("SELECT COUNT(*) as count FROM section WHERE status = 'active'")['count'] ?? 0;
+// Get dean's department
+$dean = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [$userId]);
+$deptId = $dean['department_id'] ?? 0;
 
-// Subject offerings for current year
+// Get department info
+$department = null;
+if ($deptId) {
+    $department = db()->fetchOne("SELECT * FROM department WHERE department_id = ?", [$deptId]);
+}
+
+// Get academic statistics - FILTERED BY DEPARTMENT
+$totalInstructors = db()->fetchOne(
+    "SELECT COUNT(*) as count FROM users WHERE role = 'instructor' AND status = 'active' AND department_id = ?",
+    [$deptId]
+)['count'] ?? 0;
+
+$totalStudents = db()->fetchOne(
+    "SELECT COUNT(DISTINCT ss.user_student_id) as count
+     FROM student_subject ss
+     JOIN section sec ON ss.section_id = sec.section_id
+     JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
+     JOIN subject s ON so.subject_id = s.subject_id
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ? AND ss.status = 'enrolled'",
+    [$deptId]
+)['count'] ?? 0;
+
+$totalSubjects = db()->fetchOne(
+    "SELECT COUNT(*) as count FROM subject s
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE s.status = 'active' AND dp.department_id = ?",
+    [$deptId]
+)['count'] ?? 0;
+
+$totalSections = db()->fetchOne(
+    "SELECT COUNT(*) as count FROM section sec
+     JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
+     JOIN subject s ON so.subject_id = s.subject_id
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE sec.status = 'active' AND dp.department_id = ?",
+    [$deptId]
+)['count'] ?? 0;
+
+// Subject offerings for current semester - FILTERED BY DEPARTMENT
 $currentYear = date('Y');
 $academicYear = "$currentYear-" . ($currentYear + 1);
 $currentSemester = (date('n') >= 6 && date('n') <= 10) ? '1st' : '2nd';
 
 $activeOfferings = db()->fetchOne(
-    "SELECT COUNT(*) as count FROM subject_offered
-     WHERE academic_year = ? AND semester = ? AND status = 'active'",
-    [$academicYear, $currentSemester]
+    "SELECT COUNT(*) as count FROM subject_offered so
+     JOIN subject s ON so.subject_id = s.subject_id
+     JOIN department_program dp ON s.program_id = dp.program_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
+     WHERE dp.department_id = ? AND so.status IN ('active', 'open')",
+    [$deptId]
 )['count'] ?? 0;
 
-// Enrollment stats
-$totalEnrollments = db()->fetchOne("SELECT COUNT(*) as count FROM student_subject WHERE status = 'enrolled'")['count'] ?? 0;
+// Enrollment stats - FILTERED BY DEPARTMENT
+$totalEnrollments = db()->fetchOne(
+    "SELECT COUNT(*) as count FROM student_subject ss
+     JOIN section sec ON ss.section_id = sec.section_id
+     JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
+     JOIN subject s ON so.subject_id = s.subject_id
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE ss.status = 'enrolled' AND dp.department_id = ?",
+    [$deptId]
+)['count'] ?? 0;
 $avgEnrollmentPerSection = $totalSections > 0 ? round($totalEnrollments / $totalSections, 1) : 0;
 
-// Faculty workload
+// Faculty workload - FILTERED BY DEPARTMENT
 $facultyWorkload = db()->fetchAll(
     "SELECT u.users_id, u.first_name, u.last_name, u.employee_id,
         COUNT(DISTINCT fs.faculty_subject_id) as subjects_count,
         COUNT(DISTINCT sec.section_id) as sections_count,
         (SELECT COUNT(*) FROM student_subject ss
          JOIN section sec2 ON ss.section_id = sec2.section_id
-         WHERE sec2.user_instructor_id = u.users_id AND ss.status = 'enrolled') as students_count
+         JOIN subject_offered so2 ON sec2.subject_offered_id = so2.subject_offered_id
+         JOIN subject s2 ON so2.subject_id = s2.subject_id
+         JOIN department_program dp2 ON s2.program_id = dp2.program_id
+         JOIN faculty_subject fs2 ON fs2.section_id = sec2.section_id
+         WHERE fs2.user_teacher_id = u.users_id AND ss.status = 'enrolled' AND dp2.department_id = ?) as students_count
      FROM users u
      LEFT JOIN faculty_subject fs ON u.users_id = fs.user_teacher_id AND fs.status = 'active'
-     LEFT JOIN section sec ON u.users_id = sec.user_instructor_id AND sec.status = 'active'
-     WHERE u.role = 'instructor' AND u.status = 'active'
+     LEFT JOIN section sec ON fs.section_id = sec.section_id AND sec.status = 'active'
+     WHERE u.role = 'instructor' AND u.status = 'active' AND u.department_id = ?
      GROUP BY u.users_id
      ORDER BY subjects_count DESC, students_count DESC
-     LIMIT 10"
+     LIMIT 6",
+    [$deptId, $deptId]
 );
 
-// Subject performance overview
+// Subject performance overview - FILTERED BY DEPARTMENT
 $subjectPerformance = db()->fetchAll(
     "SELECT s.subject_code, s.subject_name,
         COUNT(DISTINCT ss.user_student_id) as enrolled_students,
@@ -63,22 +118,13 @@ $subjectPerformance = db()->fetchAll(
      LEFT JOIN subject_offered so ON s.subject_id = so.subject_id
      LEFT JOIN section sec ON so.subject_offered_id = sec.subject_offered_id AND sec.status = 'active'
      LEFT JOIN student_subject ss ON sec.section_id = ss.section_id AND ss.status = 'enrolled'
-     WHERE s.status = 'active'
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE s.status = 'active' AND dp.department_id = ?
      GROUP BY s.subject_id
      HAVING section_count > 0
      ORDER BY enrolled_students DESC
-     LIMIT 8"
-);
-
-// Recent activity (academic focused)
-$recentActivity = db()->fetchAll(
-    "SELECT al.activity_type, al.activity_description, al.created_at,
-        u.first_name, u.last_name, u.role
-     FROM activity_logs al
-     LEFT JOIN users u ON al.users_id = u.users_id
-     WHERE al.activity_type IN ('enrollment', 'grade_posted', 'quiz_completed', 'lesson_created', 'announcement_posted')
-     ORDER BY al.created_at DESC
-     LIMIT 15"
+     LIMIT 6",
+    [$deptId]
 );
 
 include __DIR__ . '/../../includes/header.php';
@@ -88,131 +134,131 @@ include __DIR__ . '/../../includes/sidebar.php';
 <main class="main-content">
     <?php include __DIR__ . '/../../includes/topbar.php'; ?>
 
-    <div class="page-content">
+    <div class="dashboard-container">
 
-        <!-- Page Header -->
-        <div class="page-header">
-            <div>
-                <h2>Academic Dashboard</h2>
-                <p class="text-muted">Department Overview & Performance</p>
+        <?php if (!$department): ?>
+        <div class="alert-banner">
+            <span class="alert-icon">!</span>
+            <span>No department assigned. Please contact the administrator.</span>
+        </div>
+        <?php endif; ?>
+
+        <!-- Header Section -->
+        <div class="dash-header">
+            <div class="dash-title">
+                <h1>Dashboard</h1>
+                <p>Academic Overview</p>
             </div>
-            <div class="semester-badge">
-                <?= $academicYear ?> - <?= $currentSemester ?> Semester
+            <div class="dash-meta">
+                <?php if ($department): ?>
+                <div class="dept-badge">
+                    <span class="dept-name"><?= e($department['department_name']) ?></span>
+                </div>
+                <?php endif; ?>
+                <div class="sem-badge"><?= $academicYear ?> | <?= $currentSemester ?> Sem</div>
             </div>
         </div>
 
-        <!-- Primary Stats -->
-        <div class="stats-grid">
-            <div class="stat-card blue">
-                <div class="stat-icon">👨‍🏫</div>
-                <div class="stat-content">
-                    <span class="stat-label">Active Instructors</span>
-                    <span class="stat-value"><?= number_format($totalInstructors) ?></span>
-                </div>
-                <a href="instructors.php" class="stat-link">View All →</a>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-box">
+                <div class="stat-number"><?= $totalInstructors ?></div>
+                <div class="stat-label">Instructors</div>
             </div>
-
-            <div class="stat-card green">
-                <div class="stat-icon">👥</div>
-                <div class="stat-content">
-                    <span class="stat-label">Enrolled Students</span>
-                    <span class="stat-value"><?= number_format($totalStudents) ?></span>
-                </div>
-                <div class="stat-footer">
-                    <?= number_format($totalEnrollments) ?> total enrollments
-                </div>
+            <div class="stat-box">
+                <div class="stat-number"><?= $totalStudents ?></div>
+                <div class="stat-label">Students</div>
             </div>
-
-            <div class="stat-card purple">
-                <div class="stat-icon">📚</div>
-                <div class="stat-content">
-                    <span class="stat-label">Active Subjects</span>
-                    <span class="stat-value"><?= number_format($totalSubjects) ?></span>
-                </div>
-                <div class="stat-footer">
-                    <?= $activeOfferings ?> offered this semester
-                </div>
+            <div class="stat-box">
+                <div class="stat-number"><?= $totalSubjects ?></div>
+                <div class="stat-label">Subjects</div>
             </div>
-
-            <div class="stat-card orange">
-                <div class="stat-icon">🏫</div>
-                <div class="stat-content">
-                    <span class="stat-label">Sections</span>
-                    <span class="stat-value"><?= number_format($totalSections) ?></span>
-                </div>
-                <div class="stat-footer">
-                    Avg <?= $avgEnrollmentPerSection ?> students/section
-                </div>
+            <div class="stat-box">
+                <div class="stat-number"><?= $totalSections ?></div>
+                <div class="stat-label">Sections</div>
             </div>
         </div>
 
-        <!-- Main Content Grid -->
-        <div class="dashboard-grid">
+        <!-- Quick Info -->
+        <div class="info-row">
+            <div class="info-item">
+                <span class="info-val"><?= $activeOfferings ?></span>
+                <span class="info-text">Active Offerings</span>
+            </div>
+            <div class="info-item">
+                <span class="info-val"><?= $totalEnrollments ?></span>
+                <span class="info-text">Total Enrollments</span>
+            </div>
+            <div class="info-item">
+                <span class="info-val"><?= $avgEnrollmentPerSection ?></span>
+                <span class="info-text">Avg per Section</span>
+            </div>
+        </div>
 
-            <!-- Faculty Workload -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">Faculty Workload</h3>
-                    <a href="instructors.php" class="view-all">View All →</a>
+        <!-- Content Grid -->
+        <div class="content-grid">
+
+            <!-- Faculty Panel -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h3>Faculty Overview</h3>
+                    <a href="instructors.php">View All</a>
                 </div>
-                <div class="card-body">
+                <div class="panel-body">
                     <?php if (empty($facultyWorkload)): ?>
-                        <p class="empty-text">No faculty data available</p>
+                        <p class="no-data">No faculty data</p>
                     <?php else: ?>
-                        <div class="faculty-list">
-                            <?php foreach ($facultyWorkload as $faculty): ?>
-                            <div class="faculty-item">
-                                <div class="faculty-info">
-                                    <div class="faculty-avatar">
-                                        <?= strtoupper(substr($faculty['first_name'], 0, 1) . substr($faculty['last_name'], 0, 1)) ?>
-                                    </div>
-                                    <div>
-                                        <div class="faculty-name"><?= e($faculty['first_name'] . ' ' . $faculty['last_name']) ?></div>
-                                        <div class="faculty-id"><?= e($faculty['employee_id'] ?? 'N/A') ?></div>
-                                    </div>
-                                </div>
-                                <div class="faculty-stats">
-                                    <span class="faculty-stat" title="Subjects">
-                                        📚 <?= $faculty['subjects_count'] ?>
-                                    </span>
-                                    <span class="faculty-stat" title="Sections">
-                                        🏫 <?= $faculty['sections_count'] ?>
-                                    </span>
-                                    <span class="faculty-stat" title="Students">
-                                        👥 <?= $faculty['students_count'] ?>
-                                    </span>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Subjects</th>
+                                    <th>Sections</th>
+                                    <th>Students</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($facultyWorkload as $f): ?>
+                                <tr>
+                                    <td>
+                                        <div class="name-cell">
+                                            <span class="avatar"><?= strtoupper(substr($f['first_name'], 0, 1)) ?></span>
+                                            <span><?= e($f['first_name'] . ' ' . $f['last_name']) ?></span>
+                                        </div>
+                                    </td>
+                                    <td><?= $f['subjects_count'] ?></td>
+                                    <td><?= $f['sections_count'] ?></td>
+                                    <td><?= $f['students_count'] ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <!-- Subject Performance -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">Subject Enrollment</h3>
-                    <a href="subjects.php" class="view-all">View All →</a>
+            <!-- Subjects Panel -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h3>Subject Performance</h3>
+                    <a href="subjects.php">View All</a>
                 </div>
-                <div class="card-body">
+                <div class="panel-body">
                     <?php if (empty($subjectPerformance)): ?>
-                        <p class="empty-text">No subject data available</p>
+                        <p class="no-data">No subject data</p>
                     <?php else: ?>
                         <div class="subject-list">
-                            <?php foreach ($subjectPerformance as $subject): ?>
-                            <div class="subject-item">
-                                <div class="subject-info">
-                                    <span class="subject-code"><?= e($subject['subject_code']) ?></span>
-                                    <span class="subject-name"><?= e($subject['subject_name']) ?></span>
+                            <?php foreach ($subjectPerformance as $s): ?>
+                            <div class="subject-row">
+                                <div class="subject-main">
+                                    <span class="code"><?= e($s['subject_code']) ?></span>
+                                    <span class="name"><?= e($s['subject_name']) ?></span>
                                 </div>
-                                <div class="subject-stats">
-                                    <span class="subject-count"><?= $subject['enrolled_students'] ?> students</span>
-                                    <span class="subject-sections"><?= $subject['section_count'] ?> sections</span>
-                                    <?php if ($subject['avg_quiz_score']): ?>
-                                    <span class="subject-score <?= $subject['avg_quiz_score'] >= 75 ? 'pass' : 'fail' ?>">
-                                        <?= round($subject['avg_quiz_score']) ?>% avg
-                                    </span>
+                                <div class="subject-meta">
+                                    <span><?= $s['enrolled_students'] ?> students</span>
+                                    <span><?= $s['section_count'] ?> sec</span>
+                                    <?php if ($s['avg_quiz_score']): ?>
+                                    <span class="score <?= $s['avg_quiz_score'] >= 75 ? 'good' : 'low' ?>"><?= round($s['avg_quiz_score']) ?>%</span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -224,351 +270,319 @@ include __DIR__ . '/../../includes/sidebar.php';
 
         </div>
 
-        <!-- Recent Activity -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Recent Academic Activity</h3>
-            </div>
-            <div class="card-body">
-                <?php if (empty($recentActivity)): ?>
-                    <p class="empty-text">No recent activity</p>
-                <?php else: ?>
-                    <div class="activity-list">
-                        <?php foreach ($recentActivity as $activity): ?>
-                        <div class="activity-item">
-                            <div class="activity-dot"></div>
-                            <div class="activity-content">
-                                <div class="activity-text">
-                                    <strong><?= $activity['first_name'] ? e($activity['first_name'] . ' ' . $activity['last_name']) : 'System' ?></strong>
-                                    <span class="badge badge-<?= $activity['role'] ?? 'secondary' ?>"><?= ucfirst($activity['role'] ?? 'System') ?></span>
-                                    - <?= e($activity['activity_description'] ?? $activity['activity_type']) ?>
-                                </div>
-                                <div class="activity-time"><?= date('M d, g:i A', strtotime($activity['created_at'])) ?></div>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
     </div>
 </main>
 
 <style>
-/* Dean Dashboard Styles */
-
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 32px;
-}
-.page-header h2 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #111827;
-    margin: 0 0 4px;
-}
-.text-muted {
-    color: #6b7280;
-    font-size: 14px;
-    margin: 0;
-}
-.semester-badge {
-    background: #2563eb;
-    color: #ffffff;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
+/* COC Theme - Clean Professional Design */
+:root {
+    --coc-green: #1B4D3E;
+    --coc-green-light: #2D6A4F;
+    --coc-gold: #B8A44A;
+    --coc-gold-light: #D4C67A;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-400: #9ca3af;
+    --gray-600: #4b5563;
+    --gray-800: #1f2937;
 }
 
-/* Stats Grid */
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 32px;
-}
-.stat-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+.dashboard-container {
     padding: 24px;
-    transition: all 0.2s;
-}
-.stat-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
-}
-.stat-card.blue { border-left: 4px solid #2563eb; }
-.stat-card.green { border-left: 4px solid #10b981; }
-.stat-card.purple { border-left: 4px solid #8b5cf6; }
-.stat-card.orange { border-left: 4px solid #f59e0b; }
-
-.stat-icon {
-    font-size: 32px;
-    margin-bottom: 12px;
-}
-.stat-content {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-.stat-label {
-    font-size: 13px;
-    color: #6b7280;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.stat-value {
-    font-size: 36px;
-    font-weight: 700;
-    color: #111827;
-    line-height: 1;
-}
-.stat-footer {
-    font-size: 12px;
-    color: #6b7280;
-    padding-top: 12px;
-    border-top: 1px solid #e5e7eb;
-}
-.stat-link {
-    display: inline-block;
-    color: #2563eb;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 500;
-    margin-top: 8px;
-}
-.stat-link:hover {
-    color: #1d4ed8;
 }
 
-/* Dashboard Grid */
-.dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
+/* Alert Banner */
+.alert-banner {
+    background: #fef3c7;
+    border-left: 4px solid var(--coc-gold);
+    padding: 12px 16px;
     margin-bottom: 24px;
-}
-
-/* Cards */
-.card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    overflow: hidden;
-}
-.card-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.card-title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #111827;
-}
-.card-body {
-    padding: 24px;
-}
-.view-all {
-    color: #2563eb;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 500;
-}
-.view-all:hover {
-    color: #1d4ed8;
-}
-
-/* Faculty List */
-.faculty-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-.faculty-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    background: #f9fafb;
-    border-radius: 8px;
-}
-.faculty-info {
     display: flex;
     align-items: center;
     gap: 12px;
+    font-size: 14px;
+    color: #92400e;
 }
-.faculty-avatar {
-    width: 40px;
-    height: 40px;
-    background: #2563eb;
-    color: #ffffff;
+.alert-icon {
+    width: 20px;
+    height: 20px;
+    background: #f59e0b;
+    color: #fff;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
-    font-size: 14px;
-}
-.faculty-name {
-    font-weight: 600;
-    color: #111827;
-}
-.faculty-id {
+    font-weight: 700;
     font-size: 12px;
-    color: #6b7280;
 }
-.faculty-stats {
+
+/* Header */
+.dash-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+.dash-title h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin: 0 0 4px;
+}
+.dash-title p {
+    color: var(--gray-400);
+    font-size: 14px;
+    margin: 0;
+}
+.dash-meta {
     display: flex;
     gap: 12px;
+    align-items: center;
 }
-.faculty-stat {
-    font-size: 13px;
-    color: #374151;
-    padding: 4px 8px;
-    background: #ffffff;
+.dept-badge {
+    background: var(--coc-green);
+    color: #fff;
+    padding: 10px 18px;
     border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+}
+.sem-badge {
+    background: var(--gray-100);
+    color: var(--gray-600);
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* Stats Row */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.stat-box {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+.stat-number {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--coc-green);
+    line-height: 1;
+    margin-bottom: 8px;
+}
+.stat-label {
+    font-size: 13px;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Info Row */
+.info-row {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 24px;
+    padding: 16px 24px;
+    background: var(--gray-50);
+    border-radius: 8px;
+    border: 1px solid var(--gray-200);
+}
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.info-val {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gray-800);
+}
+.info-text {
+    font-size: 13px;
+    color: var(--gray-400);
+}
+
+/* Content Grid */
+.content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Panels */
+.panel {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.panel-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.panel-head h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-800);
+}
+.panel-head a {
+    font-size: 13px;
+    color: var(--coc-green);
+    text-decoration: none;
+    font-weight: 500;
+}
+.panel-head a:hover {
+    text-decoration: underline;
+}
+.panel-body {
+    padding: 16px;
+}
+
+/* Data Table */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.data-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0 12px 10px;
+    border-bottom: 1px solid var(--gray-100);
+}
+.data-table td {
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--gray-600);
+    border-bottom: 1px solid var(--gray-100);
+}
+.data-table tr:last-child td {
+    border-bottom: none;
+}
+.name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.avatar {
+    width: 28px;
+    height: 28px;
+    background: var(--coc-green-light);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 /* Subject List */
 .subject-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
-.subject-item {
-    padding: 12px;
-    background: #f9fafb;
-    border-radius: 8px;
+.subject-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--gray-50);
+    border-radius: 6px;
 }
-.subject-info {
+.subject-main {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 8px;
 }
-.subject-code {
-    background: #2563eb;
-    color: #ffffff;
+.subject-main .code {
+    background: var(--coc-green);
+    color: #fff;
     padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
+    border-radius: 4px;
+    font-size: 11px;
     font-weight: 600;
 }
-.subject-name {
-    font-weight: 500;
-    color: #111827;
+.subject-main .name {
+    font-size: 14px;
+    color: var(--gray-800);
 }
-.subject-stats {
+.subject-meta {
     display: flex;
-    gap: 12px;
+    gap: 16px;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--gray-400);
 }
-.subject-count, .subject-sections {
-    color: #374151;
-}
-.subject-score {
+.subject-meta .score {
     padding: 2px 8px;
     border-radius: 4px;
     font-weight: 600;
 }
-.subject-score.pass {
+.subject-meta .score.good {
     background: #dcfce7;
     color: #166534;
 }
-.subject-score.fail {
+.subject-meta .score.low {
     background: #fee2e2;
     color: #991b1b;
 }
 
-/* Activity List */
-.activity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-.activity-item {
-    display: flex;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid #e5e7eb;
-}
-.activity-item:last-child {
-    border-bottom: none;
-}
-.activity-dot {
-    width: 8px;
-    height: 8px;
-    background: #2563eb;
-    border-radius: 50%;
-    margin-top: 6px;
-    flex-shrink: 0;
-}
-.activity-content {
-    flex: 1;
-}
-.activity-text {
-    font-size: 14px;
-    color: #374151;
-    margin-bottom: 4px;
-}
-.activity-time {
-    font-size: 12px;
-    color: #6b7280;
-}
-.badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    margin: 0 4px;
-}
-.badge-admin { background: #fee2e2; color: #991b1b; }
-.badge-instructor { background: #dbeafe; color: #1e40af; }
-.badge-student { background: #dcfce7; color: #166534; }
-.badge-secondary { background: #e5e7eb; color: #374151; }
-
-.empty-text {
+/* No Data */
+.no-data {
     text-align: center;
-    color: #9ca3af;
+    color: var(--gray-400);
     padding: 40px 0;
     font-size: 14px;
 }
 
 /* Responsive */
 @media (max-width: 1024px) {
-    .dashboard-grid {
+    .content-grid {
         grid-template-columns: 1fr;
     }
-    .stats-grid {
+    .stats-row {
         grid-template-columns: repeat(2, 1fr);
     }
 }
-
-@media (max-width: 640px) {
-    .page-header {
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 12px;
+    }
+    .dash-header {
         flex-direction: column;
-        align-items: flex-start;
         gap: 16px;
     }
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    .faculty-stats {
+    .dash-meta {
         flex-direction: column;
-        gap: 4px;
+        align-items: flex-start;
+    }
+    .stats-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .info-row {
+        flex-direction: column;
+        gap: 16px;
+    }
+}
+@media (max-width: 480px) {
+    .stats-row {
+        grid-template-columns: 1fr;
     }
 }
 </style>

@@ -70,12 +70,7 @@ $lessonsCompleted = 0;
 $totalLessons = 0;
 $linkedPreTest = null;
 
-// Check if quiz_type column exists
-$quizCols = array_column(db()->fetchAll("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'quiz'") ?: [], 'column_name');
-$hasQuizType = in_array('quiz_type', $quizCols);
-$hasLinkedQuizId = in_array('linked_quiz_id', $quizCols);
-
-$quizType = $hasQuizType ? ($quiz['quiz_type'] ?? 'regular') : 'regular';
+$quizType = $quiz['quiz_type'] ?? 'regular';
 
 // PRE-TEST: Check if already taken (only 1 attempt allowed)
 if ($quizType === 'pre_test') {
@@ -95,9 +90,9 @@ if ($quizType === 'pre_test') {
 
 if ($quizType === 'post_test') {
     // Find the pre-test for this subject (by linked_quiz_id or by quiz_type)
-    $linkedPreTestId = $hasLinkedQuizId ? ($quiz['linked_quiz_id'] ?? null) : null;
+    $linkedPreTestId = $quiz['linked_quiz_id'] ?? null;
 
-    if (!$linkedPreTestId && $hasQuizType) {
+    if (!$linkedPreTestId) {
         // Find pre-test by quiz_type for same subject
         $preTestQuiz = db()->fetchOne(
             "SELECT quiz_id, quiz_title, passing_rate FROM quiz WHERE subject_id = ? AND quiz_type = 'pre_test' AND status = 'published' LIMIT 1",

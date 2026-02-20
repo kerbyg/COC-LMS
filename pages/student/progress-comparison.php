@@ -71,11 +71,11 @@ $lessonProgress = db()->fetchAll(
         l.lessons_id,
         l.lesson_title,
         l.lesson_order,
-        COALESCE(lp.completion_percentage, 0) as completion_percentage,
-        COALESCE(lp.is_completed, 0) as is_completed,
-        lp.completed_at
+        CASE WHEN sp.status = 'completed' THEN 100 ELSE 0 END as completion_percentage,
+        CASE WHEN sp.status = 'completed' THEN 1 ELSE 0 END as is_completed,
+        sp.completed_at
     FROM lessons l
-    LEFT JOIN lesson_progress lp ON l.lessons_id = lp.lessons_id AND lp.user_student_id = ?
+    LEFT JOIN student_progress sp ON l.lessons_id = sp.lessons_id AND sp.user_student_id = ?
     WHERE l.subject_id = ? AND l.status = 'published'
     ORDER BY l.lesson_order",
     [$userId, $subject['subject_id']]

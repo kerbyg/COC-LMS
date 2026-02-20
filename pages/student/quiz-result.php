@@ -114,9 +114,10 @@ if ($isPreTest) {
         )['count'] ?? 0;
 
         $completedLessons = db()->fetchOne(
-            "SELECT COUNT(*) as count FROM lesson_progress
-             WHERE user_student_id = ? AND is_completed = 1
-             AND lessons_id IN (SELECT lessons_id FROM lessons WHERE subject_id = (SELECT subject_id FROM quiz WHERE quiz_id = ?))",
+            "SELECT COUNT(*) as count FROM student_progress sp
+             JOIN lessons l ON sp.lessons_id = l.lessons_id
+             WHERE sp.user_student_id = ? AND sp.status = 'completed'
+             AND l.subject_id = (SELECT subject_id FROM quiz WHERE quiz_id = ?)",
             [$userId, $attempt['quiz_id']]
         )['count'] ?? 0;
 

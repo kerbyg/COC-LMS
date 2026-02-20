@@ -18,13 +18,14 @@ $offeringFilter = $_GET['offering_id'] ?? '';
 $error = '';
 $success = '';
 
-// Get offerings and instructors
+// Get offerings and instructors (with semester table join)
 $offerings = db()->fetchAll(
-    "SELECT so.subject_offered_id, so.academic_year, so.semester, s.subject_code, s.subject_name
+    "SELECT so.subject_offered_id, sem.academic_year, sem.semester_name, s.subject_code, s.subject_name
      FROM subject_offered so
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      WHERE so.status IN ('open', 'active')
-     ORDER BY so.academic_year DESC, s.subject_code"
+     ORDER BY sem.academic_year DESC, s.subject_code"
 );
 $instructors = db()->fetchAll("SELECT users_id, first_name, last_name, employee_id FROM users WHERE role = 'instructor' AND status = 'active' ORDER BY last_name");
 
@@ -160,14 +161,15 @@ $params = [];
 if ($offeringFilter) { $whereClause .= " AND sec.subject_offered_id = ?"; $params[] = $offeringFilter; }
 
 $sections = db()->fetchAll(
-    "SELECT sec.*, so.academic_year, so.semester, s.subject_code, s.subject_name,
+    "SELECT sec.*, sem.academic_year, sem.semester_name, s.subject_code, s.subject_name,
         (SELECT COUNT(*) FROM student_subject ss WHERE ss.section_id = sec.section_id AND ss.status = 'enrolled') as student_count,
         (SELECT CONCAT(u.first_name, ' ', u.last_name) FROM faculty_subject fs JOIN users u ON fs.user_teacher_id = u.users_id WHERE fs.section_id = sec.section_id AND fs.status = 'active' LIMIT 1) as instructor_name
      FROM section sec
      JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      $whereClause
-     ORDER BY so.academic_year DESC, s.subject_code, sec.section_name",
+     ORDER BY sem.academic_year DESC, s.subject_code, sec.section_name",
     $params
 );
 
@@ -201,7 +203,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <option value="">All Offerings</option>
                         <?php foreach ($offerings as $off): ?>
                         <option value="<?= $off['subject_offered_id'] ?>" <?= $offeringFilter == $off['subject_offered_id'] ? 'selected' : '' ?>>
-                            <?= e($off['subject_code']) ?> - <?= e($off['academic_year']) ?> (<?= e($off['semester']) ?>)
+                            <?= e($off['subject_code']) ?> - <?= e($off['academic_year'] ?? 'N/A') ?> (<?= e($off['semester_name'] ?? 'N/A') ?>)
                         </option>
                         <?php endforeach; ?>
                     </select>
@@ -238,7 +240,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                 </div>
 
                 <div class="section-details">
-                    <div class="detail"><span class="detail-icon">📅</span><?= e($section['academic_year']) ?> - <?= e($section['semester']) ?></div>
+                    <div class="detail"><span class="detail-icon">📅</span><?= e($section['academic_year'] ?? 'N/A') ?> - <?= e($section['semester_name'] ?? 'N/A') ?></div>
                     <?php if ($section['schedule']): ?><div class="detail"><span class="detail-icon">🕐</span><?= e($section['schedule']) ?></div><?php endif; ?>
                     <?php if ($section['room']): ?><div class="detail"><span class="detail-icon">🚪</span><?= e($section['room']) ?></div><?php endif; ?>
                     <?php if ($section['instructor_name']): ?><div class="detail"><span class="detail-icon">👨‍🏫</span><?= e($section['instructor_name']) ?></div><?php endif; ?>
@@ -294,7 +296,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <?php else: ?>
                         <?php foreach ($offerings as $off): ?>
                         <option value="<?= $off['subject_offered_id'] ?>" <?= ($editSection['subject_offered_id'] ?? $offeringFilter) == $off['subject_offered_id'] ? 'selected' : '' ?>>
-                            <?= e($off['subject_code']) ?> - <?= e($off['subject_name']) ?> (<?= e($off['academic_year']) ?> - <?= e($off['semester']) ?>)
+                            <?= e($off['subject_code']) ?> - <?= e($off['subject_name']) ?> (<?= e($off['academic_year'] ?? 'N/A') ?> - <?= e($off['semester_name'] ?? 'N/A') ?>)
                         </option>
                         <?php endforeach; ?>
                         <?php endif; ?>

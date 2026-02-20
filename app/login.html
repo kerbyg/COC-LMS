@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | CIT-LMS</title>
+    <link rel="icon" type="image/png" href="/COC-LMS/assets/images/phinma_logo2.png">
+    <link rel="stylesheet" href="/COC-LMS/css/auth.css">
+</head>
+<body>
+    <div class="auth-page">
+
+        <!-- Branding above card -->
+        <div class="auth-brand">
+            <img src="/COC-LMS/assets/images/phinma_logo2.png" alt="PHINMA Logo" class="brand-logo">
+            <h1 class="brand-title">CIT-LMS</h1>
+            <p class="brand-sub">College of Information Technology</p>
+            <p class="brand-school">PHINMA Cagayan de Oro College</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="auth-card">
+            <h2 class="card-title">Welcome Back</h2>
+            <p class="card-sub">Sign in to continue to your dashboard</p>
+
+            <!-- Error -->
+            <div id="error-container" style="display:none;"></div>
+
+            <!-- Form -->
+            <form id="login-form" autocomplete="on">
+
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <div class="input-wrap">
+                        <span class="input-icon">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        </span>
+                        <input type="email" id="email" name="email" placeholder="Enter your email" autocomplete="email" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-wrap">
+                        <span class="input-icon">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </span>
+                        <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required minlength="6">
+                        <button type="button" id="password-toggle" class="pw-toggle" title="Show/hide password">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-options">
+                    <label class="remember-wrap">
+                        <input type="checkbox" id="remember" name="remember">
+                        <span>Remember me</span>
+                    </label>
+                    <a href="#" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <button type="submit" id="submit-btn" class="btn-signin">
+                    Sign In
+                </button>
+
+            </form>
+        </div>
+
+        <!-- Page Footer -->
+        <div class="auth-page-footer">
+            <p>© 2025 PHINMA Cagayan de Oro College</p>
+            <p>Making Lives Better Through Education</p>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { Api } from '/COC-LMS/app/js/api.js';
+        import { Auth } from '/COC-LMS/app/js/auth.js';
+
+        // If already logged in, redirect
+        const user = await Auth.check();
+        if (user) {
+            window.location.href = '/COC-LMS/app/index.html';
+        }
+
+        // Password toggle
+        document.getElementById('password-toggle').addEventListener('click', () => {
+            const input = document.getElementById('password');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        });
+
+        // Login form submit
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            const errorContainer = document.getElementById('error-container');
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner"></div> Signing in...';
+            errorContainer.style.display = 'none';
+
+            try {
+                const result = await Api.post('/AuthAPI.php?action=login', {
+                    email: document.getElementById('email').value,
+                    password: document.getElementById('password').value
+                });
+
+                if (result.success) {
+                    window.location.href = '/COC-LMS/app/index.html';
+                } else {
+                    errorContainer.innerHTML = `<div class="auth-error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>${result.message}</span></div>`;
+                    errorContainer.style.display = 'block';
+                }
+            } catch (err) {
+                errorContainer.innerHTML = `<div class="auth-error"><span>An error occurred. Please try again.</span></div>`;
+                errorContainer.style.display = 'block';
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = 'Sign In';
+        });
+    </script>
+</body>
+</html>

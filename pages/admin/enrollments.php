@@ -18,14 +18,15 @@ $search = $_GET['search'] ?? '';
 $error = '';
 $success = '';
 
-// Get sections for filter
+// Get sections for filter (with semester table join)
 $sections = db()->fetchAll(
-    "SELECT sec.section_id, sec.section_name, s.subject_code, s.subject_name, so.academic_year, so.semester
+    "SELECT sec.section_id, sec.section_name, s.subject_code, s.subject_name, sem.academic_year, sem.semester_name
      FROM section sec
      JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      WHERE sec.status = 'active'
-     ORDER BY so.academic_year DESC, s.subject_code, sec.section_name"
+     ORDER BY sem.academic_year DESC, s.subject_code, sec.section_name"
 );
 
 // Get students for enrollment form
@@ -121,14 +122,15 @@ if ($search) {
 
 $enrollments = db()->fetchAll(
     "SELECT ss.*, u.first_name, u.last_name, u.student_id as student_number, u.email,
-        sec.section_name, s.subject_code, s.subject_name, so.academic_year, so.semester
+        sec.section_name, s.subject_code, s.subject_name, sem.academic_year, sem.semester_name
      FROM student_subject ss
      JOIN users u ON ss.user_student_id = u.users_id
      LEFT JOIN section sec ON ss.section_id = sec.section_id
      JOIN subject_offered so ON ss.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      $whereClause
-     ORDER BY so.academic_year DESC, s.subject_code, sec.section_name, u.last_name",
+     ORDER BY sem.academic_year DESC, s.subject_code, sec.section_name, u.last_name",
     $params
 );
 
@@ -136,11 +138,12 @@ $enrollments = db()->fetchAll(
 $currentSection = null;
 if ($sectionFilter) {
     $currentSection = db()->fetchOne(
-        "SELECT sec.*, s.subject_code, s.subject_name, so.academic_year, so.semester,
+        "SELECT sec.*, s.subject_code, s.subject_name, sem.academic_year, sem.semester_name,
             (SELECT COUNT(*) FROM student_subject ss WHERE ss.section_id = sec.section_id) as enrolled
          FROM section sec
          JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
          JOIN subject s ON so.subject_id = s.subject_id
+         LEFT JOIN semester sem ON so.semester_id = sem.semester_id
          WHERE sec.section_id = ?",
         [$sectionFilter]
     );
@@ -175,7 +178,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <option value="">All Sections</option>
                         <?php foreach ($sections as $sec): ?>
                         <option value="<?= $sec['section_id'] ?>" <?= $sectionFilter == $sec['section_id'] ? 'selected' : '' ?>>
-                            <?= e($sec['subject_code']) ?> - <?= e($sec['section_name']) ?> (<?= e($sec['academic_year']) ?>)
+                            <?= e($sec['subject_code']) ?> - <?= e($sec['section_name']) ?> (<?= e($sec['academic_year'] ?? 'N/A') ?>)
                         </option>
                         <?php endforeach; ?>
                     </select>
@@ -199,7 +202,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                 <h3><?= e($currentSection['subject_name']) ?></h3>
             </div>
             <div class="section-info-details">
-                <span>📅 <?= e($currentSection['academic_year']) ?> - <?= e($currentSection['semester']) ?></span>
+                <span>📅 <?= e($currentSection['academic_year'] ?? 'N/A') ?> - <?= e($currentSection['semester_name'] ?? 'N/A') ?></span>
                 <span>🏫 Section <?= e($currentSection['section_name']) ?></span>
                 <span>👥 <?= $currentSection['enrolled'] ?>/<?= $currentSection['max_students'] ?> enrolled</span>
             </div>
@@ -293,7 +296,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                     <select name="section_id" class="form-control" required>
                         <option value="">Choose a section...</option>
                         <?php foreach ($sections as $sec): ?>
-                        <option value="<?= $sec['section_id'] ?>"><?= e($sec['subject_code']) ?> - <?= e($sec['subject_name']) ?> (<?= e($sec['section_name']) ?>) [<?= e($sec['academic_year']) ?>]</option>
+                        <option value="<?= $sec['section_id'] ?>"><?= e($sec['subject_code']) ?> - <?= e($sec['subject_name']) ?> (<?= e($sec['section_name']) ?>) [<?= e($sec['academic_year'] ?? 'N/A') ?>]</option>
                         <?php endforeach; ?>
                     </select>
                 </div>

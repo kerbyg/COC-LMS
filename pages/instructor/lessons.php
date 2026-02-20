@@ -40,10 +40,9 @@ $mySubjects = db()->fetchAll(
     [$userId]
 );
 
-// 2. Build the Lessons Query safely (includes topic count)
+// 2. Build the Lessons Query
 $sql = "SELECT l.*, s.subject_code, s.subject_name,
-        (SELECT COUNT(*) FROM student_progress sp WHERE sp.lessons_id = l.lessons_id AND sp.status = 'completed') as completions,
-        (SELECT COUNT(*) FROM topic t WHERE t.lessons_id = l.lessons_id) as topic_count
+        (SELECT COUNT(*) FROM student_progress sp WHERE sp.lessons_id = l.lessons_id AND sp.status = 'completed') as completions
         FROM lessons l
         JOIN subject s ON l.subject_id = s.subject_id
         WHERE l.user_teacher_id = ?";
@@ -153,7 +152,6 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                 <th style="width: 50px;">#</th>
                                 <th>Lesson</th>
                                 <th>Status</th>
-                                <th>Topics</th>
                                 <th>Completions</th>
                                 <th>Updated</th>
                                 <th style="width: 60px; text-align: center;">Actions</th>
@@ -174,9 +172,6 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="tag-topics"><?= $l['topic_count'] ?> topics</span>
-                                </td>
-                                <td>
                                     <span class="completions-count"><?= $l['completions'] ?></span>
                                 </td>
                                 <td>
@@ -191,10 +186,6 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                                             <a href="lesson-edit.php?id=<?= $l['lessons_id'] ?>" class="action-item">
                                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                                 Edit Lesson
-                                            </a>
-                                            <a href="lesson-edit.php?id=<?= $l['lessons_id'] ?>#topics" class="action-item">
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                                                Manage Topics
                                             </a>
                                             <div class="action-divider"></div>
                                             <form method="POST" onsubmit="return confirm('Are you sure you want to delete this lesson? All student progress for this lesson will also be removed.');">
@@ -352,17 +343,6 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 .status-draft {
     background: var(--danger-bg, #fee2e2);
     color: #b91c1c;
-}
-
-/* Topics Tag */
-.tag-topics {
-    background: #dbeafe;
-    color: #1d4ed8;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 /* Completions */

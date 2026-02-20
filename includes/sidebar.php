@@ -66,8 +66,20 @@ $initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_na
                 <span class="nav-icon">📋</span>
                 <span class="nav-text">Curriculum</span>
             </a>
+            <a href="<?= BASE_URL ?>/pages/admin/subject-offerings.php" class="nav-item <?= $currentPage === 'subject-offerings' ? 'active' : '' ?>">
+                <span class="nav-icon">📅</span>
+                <span class="nav-text">Subject Offerings</span>
+            </a>
+            <a href="<?= BASE_URL ?>/pages/admin/sections.php" class="nav-item <?= $currentPage === 'sections' ? 'active' : '' ?>">
+                <span class="nav-icon">🏫</span>
+                <span class="nav-text">Sections</span>
+            </a>
+            <a href="<?= BASE_URL ?>/pages/admin/faculty-assignments.php" class="nav-item <?= $currentPage === 'faculty-assignments' ? 'active' : '' ?>">
+                <span class="nav-icon">👨‍🏫</span>
+                <span class="nav-text">Faculty Assignments</span>
+            </a>
         </div>
-        
+
         <div class="nav-section">
             <span class="nav-section-title">Reports</span>
             <a href="<?= BASE_URL ?>/pages/admin/reports.php" class="nav-item <?= $currentPage === 'reports' ? 'active' : '' ?>">
@@ -168,8 +180,12 @@ $initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_na
                 <span class="nav-icon">📈</span>
                 <span class="nav-text">Analytics</span>
             </a>
+            <a href="<?= BASE_URL ?>/pages/instructor/remedials.php" class="nav-item <?= $currentPage === 'remedials' ? 'active' : '' ?>">
+                <span class="nav-icon">📌</span>
+                <span class="nav-text">Remedials</span>
+            </a>
         </div>
-        
+
         <div class="nav-section">
             <span class="nav-section-title">Communication</span>
             <a href="<?= BASE_URL ?>/pages/instructor/announcements.php" class="nav-item <?= $currentPage === 'announcements' ? 'active' : '' ?>">
@@ -220,6 +236,10 @@ $initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_na
             <a href="<?= BASE_URL ?>/pages/student/progress.php" class="nav-item <?= $currentPage === 'progress' ? 'active' : '' ?>">
                 <span class="nav-icon">📈</span>
                 <span class="nav-text">My Progress</span>
+            </a>
+            <a href="<?= BASE_URL ?>/pages/student/remedials.php" class="nav-item <?= $currentPage === 'remedials' ? 'active' : '' ?>">
+                <span class="nav-icon">📌</span>
+                <span class="nav-text">Remedials</span>
             </a>
         </div>
         

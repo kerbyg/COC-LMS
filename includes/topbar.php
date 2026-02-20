@@ -155,6 +155,7 @@ if (!function_exists('getRoleName')) {
     border: 1px solid var(--gray-200);
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
     transform: translateY(10px);
     transition: var(--transition);
     z-index: 1000;
@@ -164,6 +165,7 @@ if (!function_exists('getRoleName')) {
 .dropdown.active .dropdown-menu {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
     transform: translateY(0);
 }
 

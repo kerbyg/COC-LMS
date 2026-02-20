@@ -40,6 +40,10 @@ if (!$quiz) {
     exit;
 }
 
+// Get lessons_id from quiz_lessons junction table
+$linkedLesson = db()->fetchOne("SELECT lessons_id FROM quiz_lessons WHERE quiz_id = ? LIMIT 1", [$quizId]);
+$quiz['lessons_id'] = $linkedLesson['lessons_id'] ?? null;
+
 // Handle Form Submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 1. Add New Question Logic

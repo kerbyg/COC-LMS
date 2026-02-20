@@ -74,11 +74,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get user data
+include __DIR__ . '/../../includes/header.php';
+include __DIR__ . '/../../includes/sidebar.php';
+?>
+
+<main class="main-content">
+    <?php include __DIR__ . '/../../includes/topbar.php'; ?>
+
+<?php
+// Get user data with department (AFTER includes so $user isn't overwritten by sidebar/topbar)
 $user = db()->fetchOne(
-    "SELECT u.*, p.program_code, p.program_name
+    "SELECT u.*, p.program_code, p.program_name,
+        d.department_name, d.department_code
      FROM users u
      LEFT JOIN program p ON u.program_id = p.program_id
+     LEFT JOIN department_program dp ON p.program_id = dp.program_id
+     LEFT JOIN department d ON dp.department_id = d.department_id
      WHERE u.users_id = ?",
     [$userId]
 );
@@ -92,13 +103,7 @@ $stats = db()->fetchOne(
     ",
     [$userId, $userId, $userId]
 );
-
-include __DIR__ . '/../../includes/header.php';
-include __DIR__ . '/../../includes/sidebar.php';
 ?>
-
-<main class="main-content">
-    <?php include __DIR__ . '/../../includes/topbar.php'; ?>
 
     <div class="profile-wrap">
 
@@ -172,6 +177,16 @@ include __DIR__ . '/../../includes/sidebar.php';
                             Email
                         </span>
                         <span class="info-value"><?= e($user['email'] ?? '') ?></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                                <polyline points="9 22 9 12 15 12 15 22"/>
+                            </svg>
+                            Department
+                        </span>
+                        <span class="info-value"><?= e($user['department_name'] ?? 'N/A') ?></span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">

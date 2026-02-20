@@ -25,55 +25,54 @@ $semesterSetting = db()->fetchOne(
 $currentSem = $semesterSetting['setting_value'] ?? '1st';
 
 // Get filter parameters
-$filterAY = $_GET['ay'] ?? $currentAY;
-$filterSem = $_GET['sem'] ?? '';
+$filterSemId = $_GET['semester_id'] ?? '';
 
-// Build query
+// Build query (using semester table)
 $whereClause = "WHERE fs.user_teacher_id = ? AND fs.status = 'active'";
 $params = [$userId];
 
-if ($filterAY) {
-    $whereClause .= " AND so.academic_year = ?";
-    $params[] = $filterAY;
-}
-if ($filterSem) {
-    $whereClause .= " AND so.semester = ?";
-    $params[] = $filterSem;
+if ($filterSemId) {
+    $whereClause .= " AND so.semester_id = ?";
+    $params[] = $filterSemId;
 }
 
 // Get assigned classes
 $classes = db()->fetchAll(
-    "SELECT 
+    "SELECT
         s.subject_id,
         s.subject_code,
         s.subject_name,
         s.description,
         s.units,
         so.subject_offered_id,
-        so.academic_year,
-        so.semester,
+        sem.academic_year,
+        sem.semester_name as semester,
         so.status as offering_status,
-        (SELECT COUNT(*) FROM student_subject ss 
+        (SELECT COUNT(*) FROM student_subject ss
          WHERE ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled') as student_count,
-        (SELECT COUNT(*) FROM lessons l 
+        (SELECT COUNT(*) FROM lessons l
          WHERE l.subject_id = s.subject_id AND l.user_teacher_id = ?) as lesson_count,
-        (SELECT COUNT(*) FROM lessons l 
+        (SELECT COUNT(*) FROM lessons l
          WHERE l.subject_id = s.subject_id AND l.user_teacher_id = ? AND l.status = 'published') as published_lessons,
-        (SELECT COUNT(*) FROM quiz q 
+        (SELECT COUNT(*) FROM quiz q
          WHERE q.subject_id = s.subject_id AND q.user_teacher_id = ?) as quiz_count,
-        (SELECT COUNT(*) FROM quiz q 
+        (SELECT COUNT(*) FROM quiz q
          WHERE q.subject_id = s.subject_id AND q.user_teacher_id = ? AND q.status = 'published') as published_quizzes
     FROM faculty_subject fs
     JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
     JOIN subject s ON so.subject_id = s.subject_id
+    LEFT JOIN semester sem ON so.semester_id = sem.semester_id
     $whereClause
-    ORDER BY so.academic_year DESC, so.semester, s.subject_code",
+    ORDER BY sem.academic_year DESC, s.subject_code",
     array_merge([$userId, $userId, $userId, $userId], $params)
 );
 
-// Get available academic years for filter
-$academicYears = db()->fetchAll(
-    "SELECT DISTINCT academic_year FROM subject_offered ORDER BY academic_year DESC"
+// Get available semesters for filter
+$semesters = db()->fetchAll(
+    "SELECT s.semester_id, s.semester_name, s.academic_year
+     FROM semester s
+     JOIN sem_type st ON s.sem_type_id = st.sem_type_id
+     ORDER BY s.academic_year DESC, st.sem_level"
 );
 
 include __DIR__ . '/../../includes/header.php';
@@ -97,23 +96,14 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
         <div class="filters-card">
             <form method="GET" class="filters-form">
                 <div class="filter-group">
-                    <label>Academic Year</label>
-                    <select name="ay" class="form-control" onchange="this.form.submit()">
-                        <option value="">All Years</option>
-                        <?php foreach ($academicYears as $ay): ?>
-                        <option value="<?= e($ay['academic_year']) ?>" <?= $filterAY === $ay['academic_year'] ? 'selected' : '' ?>>
-                            <?= e($ay['academic_year']) ?>
+                    <label>Semester</label>
+                    <select name="semester_id" class="form-control" onchange="this.form.submit()">
+                        <option value="">All Semesters</option>
+                        <?php foreach ($semesters as $sem): ?>
+                        <option value="<?= $sem['semester_id'] ?>" <?= $filterSemId == $sem['semester_id'] ? 'selected' : '' ?>>
+                            <?= e($sem['semester_name']) ?> (<?= e($sem['academic_year']) ?>)
                         </option>
                         <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Semester</label>
-                    <select name="sem" class="form-control" onchange="this.form.submit()">
-                        <option value="">All Semesters</option>
-                        <option value="1st" <?= $filterSem === '1st' ? 'selected' : '' ?>>1st Semester</option>
-                        <option value="2nd" <?= $filterSem === '2nd' ? 'selected' : '' ?>>2nd Semester</option>
-                        <option value="summer" <?= $filterSem === 'summer' ? 'selected' : '' ?>>Summer</option>
                     </select>
                 </div>
                 <div class="filter-group">

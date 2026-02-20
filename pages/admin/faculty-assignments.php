@@ -12,23 +12,35 @@ Auth::requireRole('admin');
 $pageTitle = 'Faculty Assignments';
 $currentPage = 'faculty-assignments';
 
-$yearFilter = $_GET['year'] ?? '';
-$semesterFilter = $_GET['semester'] ?? '';
+$semesterFilter = $_GET['semester_id'] ?? '';
 $error = '';
 $success = '';
 
 // Get instructors
 $instructors = db()->fetchAll(
-    "SELECT users_id, first_name, last_name, employee_id, email 
-     FROM users WHERE role = 'instructor' AND status = 'active' 
+    "SELECT users_id, first_name, last_name, employee_id, email
+     FROM users WHERE role = 'instructor' AND status = 'active'
      ORDER BY last_name, first_name"
 );
 
-// Academic years
-$currentYear = date('Y');
-$academicYears = [];
-for ($i = $currentYear - 2; $i <= $currentYear + 1; $i++) {
-    $academicYears[] = "$i-" . ($i + 1);
+// Get semesters from semester table
+$semesters = db()->fetchAll(
+    "SELECT s.semester_id, s.semester_name, s.academic_year, s.status
+     FROM semester s
+     JOIN sem_type st ON s.sem_type_id = st.sem_type_id
+     ORDER BY s.academic_year DESC, st.sem_level"
+);
+
+// Get sections grouped by subject_offered_id
+$allSections = db()->fetchAll(
+    "SELECT sec.section_id, sec.section_name, sec.subject_offered_id
+     FROM section sec
+     WHERE sec.status = 'active'
+     ORDER BY sec.section_name"
+);
+$sectionsByOffering = [];
+foreach ($allSections as $sec) {
+    $sectionsByOffering[$sec['subject_offered_id']][] = $sec;
 }
 
 // Handle form submissions
@@ -38,14 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($postAction === 'assign') {
         $subjectOfferedId = (int)$_POST['subject_offered_id'];
         $instructorId = (int)$_POST['instructor_id'];
-        
-        if ($subjectOfferedId && $instructorId) {
-            // Check if already assigned
+        $sectionId = (int)$_POST['section_id'];
+
+        if ($subjectOfferedId && $instructorId && $sectionId) {
+            // Check if already assigned to this section
             $exists = db()->fetchOne(
-                "SELECT faculty_subject_id FROM faculty_subject WHERE subject_offered_id = ? AND user_teacher_id = ?",
-                [$subjectOfferedId, $instructorId]
+                "SELECT faculty_subject_id FROM faculty_subject WHERE subject_offered_id = ? AND user_teacher_id = ? AND section_id = ?",
+                [$subjectOfferedId, $instructorId, $sectionId]
             );
-            
+
             if ($exists) {
                 db()->execute(
                     "UPDATE faculty_subject SET status = 'active', updated_at = NOW() WHERE faculty_subject_id = ?",
@@ -53,12 +66,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             } else {
                 db()->execute(
-                    "INSERT INTO faculty_subject (subject_offered_id, user_teacher_id, status, created_at, updated_at)
-                     VALUES (?, ?, 'active', NOW(), NOW())",
-                    [$subjectOfferedId, $instructorId]
+                    "INSERT INTO faculty_subject (subject_offered_id, user_teacher_id, section_id, status, created_at, updated_at)
+                     VALUES (?, ?, ?, 'active', NOW(), NOW())",
+                    [$subjectOfferedId, $instructorId, $sectionId]
                 );
             }
             $success = 'Instructor assigned successfully!';
+        } else {
+            $error = 'Please select an instructor and a section.';
         }
     }
     
@@ -77,33 +92,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Build query for offerings with assignments
-$whereClause = "WHERE so.status = 'active'";
+// Build query for offerings with assignments (using semester table)
+$whereClause = "WHERE so.status IN ('open', 'active')";
 $params = [];
 
-if ($yearFilter) { $whereClause .= " AND so.academic_year = ?"; $params[] = $yearFilter; }
-if ($semesterFilter) { $whereClause .= " AND so.semester = ?"; $params[] = $semesterFilter; }
+if ($semesterFilter) { $whereClause .= " AND so.semester_id = ?"; $params[] = $semesterFilter; }
 
 $offerings = db()->fetchAll(
-    "SELECT so.*, s.subject_code, s.subject_name, s.units,
+    "SELECT so.*, s.subject_code, s.subject_name, s.units, sem.academic_year, sem.semester_name,
         (SELECT COUNT(*) FROM section sec WHERE sec.subject_offered_id = so.subject_offered_id) as section_count,
         (SELECT COUNT(*) FROM faculty_subject fs WHERE fs.subject_offered_id = so.subject_offered_id AND fs.status = 'active') as instructor_count
      FROM subject_offered so
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      $whereClause
-     ORDER BY so.academic_year DESC, so.semester DESC, s.subject_code",
+     ORDER BY sem.academic_year DESC, s.subject_code",
     $params
 );
 
-// Get all assignments
+// Get all assignments (with semester table and section info)
 $assignments = db()->fetchAll(
-    "SELECT fs.*, so.academic_year, so.semester, s.subject_code, s.subject_name,
-        u.first_name, u.last_name, u.employee_id, u.email
+    "SELECT fs.*, sem.academic_year, sem.semester_name, s.subject_code, s.subject_name,
+        u.first_name, u.last_name, u.employee_id, u.email,
+        sec.section_name
      FROM faculty_subject fs
      JOIN subject_offered so ON fs.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
      JOIN users u ON fs.user_teacher_id = u.users_id
-     ORDER BY so.academic_year DESC, s.subject_code, u.last_name"
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
+     LEFT JOIN section sec ON fs.section_id = sec.section_id
+     ORDER BY sem.academic_year DESC, s.subject_code, u.last_name"
 );
 
 // Group assignments by offering
@@ -135,21 +153,14 @@ include __DIR__ . '/../../includes/sidebar.php';
         <div class="filters-card">
             <form method="GET" class="filters-form">
                 <div class="filter-group">
-                    <label>Academic Year</label>
-                    <select name="year" class="form-control">
-                        <option value="">All Years</option>
-                        <?php foreach ($academicYears as $year): ?>
-                        <option value="<?= $year ?>" <?= $yearFilter === $year ? 'selected' : '' ?>><?= $year ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="filter-group">
                     <label>Semester</label>
-                    <select name="semester" class="form-control">
+                    <select name="semester_id" class="form-control">
                         <option value="">All Semesters</option>
-                        <option value="1st" <?= $semesterFilter === '1st' ? 'selected' : '' ?>>1st Semester</option>
-                        <option value="2nd" <?= $semesterFilter === '2nd' ? 'selected' : '' ?>>2nd Semester</option>
-                        <option value="summer" <?= $semesterFilter === 'summer' ? 'selected' : '' ?>>Summer</option>
+                        <?php foreach ($semesters as $sem): ?>
+                        <option value="<?= $sem['semester_id'] ?>" <?= $semesterFilter == $sem['semester_id'] ? 'selected' : '' ?>>
+                            <?= e($sem['semester_name']) ?> (<?= e($sem['academic_year']) ?>)
+                        </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -176,8 +187,8 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <span class="subject-code"><?= e($offering['subject_code']) ?></span>
                         <h3><?= e($offering['subject_name']) ?></h3>
                         <div class="offering-meta">
-                            <span>📅 <?= e($offering['academic_year']) ?></span>
-                            <span>📚 <?= e($offering['semester']) ?> Semester</span>
+                            <span>📅 <?= e($offering['academic_year'] ?? 'N/A') ?></span>
+                            <span>📚 <?= e($offering['semester_name'] ?? 'N/A') ?></span>
                             <span>📊 <?= $offering['units'] ?> units</span>
                             <span>🏫 <?= $offering['section_count'] ?> sections</span>
                         </div>
@@ -196,7 +207,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <div class="instructor-avatar"><?= strtoupper(substr($assignment['first_name'], 0, 1) . substr($assignment['last_name'], 0, 1)) ?></div>
                         <div class="instructor-info">
                             <span class="instructor-name"><?= e($assignment['first_name'] . ' ' . $assignment['last_name']) ?></span>
-                            <span class="instructor-id"><?= e($assignment['employee_id'] ?? $assignment['email']) ?></span>
+                            <span class="instructor-id"><?= e($assignment['employee_id'] ?? $assignment['email']) ?> · Section <?= e($assignment['section_name'] ?? 'N/A') ?></span>
                         </div>
                         <form method="POST" style="display:flex;gap:8px;align-items:center">
                             <input type="hidden" name="assignment_id" value="<?= $assignment['faculty_subject_id'] ?>">
@@ -222,8 +233,19 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <option value="<?= $inst['users_id'] ?>"><?= e($inst['last_name'] . ', ' . $inst['first_name']) ?> (<?= e($inst['employee_id'] ?? $inst['email']) ?>)</option>
                         <?php endforeach; ?>
                     </select>
+                    <select name="section_id" class="form-control" required>
+                        <option value="">Select section...</option>
+                        <?php if (!empty($sectionsByOffering[$offering['subject_offered_id']])): ?>
+                            <?php foreach ($sectionsByOffering[$offering['subject_offered_id']] as $sec): ?>
+                            <option value="<?= $sec['section_id'] ?>">Section <?= e($sec['section_name']) ?></option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
                     <button type="submit" class="btn btn-success btn-sm">Assign</button>
                 </form>
+                <?php if (empty($sectionsByOffering[$offering['subject_offered_id']])): ?>
+                <p class="no-sections-note">No sections created yet. <a href="sections.php">Create sections</a> first.</p>
+                <?php endif; ?>
             </div>
             <?php endforeach; ?>
         </div>
@@ -285,8 +307,10 @@ include __DIR__ . '/../../includes/sidebar.php';
 .status-active{background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%);color:#065f46;border-color:#10b981}
 .status-inactive{background:linear-gradient(135deg,#f3f4f6 0%,#e5e7eb 100%);color:#6b7280;border-color:#9ca3af}
 
-.add-assignment-form{display:flex;gap:14px;padding-top:20px;border-top:2px solid #f3f4f6}
+.add-assignment-form{display:flex;gap:14px;padding-top:20px;border-top:2px solid #f3f4f6;align-items:center}
 .add-assignment-form select{flex:1}
+.no-sections-note{font-size:13px;color:#b91c1c;margin:8px 0 0;font-weight:500}
+.no-sections-note a{color:#1e3a8a;text-decoration:underline}
 
 .summary-card{background:linear-gradient(135deg,#ffffff 0%,#f9fafb 100%);border:1px solid #e5e7eb;border-radius:16px;padding:28px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
 .summary-card h3{margin:0 0 20px;font-size:18px;font-weight:800;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}

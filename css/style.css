@@ -120,6 +120,8 @@ img {
     padding: 24px 32px;
     max-width: 1400px;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
 }
 
 /* ========================================
@@ -265,6 +267,33 @@ img {
 .sidebar-footer {
     padding: 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Department Badge in Sidebar */
+.dept-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--border-radius);
+    margin-bottom: 10px;
+}
+.dept-badge-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.dept-badge-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cream);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .user-card {
@@ -1197,14 +1226,7 @@ tr:last-child td {
     align-items: center;
     justify-content: center;
     z-index: 2000;
-    opacity: 0;
-    visibility: hidden;
     transition: var(--transition);
-}
-
-.modal-overlay.active {
-    opacity: 1;
-    visibility: visible;
 }
 
 .modal {
@@ -1214,13 +1236,8 @@ tr:last-child td {
     max-width: 500px;
     max-height: 90vh;
     overflow: hidden;
-    transform: scale(0.9) translateY(20px);
     transition: var(--transition);
     box-shadow: var(--shadow-lg);
-}
-
-.modal-overlay.active .modal {
-    transform: scale(1) translateY(0);
 }
 
 .modal-header {

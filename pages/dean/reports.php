@@ -27,15 +27,15 @@ $selectedSemester = $_GET['semester'] ?? '';
 
 // Get available academic years and semesters for filters
 $academicYears = db()->fetchAll(
-    "SELECT DISTINCT academic_year FROM subject_offered ORDER BY academic_year DESC"
+    "SELECT DISTINCT academic_year FROM semester ORDER BY academic_year DESC"
 );
 $semesters = db()->fetchAll(
-    "SELECT DISTINCT semester FROM subject_offered ORDER BY semester"
+    "SELECT DISTINCT semester_name as semester FROM semester ORDER BY semester_name"
 );
 
 // Build date filter for queries
-$yearFilter = $selectedYear ? "AND so.academic_year = '" . addslashes($selectedYear) . "'" : "";
-$semesterFilter = $selectedSemester ? "AND so.semester = '" . addslashes($selectedSemester) . "'" : "";
+$yearFilter = $selectedYear ? "AND sem.academic_year = '" . addslashes($selectedYear) . "'" : "";
+$semesterFilter = $selectedSemester ? "AND sem.semester_name = '" . addslashes($selectedSemester) . "'" : "";
 
 // ==================== OVERVIEW STATS ====================
 // Department-specific counts
@@ -45,7 +45,9 @@ $totalStudents = db()->fetchOne(
      JOIN section sec ON ss.section_id = sec.section_id
      JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
-     WHERE s.department_id = ? $yearFilter $semesterFilter",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
+     WHERE dp.department_id = ? $yearFilter $semesterFilter",
     [$deptId]
 )['count'] ?? 0;
 
@@ -55,7 +57,9 @@ $totalInstructors = db()->fetchOne(
 )['count'] ?? 0;
 
 $totalSubjects = db()->fetchOne(
-    "SELECT COUNT(*) as count FROM subject WHERE department_id = ?",
+    "SELECT COUNT(*) as count FROM subject s
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ?",
     [$deptId]
 )['count'] ?? 0;
 
@@ -63,14 +67,17 @@ $totalSections = db()->fetchOne(
     "SELECT COUNT(*) as count FROM section sec
      JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
-     WHERE s.department_id = ? AND sec.status = 'active' $yearFilter $semesterFilter",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
+     WHERE dp.department_id = ? AND sec.status = 'active' $yearFilter $semesterFilter",
     [$deptId]
 )['count'] ?? 0;
 
 $totalQuizzes = db()->fetchOne(
     "SELECT COUNT(*) as count FROM quiz q
      JOIN subject s ON q.subject_id = s.subject_id
-     WHERE s.department_id = ?",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ?",
     [$deptId]
 )['count'] ?? 0;
 
@@ -78,7 +85,8 @@ $totalAttempts = db()->fetchOne(
     "SELECT COUNT(*) as count FROM student_quiz_attempts sqa
      JOIN quiz q ON sqa.quiz_id = q.quiz_id
      JOIN subject s ON q.subject_id = s.subject_id
-     WHERE s.department_id = ? AND sqa.status = 'completed'",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ? AND sqa.status = 'completed'",
     [$deptId]
 )['count'] ?? 0;
 
@@ -86,7 +94,8 @@ $avgScore = db()->fetchOne(
     "SELECT AVG(sqa.percentage) as avg FROM student_quiz_attempts sqa
      JOIN quiz q ON sqa.quiz_id = q.quiz_id
      JOIN subject s ON q.subject_id = s.subject_id
-     WHERE s.department_id = ? AND sqa.status = 'completed'",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ? AND sqa.status = 'completed'",
     [$deptId]
 )['avg'] ?? 0;
 
@@ -96,7 +105,8 @@ $passRate = db()->fetchOne(
      FROM student_quiz_attempts sqa
      JOIN quiz q ON sqa.quiz_id = q.quiz_id
      JOIN subject s ON q.subject_id = s.subject_id
-     WHERE s.department_id = ? AND sqa.status = 'completed'",
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ? AND sqa.status = 'completed'",
     [$deptId]
 )['rate'] ?? 0;
 
@@ -110,7 +120,8 @@ $topStudents = db()->fetchAll(
      JOIN student_quiz_attempts sqa ON u.users_id = sqa.student_id
      JOIN quiz q ON sqa.quiz_id = q.quiz_id
      JOIN subject s ON q.subject_id = s.subject_id
-     WHERE u.role = 'student' AND sqa.status = 'completed' AND s.department_id = ?
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE u.role = 'student' AND sqa.status = 'completed' AND dp.department_id = ?
      GROUP BY u.users_id
      HAVING attempts >= 1
      ORDER BY avg_score DESC
@@ -121,7 +132,9 @@ $topStudents = db()->fetchAll(
 // ==================== SUBJECT PERFORMANCE ====================
 // Get all subjects first, then add quiz data
 $subjects = db()->fetchAll(
-    "SELECT subject_id, subject_code, subject_name FROM subject WHERE department_id = ? ORDER BY subject_code",
+    "SELECT s.subject_id, s.subject_code, s.subject_name FROM subject s
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ? ORDER BY s.subject_code",
     [$deptId]
 );
 
@@ -160,9 +173,10 @@ $enrollmentByProgram = db()->fetchAll(
         COUNT(DISTINCT ss.user_student_id) as students,
         COUNT(DISTINCT ss.section_id) as sections
      FROM program p
+     JOIN department_program dp ON p.program_id = dp.program_id
      LEFT JOIN users u ON p.program_id = u.program_id AND u.role = 'student'
      LEFT JOIN student_subject ss ON u.users_id = ss.user_student_id
-     WHERE p.department_id = ?
+     WHERE dp.department_id = ?
      GROUP BY p.program_id
      ORDER BY students DESC",
     [$deptId]
@@ -171,14 +185,16 @@ $enrollmentByProgram = db()->fetchAll(
 // Enrollment by Section with Capacity
 $enrollmentBySection = db()->fetchAll(
     "SELECT sec.section_id, sec.section_name, sec.max_students,
-        s.subject_code, s.subject_name, so.academic_year, so.semester,
+        s.subject_code, s.subject_name, sem.academic_year, sem.semester_name as semester,
         COUNT(ss.student_subject_id) as enrolled,
         ROUND(COUNT(ss.student_subject_id) * 100.0 / NULLIF(sec.max_students, 0), 1) as utilization
      FROM section sec
      JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      LEFT JOIN student_subject ss ON sec.section_id = ss.section_id AND ss.status = 'enrolled'
-     WHERE s.department_id = ? AND sec.status = 'active' $yearFilter $semesterFilter
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ? AND sec.status = 'active' $yearFilter $semesterFilter
      GROUP BY sec.section_id
      ORDER BY utilization DESC",
     [$deptId]
@@ -192,8 +208,10 @@ $capacityStats = db()->fetchOne(
      FROM section sec
      JOIN subject_offered so ON sec.subject_offered_id = so.subject_offered_id
      JOIN subject s ON so.subject_id = s.subject_id
+     JOIN department_program dp ON s.program_id = dp.program_id
+     LEFT JOIN semester sem ON so.semester_id = sem.semester_id
      LEFT JOIN student_subject ss ON sec.section_id = ss.section_id AND ss.status = 'enrolled'
-     WHERE s.department_id = ? AND sec.status = 'active' $yearFilter $semesterFilter",
+     WHERE dp.department_id = ? AND sec.status = 'active' $yearFilter $semesterFilter",
     [$deptId]
 );
 
@@ -233,7 +251,8 @@ $quizStats = db()->fetchAll(
      FROM quiz q
      JOIN subject s ON q.subject_id = s.subject_id
      LEFT JOIN student_quiz_attempts sqa ON q.quiz_id = sqa.quiz_id
-     WHERE s.department_id = ?
+     JOIN department_program dp ON s.program_id = dp.program_id
+     WHERE dp.department_id = ?
      GROUP BY q.quiz_id
      ORDER BY completed DESC
      LIMIT 20",

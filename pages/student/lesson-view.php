@@ -12,14 +12,6 @@ $lessonId = $_GET['id'] ?? 0;
 
 if (!$lessonId) { header('Location: my-subjects.php'); exit; }
 
-// Check columns
-$lessonCols = array_column(db()->fetchAll("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lessons'") ?: [], 'column_name');
-$topicCols = array_column(db()->fetchAll("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'topic'") ?: [], 'column_name');
-
-$hasObjectives = in_array('learning_objectives', $lessonCols);
-$hasPrerequisite = in_array('prerequisite_lessons_id', $lessonCols);
-$hasDifficulty = in_array('difficulty', $lessonCols);
-$hasVideoUrl = in_array('video_url', $topicCols);
 
 // Get lesson
 $lesson = db()->fetchOne(
@@ -45,7 +37,7 @@ if (!$enrollment) { header('Location: my-subjects.php'); exit; }
 // Check prerequisite
 $prerequisiteMet = true;
 $prerequisiteLesson = null;
-if ($hasPrerequisite && !empty($lesson['prerequisite_lessons_id'])) {
+if (!empty($lesson['prerequisite_lessons_id'])) {
     $prerequisiteLesson = db()->fetchOne("SELECT lessons_id, lesson_title FROM lessons WHERE lessons_id = ?", [$lesson['prerequisite_lessons_id']]);
     $prereqProgress = db()->fetchOne(
         "SELECT * FROM student_progress WHERE user_student_id = ? AND lessons_id = ? AND status = 'completed'",
@@ -70,17 +62,8 @@ $currentIndex = array_search($lessonId, array_column($allLessons, 'lessons_id'))
 $prevLesson = $currentIndex > 0 ? $allLessons[$currentIndex - 1] : null;
 $nextLesson = $currentIndex < count($allLessons) - 1 ? $allLessons[$currentIndex + 1] : null;
 
-// Get topics & attachments
-$topics = db()->fetchAll("SELECT * FROM topic WHERE lessons_id = ? ORDER BY topic_order", [$lessonId]) ?: [];
+// Get attachments
 $attachments = db()->fetchAll("SELECT * FROM lesson_materials WHERE lessons_id = ? ORDER BY uploaded_at", [$lessonId]) ?: [];
-
-function getEmbedUrl($url) {
-    if (empty($url)) return '';
-    if (preg_match('/youtube\.com\/watch\?v=([^&]+)/', $url, $m)) return "https://www.youtube.com/embed/{$m[1]}";
-    if (preg_match('/youtu\.be\/([^?]+)/', $url, $m)) return "https://www.youtube.com/embed/{$m[1]}";
-    if (preg_match('/vimeo\.com\/(\d+)/', $url, $m)) return "https://player.vimeo.com/video/{$m[1]}";
-    return $url;
-}
 
 $pageTitle = $lesson['lesson_title'];
 $currentPage = 'lessons';
@@ -156,7 +139,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                 <div class="lesson-header">
                     <div class="header-badges">
                         <span class="badge-code"><?= e($lesson['subject_code']) ?></span>
-                        <?php if ($hasDifficulty && !empty($lesson['difficulty'])): ?>
+                        <?php if (!empty($lesson['difficulty'])): ?>
                         <span class="badge-level <?= $lesson['difficulty'] ?>"><?= ucfirst($lesson['difficulty']) ?></span>
                         <?php endif; ?>
                         <?php if ($isCompleted): ?>
@@ -190,7 +173,7 @@ include __DIR__ . '/../../includes/sidebar.php';
                 </div>
 
                 <!-- Learning Objectives -->
-                <?php if ($hasObjectives && !empty($lesson['learning_objectives'])): ?>
+                <?php if (!empty($lesson['learning_objectives'])): ?>
                 <div class="objectives-card">
                     <h3>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -217,82 +200,136 @@ include __DIR__ . '/../../includes/sidebar.php';
                 </div>
                 <?php endif; ?>
 
-                <!-- Topics -->
-                <?php if ($topics): ?>
-                <div class="topics-card">
+                <!-- Materials & Resources -->
+                <?php if ($attachments): ?>
+                <?php
+                    // Separate video links from other materials
+                    $videoLinks = [];
+                    $otherMaterials = [];
+                    foreach ($attachments as $f) {
+                        if ($f['material_type'] === 'link' && in_array($f['file_type'], ['youtube', 'vimeo'])) {
+                            $videoLinks[] = $f;
+                        } else {
+                            $otherMaterials[] = $f;
+                        }
+                    }
+                ?>
+
+                <?php if ($videoLinks): ?>
+                <div class="resources-card">
                     <h3>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                         </svg>
-                        Topics (<?= count($topics) ?>)
+                        Video Materials
                     </h3>
-                    <div class="topics-list">
-                        <?php foreach ($topics as $i => $t):
-                            $embedUrl = $hasVideoUrl ? getEmbedUrl($t['video_url'] ?? '') : '';
+                    <div class="video-list">
+                        <?php foreach ($videoLinks as $v):
+                            $embedUrl = '';
+                            $url = $v['file_path'];
+                            if ($v['file_type'] === 'youtube') {
+                                // Extract video ID from various YouTube URL formats
+                                if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/', $url, $m)) {
+                                    $embedUrl = 'https://www.youtube.com/embed/' . $m[1];
+                                }
+                            } elseif ($v['file_type'] === 'vimeo') {
+                                if (preg_match('/vimeo\.com\/(\d+)/', $url, $m)) {
+                                    $embedUrl = 'https://player.vimeo.com/video/' . $m[1];
+                                }
+                            }
                         ?>
-                        <div class="topic-item <?= $i==0?'open':'' ?>" id="topic-<?= $t['topic_id'] ?>">
-                            <button class="topic-header" onclick="toggleTopic(<?= $t['topic_id'] ?>)">
-                                <span class="topic-num"><?= $t['topic_order'] ?></span>
-                                <span class="topic-title"><?= e($t['topic_title']) ?></span>
-                                <?php if ($embedUrl): ?>
-                                <span class="topic-tag">Video</span>
-                                <?php endif; ?>
-                                <svg class="topic-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="6 9 12 15 18 9"/>
-                                </svg>
-                            </button>
-                            <div class="topic-content">
-                                <?php if ($embedUrl): ?>
-                                <div class="video-wrap">
-                                    <iframe src="<?= e($embedUrl) ?>" frameborder="0" allowfullscreen></iframe>
-                                </div>
-                                <?php endif; ?>
-                                <div class="topic-body"><?= $t['topic_content'] ?: '<p class="no-content">No additional content.</p>' ?></div>
-                                <?php if (!empty($t['estimated_time'])): ?>
-                                <div class="topic-time">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <polyline points="12 6 12 12 16 14"/>
-                                    </svg>
-                                    ~<?= $t['estimated_time'] ?> mins
-                                </div>
-                                <?php endif; ?>
+                        <?php if ($embedUrl): ?>
+                        <div class="video-embed">
+                            <div class="video-title"><?= e($v['original_name']) ?></div>
+                            <div class="video-responsive">
+                                <iframe src="<?= e($embedUrl) ?>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                             </div>
                         </div>
+                        <?php else: ?>
+                        <a href="<?= e($url) ?>" class="resource-item" target="_blank" rel="noopener">
+                            <div class="res-icon video-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            </div>
+                            <span class="resource-name"><?= e($v['original_name']) ?></span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                        </a>
+                        <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
                 <?php endif; ?>
 
-                <!-- Resources -->
-                <?php if ($attachments): ?>
+                <?php if ($otherMaterials): ?>
                 <div class="resources-card">
                     <h3>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                         </svg>
-                        Resources
+                        Resources & Files
                     </h3>
                     <div class="resources-list">
-                        <?php foreach ($attachments as $f):
-                            $ext = strtolower(pathinfo($f['file_name'], PATHINFO_EXTENSION));
+                        <?php foreach ($otherMaterials as $f):
+                            $isLink = ($f['material_type'] === 'link');
+                            $isImage = ($f['material_type'] === 'image');
+                            $ext = strtolower(pathinfo($f['original_name'] ?? $f['file_name'], PATHINFO_EXTENSION));
                         ?>
-                        <a href="<?= BASE_URL ?>/uploads/materials/<?= e($f['file_path']) ?>" class="resource-item" target="_blank" download>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                            </svg>
-                            <span class="resource-name"><?= e($f['file_name']) ?></span>
+
+                        <?php if ($isImage && !$isLink): ?>
+                        <!-- Image preview -->
+                        <div class="resource-image-card">
+                            <img src="<?= BASE_URL ?>/<?= e($f['file_path']) ?>" alt="<?= e($f['original_name']) ?>" loading="lazy">
+                            <div class="resource-image-info">
+                                <span class="resource-name"><?= e($f['original_name']) ?></span>
+                                <a href="<?= BASE_URL ?>/<?= e($f['file_path']) ?>" class="res-download-btn" download>Download</a>
+                            </div>
+                        </div>
+
+                        <?php elseif ($isLink): ?>
+                        <!-- External link -->
+                        <a href="<?= e($f['file_path']) ?>" class="resource-item" target="_blank" rel="noopener">
+                            <div class="res-icon link-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                                </svg>
+                            </div>
+                            <div style="flex:1;min-width:0">
+                                <div class="resource-name"><?= e($f['original_name']) ?></div>
+                                <div class="resource-url"><?= e(parse_url($f['file_path'], PHP_URL_HOST) ?: $f['file_path']) ?></div>
+                            </div>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="7 10 12 15 17 10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                             </svg>
                         </a>
+
+                        <?php else: ?>
+                        <!-- File download -->
+                        <a href="<?= BASE_URL ?>/<?= e($f['file_path']) ?>" class="resource-item" target="_blank" download>
+                            <div class="res-icon <?= $ext === 'pdf' ? 'pdf-icon' : ($ext === 'zip' ? 'zip-icon' : 'doc-icon') ?>">
+                                <?php if ($ext === 'pdf'): ?>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                <?php else: ?>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                <?php endif; ?>
+                            </div>
+                            <div style="flex:1;min-width:0">
+                                <div class="resource-name"><?= e($f['original_name'] ?? $f['file_name']) ?></div>
+                                <div class="resource-meta"><?= strtoupper($ext) ?> &middot; <?= $f['file_size'] > 1048576 ? round($f['file_size']/1048576, 1) . ' MB' : round($f['file_size']/1024, 1) . ' KB' ?></div>
+                            </div>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </a>
+                        <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
+                <?php endif; ?>
                 <?php endif; ?>
 
                 <!-- Actions -->
@@ -468,7 +505,6 @@ include __DIR__ . '/../../includes/sidebar.php';
 .lesson-header,
 .objectives-card,
 .content-card,
-.topics-card,
 .resources-card,
 .actions-card {
     background: #fff;
@@ -624,127 +660,6 @@ include __DIR__ . '/../../includes/sidebar.php';
 }
 .content-body pre code { background: none; padding: 0; }
 
-/* Topics */
-.topics-card h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 15px;
-    font-weight: 600;
-    color: #333;
-    margin: 0 0 16px;
-}
-
-.topics-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.topic-item {
-    border: 1px solid #e8e8e8;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.topic-header {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
-    background: #fafafa;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.2s;
-}
-
-.topic-header:hover { background: #f5f5f5; }
-
-.topic-num {
-    width: 28px;
-    height: 28px;
-    background: #1B4D3E;
-    color: #fff;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-.topic-title {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 600;
-    color: #333;
-}
-
-.topic-tag {
-    background: #E3F2FD;
-    color: #1565C0;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-}
-
-.topic-arrow {
-    color: #999;
-    transition: transform 0.2s;
-}
-
-.topic-item.open .topic-arrow { transform: rotate(180deg); }
-
-.topic-content {
-    display: none;
-    padding: 16px;
-    border-top: 1px solid #e8e8e8;
-}
-
-.topic-item.open .topic-content { display: block; }
-
-.video-wrap {
-    position: relative;
-    padding-bottom: 56.25%;
-    height: 0;
-    margin-bottom: 16px;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #000;
-}
-
-.video-wrap iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.topic-body {
-    font-size: 14px;
-    line-height: 1.6;
-    color: #555;
-}
-
-.topic-body .no-content {
-    color: #999;
-    font-style: italic;
-}
-
-.topic-time {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 12px;
-    font-size: 12px;
-    color: #999;
-}
-
 /* Resources */
 .resources-card h3 {
     display: flex;
@@ -778,9 +693,48 @@ include __DIR__ . '/../../includes/sidebar.php';
     background: #E8F5E9;
 }
 
-.resource-item svg:first-child { color: #1B4D3E; }
-.resource-name { flex: 1; font-size: 14px; }
-.resource-item svg:last-child { color: #999; }
+.res-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.res-icon.pdf-icon { background: #FEE2E2; color: #b91c1c; }
+.res-icon.doc-icon { background: #DBEAFE; color: #1E40AF; }
+.res-icon.zip-icon { background: #FEF3C7; color: #92400E; }
+.res-icon.link-icon { background: #EDE9FE; color: #5B21B6; }
+.res-icon.video-icon { background: #FEE2E2; color: #b91c1c; }
+
+.resource-name { font-size: 14px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resource-meta { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+.resource-url { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+.resource-item svg:last-child { color: #999; flex-shrink: 0; }
+
+/* Video Embeds */
+.video-list { display: flex; flex-direction: column; gap: 16px; }
+.video-embed { border: 1px solid #e8e8e8; border-radius: 10px; overflow: hidden; }
+.video-title { padding: 10px 14px; font-size: 13px; font-weight: 600; color: #333; background: #fafafa; border-bottom: 1px solid #e8e8e8; }
+.video-responsive { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; }
+.video-responsive iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* Image Preview */
+.resource-image-card {
+    border: 1px solid #e8e8e8; border-radius: 10px; overflow: hidden;
+    margin-bottom: 8px;
+}
+.resource-image-card img {
+    width: 100%; max-height: 400px; object-fit: contain;
+    display: block; background: #fafafa;
+}
+.resource-image-info {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-top: 1px solid #e8e8e8;
+}
+.res-download-btn {
+    font-size: 12px; font-weight: 600; color: #1B4D3E;
+    text-decoration: none; padding: 4px 12px;
+    border: 1px solid #1B4D3E; border-radius: 6px;
+}
+.res-download-btn:hover { background: #E8F5E9; }
 
 /* Actions */
 .btn-complete {
@@ -922,10 +876,6 @@ include __DIR__ . '/../../includes/sidebar.php';
 </style>
 
 <script>
-function toggleTopic(id) {
-    document.getElementById('topic-' + id).classList.toggle('open');
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('markCompleteBtn');
     if (btn) {

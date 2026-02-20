@@ -52,7 +52,20 @@
       "Bash(mysql -u root cit_lms)",
       "Bash(c:xamppfinalmysqlbinmysql.exe -u root cit_lms -e \"DESCRIBE quiz;\")",
       "Bash(/c/xamppfinal/php/php.exe -r \"require_once ''config/database.php''; $cols = db\\(\\)->fetchAll\\(''SHOW COLUMNS FROM question_option''\\); print_r\\($cols\\);\")",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(curl:*)",
+      "Bash(powershell:*)",
+      "Bash(c:\\\\xamppfinal\\\\php\\\\php.exe:*)",
+      "Bash(del \"c:\\\\xamppfinal\\\\htdocs\\\\COC-LMS\\\\debug_quiz_table.php\")",
+      "Bash(/c/xamppfinal/mysql/bin/mysql:*)",
+      "Bash(\"C:/xamppfinal/mysql/bin/mysql.exe\":*)",
+      "Bash(\"C:/xamppfinal/mysql/bin/mysql.exe\" -u root cit_lms -e \"DESCRIBE student_subject\")",
+      "Bash(\"C:/xamppfinal/mysql/bin/mysql.exe\" -u root cit_lms -e \"SELECT * FROM quiz_questions WHERE quiz_id = 31;\")",
+      "Bash(\"C:/xamppfinal/mysql/bin/mysql.exe\" -u root cit_lms -e \"SELECT * FROM questions ORDER BY questions_id DESC LIMIT 10;\")",
+      "Bash(find:*)",
+      "WebFetch(domain:coc.phinma.edu.ph)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:grokipedia.com)"
     ]
   }
 }

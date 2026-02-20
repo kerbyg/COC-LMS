@@ -76,15 +76,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Generate Profile Initials
-$initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_name'], 0, 1));
-
 include __DIR__ . '/../../includes/header.php';
 include __DIR__ . '/../../includes/instructor_sidebar.php';
 ?>
 
 <main class="main-content">
     <?php include __DIR__ . '/../../includes/topbar.php'; ?>
+
+<?php
+// Re-fetch user data AFTER includes (sidebar/topbar overwrite $user with Auth::user())
+$user = db()->fetchOne("SELECT * FROM users WHERE users_id = ?", [$userId]);
+
+// Generate Profile Initials
+$initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_name'], 0, 1));
+
+// Get department info
+$userDept = null;
+if (!empty($user['department_id'])) {
+    $userDept = db()->fetchOne(
+        "SELECT department_name, department_code FROM department WHERE department_id = ?",
+        [$user['department_id']]
+    );
+}
+?>
 
     <div class="page-content">
         <div class="page-header">
@@ -111,6 +125,13 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                     <h2 class="user-full-name"><?= e($user['first_name'] . ' ' . $user['last_name']) ?></h2>
                     <span class="role-badge">Instructor</span>
                     
+                    <?php if ($userDept): ?>
+                    <div class="dept-info">
+                        <span class="dept-info-code"><?= e($userDept['department_code']) ?></span>
+                        <span class="dept-info-name"><?= e($userDept['department_name']) ?></span>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="quick-stats">
                         <div class="q-stat">
                             <span class="qs-label">Employee ID</span>
@@ -119,6 +140,10 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
                         <div class="q-stat">
                             <span class="qs-label">Email</span>
                             <span class="qs-value"><?= e($user['email']) ?></span>
+                        </div>
+                        <div class="q-stat">
+                            <span class="qs-label">Department</span>
+                            <span class="qs-value"><?= $userDept ? e($userDept['department_name']) : 'Not Assigned' ?></span>
                         </div>
                         <div class="q-stat">
                             <span class="qs-label">Joined</span>
@@ -176,20 +201,18 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 </main>
 
 <style>
-/* Clean Professional Profile Page */
-
 /* Page Header */
 .page-header {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 }
 .page-header h2 {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
-    color: #111827;
+    color: var(--gray-800);
     margin: 0 0 4px;
 }
 .text-muted {
-    color: #6b7280;
+    color: var(--gray-500);
     margin: 0;
     font-size: 14px;
 }
@@ -197,7 +220,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 /* Profile Grid Layout */
 .profile-grid {
     display: grid;
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 300px 1fr;
     gap: 24px;
     align-items: start;
 }
@@ -208,71 +231,98 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
     top: 24px;
 }
 .summary-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 32px 24px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius-lg);
+    padding: 28px 20px;
     text-align: center;
 }
 .avatar-container {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 .profile-avatar {
-    width: 100px;
-    height: 100px;
-    background: #2563eb;
-    color: #ffffff;
+    width: 80px;
+    height: 80px;
+    background: var(--primary);
+    color: var(--white);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 36px;
+    font-size: 28px;
     font-weight: 700;
     margin: 0 auto;
 }
 .user-full-name {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
-    color: #111827;
-    margin: 0 0 12px;
+    color: var(--gray-800);
+    margin: 0 0 8px;
 }
 .role-badge {
     display: inline-block;
-    background: #dbeafe;
-    color: #1e40af;
-    padding: 6px 12px;
+    background: var(--cream-light);
+    color: var(--primary);
+    padding: 4px 12px;
     border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
-    margin-bottom: 24px;
+    margin-bottom: 4px;
+}
+
+/* Department Info */
+.dept-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    padding: 8px 12px;
+    background: var(--primary);
+    border-radius: var(--border-radius);
+}
+.dept-info-code {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cream);
+    background: rgba(255,255,255,0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+.dept-info-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--white);
 }
 
 /* Quick Stats */
 .quick-stats {
-    border-top: 1px solid #e5e7eb;
-    padding-top: 20px;
-    margin-top: 20px;
+    border-top: 1px solid var(--gray-200);
+    padding-top: 16px;
+    margin-top: 16px;
+    text-align: left;
 }
 .q-stat {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 12px 0;
-    border-bottom: 1px solid #f3f4f6;
+    gap: 2px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-100);
 }
 .q-stat:last-child {
     border-bottom: none;
 }
 .qs-label {
-    font-size: 12px;
-    color: #6b7280;
-    font-weight: 500;
+    font-size: 11px;
+    color: var(--gray-400);
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 .qs-value {
     font-size: 14px;
-    color: #111827;
+    color: var(--gray-800);
     font-weight: 500;
     word-break: break-word;
 }
@@ -281,60 +331,61 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 .profile-main {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
 }
 .panel {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius-lg);
     overflow: hidden;
 }
 .panel-head {
-    padding: 20px 24px;
-    border-bottom: 1px solid #e5e7eb;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
 }
 .panel-head h3 {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #111827;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray-800);
 }
 .panel-body {
-    padding: 24px;
-}
-.mb-4 {
-    margin-bottom: 24px;
+    padding: 20px;
 }
 
 /* Form Elements */
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 .field-label {
     display: block;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    color: #374151;
-    margin-bottom: 8px;
+    color: var(--gray-600);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 .field-input {
     width: 100%;
-    padding: 10px 14px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
     font-size: 14px;
-    color: #111827;
-    transition: all 0.2s;
+    color: var(--gray-800);
+    transition: border-color 0.2s;
+    box-sizing: border-box;
 }
 .field-input:focus {
     outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 70, 27, 0.08);
 }
 .grid-2col {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: 16px;
 }
 
 /* Buttons */
@@ -342,34 +393,34 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
 .btn-secondary {
     padding: 10px 20px;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--border-radius);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: 0.2s;
 }
 .btn-primary {
-    background: #2563eb;
-    color: #ffffff;
+    background: var(--primary);
+    color: var(--white);
 }
 .btn-primary:hover {
-    background: #1d4ed8;
+    background: var(--primary-light);
 }
 .btn-secondary {
-    background: #ffffff;
-    color: #374151;
-    border: 1px solid #d1d5db;
+    background: var(--white);
+    color: var(--gray-600);
+    border: 1px solid var(--gray-200);
 }
 .btn-secondary:hover {
-    background: #f9fafb;
-    border-color: #9ca3af;
+    background: var(--gray-50);
+    border-color: var(--gray-300);
 }
 
 /* Alerts */
 .alert {
-    padding: 16px 20px;
-    border-radius: 8px;
-    margin-bottom: 24px;
+    padding: 12px 16px;
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
     font-size: 14px;
 }
 .alert-success {
@@ -383,7 +434,7 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
     border-left: 4px solid #ef4444;
 }
 
-/* Responsive Design */
+/* Responsive */
 @media (max-width: 1024px) {
     .profile-grid {
         grid-template-columns: 1fr;
@@ -392,7 +443,6 @@ include __DIR__ . '/../../includes/instructor_sidebar.php';
         position: static;
     }
 }
-
 @media (max-width: 640px) {
     .grid-2col {
         grid-template-columns: 1fr;

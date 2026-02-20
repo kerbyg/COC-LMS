@@ -87,7 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($action === 'delete_department') {
         $deptId = (int)$_POST['department_id'];
-        $hasPrograms = db()->fetchOne("SELECT COUNT(*) as count FROM program WHERE department_id = ? AND status = 'active'", [$deptId])['count'];
+        // Check if department has active programs via junction table
+        $hasPrograms = db()->fetchOne("SELECT COUNT(*) as count FROM department_program dp JOIN program p ON dp.program_id = p.program_id WHERE dp.department_id = ? AND p.status = 'active'", [$deptId])['count'];
         if ($hasPrograms > 0) {
             $error = "Cannot delete department with active programs.";
         } else {
@@ -100,8 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get departments
 $departments = db()->fetchAll(
-    "SELECT d.*, 
-        (SELECT COUNT(*) FROM program p WHERE p.department_id = d.department_id) as program_count,
+    "SELECT d.*,
+        (SELECT COUNT(*) FROM department_program dp WHERE dp.department_id = d.department_id) as program_count,
         (SELECT COUNT(*) FROM users u WHERE u.department_id = d.department_id) as user_count
      FROM department d ORDER BY d.department_name"
 );

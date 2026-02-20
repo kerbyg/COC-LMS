@@ -73,15 +73,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Generate Profile Initials
-$initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_name'], 0, 1));
-
 include __DIR__ . '/../../includes/header.php';
 include __DIR__ . '/../../includes/sidebar.php';
 ?>
 
 <main class="main-content">
     <?php include __DIR__ . '/../../includes/topbar.php'; ?>
+
+<?php
+// Re-fetch user data AFTER includes (sidebar/topbar overwrite $user with Auth::user())
+$user = db()->fetchOne("SELECT * FROM users WHERE users_id = ?", [$userId]);
+
+// Generate Profile Initials
+$initials = strtoupper(substr($user['first_name'], 0, 1) . substr($user['last_name'], 0, 1));
+
+// Get department info
+$userDept = null;
+if (!empty($user['department_id'])) {
+    $userDept = db()->fetchOne(
+        "SELECT department_name, department_code FROM department WHERE department_id = ?",
+        [$user['department_id']]
+    );
+}
+
+// Get programs under the dean's department
+$deptPrograms = [];
+if (!empty($user['department_id'])) {
+    $deptPrograms = db()->fetchAll(
+        "SELECT p.program_code, p.program_name FROM program p
+         JOIN department_program dp ON p.program_id = dp.program_id
+         WHERE dp.department_id = ? AND p.status = 'active' ORDER BY p.program_code",
+        [$user['department_id']]
+    );
+}
+?>
 
     <div class="page-content">
         <div class="page-header">
@@ -108,6 +133,13 @@ include __DIR__ . '/../../includes/sidebar.php';
                     <h2 class="user-full-name"><?= e($user['first_name'] . ' ' . $user['last_name']) ?></h2>
                     <span class="role-badge">Dean</span>
 
+                    <?php if ($userDept): ?>
+                    <div class="dept-info">
+                        <span class="dept-info-code"><?= e($userDept['department_code']) ?></span>
+                        <span class="dept-info-name"><?= e($userDept['department_name']) ?></span>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="quick-stats">
                         <div class="q-stat">
                             <span class="qs-label">Employee ID</span>
@@ -116,6 +148,14 @@ include __DIR__ . '/../../includes/sidebar.php';
                         <div class="q-stat">
                             <span class="qs-label">Email</span>
                             <span class="qs-value"><?= e($user['email']) ?></span>
+                        </div>
+                        <div class="q-stat">
+                            <span class="qs-label">Department</span>
+                            <span class="qs-value"><?= $userDept ? e($userDept['department_name']) : 'Not Assigned' ?></span>
+                        </div>
+                        <div class="q-stat">
+                            <span class="qs-label">Programs</span>
+                            <span class="qs-value"><?= count($deptPrograms) > 0 ? implode(', ', array_column($deptPrograms, 'program_code')) : 'None' ?></span>
                         </div>
                         <div class="q-stat">
                             <span class="qs-label">Joined</span>
@@ -217,7 +257,7 @@ include __DIR__ . '/../../includes/sidebar.php';
 .profile-avatar {
     width: 100px;
     height: 100px;
-    background: #2563eb;
+    background: #1B4D3E;
     color: #ffffff;
     border-radius: 50%;
     display: flex;
@@ -235,13 +275,35 @@ include __DIR__ . '/../../includes/sidebar.php';
 }
 .role-badge {
     display: inline-block;
-    background: #fee2e2;
-    color: #991b1b;
+    background: #E8F5E9;
+    color: #1B4D3E;
     padding: 6px 12px;
     border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
+}
+
+/* Department Info Badge */
+.dept-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.dept-info-code {
+    background: #1B4D3E;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.dept-info-name {
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
 }
 
 /* Quick Stats */
@@ -325,8 +387,8 @@ include __DIR__ . '/../../includes/sidebar.php';
 }
 .field-input:focus {
     outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: #1B4D3E;
+    box-shadow: 0 0 0 3px rgba(27, 77, 62, 0.1);
 }
 .grid-2col {
     display: grid;
@@ -346,11 +408,11 @@ include __DIR__ . '/../../includes/sidebar.php';
     transition: all 0.2s;
 }
 .btn-primary {
-    background: #2563eb;
+    background: #1B4D3E;
     color: #ffffff;
 }
 .btn-primary:hover {
-    background: #1d4ed8;
+    background: #2D6A4F;
 }
 .btn-secondary {
     background: #ffffff;
