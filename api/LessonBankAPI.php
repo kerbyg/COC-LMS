@@ -19,12 +19,28 @@ Auth::requireRole('instructor');
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_lbPerms = [
+    'browse'   => 'lessons.view',
+    'my-bank'  => 'lessons.view',
+    'subjects' => 'lessons.view',
+    'publish'  => 'lessons.create',
+    'copy'     => 'lessons.create',
+    'delete'   => 'lessons.delete',
+];
+if (isset($_lbPerms[$action]) && !Auth::can($_lbPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_lbPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'browse':    browseBank();    break;
     case 'my-bank':   myBank();        break;
     case 'publish':   publishLesson(); break;
     case 'copy':      copyLesson();    break;
     case 'delete':    deleteLesson();  break;
+    case 'subjects':  bankSubjects();  break;
     default:
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
@@ -105,11 +121,11 @@ function publishLesson() {
     $isMultipart = strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart') !== false;
     $data = $isMultipart ? $_POST : (json_decode(file_get_contents('php://input'), true) ?? []);
 
-    // Support publishing from an existing lesson_id
-    if (!empty($data['lesson_id'])) {
-        $lessonId = (int)$data['lesson_id'];
+    // Support publishing from an existing lessons_id
+    if (!empty($data['lessons_id'])) {
+        $lessonId = (int)$data['lessons_id'];
         $existing = db()->fetchOne(
-            "SELECT * FROM lessons WHERE lesson_id = ? AND user_teacher_id = ?",
+            "SELECT * FROM lessons WHERE lessons_id = ? AND user_teacher_id = ?",
             [$lessonId, $userId]
         );
         if (!$existing) {
@@ -274,6 +290,21 @@ function copyLesson() {
         error_log('LessonBank copy: ' . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Failed to copy lesson']);
     }
+}
+
+// ─── Subjects: distinct subjects visible in lesson bank ──────────────────────
+
+function bankSubjects() {
+    $userId = Auth::id();
+    $subjects = db()->fetchAll(
+        "SELECT DISTINCT s.subject_id, s.subject_code, s.subject_name
+         FROM lesson_bank lb
+         JOIN subject s ON lb.subject_id = s.subject_id
+         WHERE lb.visibility = 'public' OR lb.created_by = ?
+         ORDER BY s.subject_code",
+        [$userId]
+    );
+    echo json_encode(['success' => true, 'data' => $subjects ?: []]);
 }
 
 // ─── Delete: remove own bank lesson ─────────────────────────────────────────

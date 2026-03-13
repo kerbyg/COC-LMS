@@ -92,11 +92,13 @@ async function renderList(container) {
                         <td><span class="dept-code">${esc(d.department_code)}</span></td>
                         <td><div class="dept-name">${esc(d.department_name)}</div>${d.description ? `<div class="dept-desc">${esc(d.description)}</div>` : ''}</td>
                         <td>${esc(d.campus_name || '—')}</td>
-                        <td><span class="program-badge">${d.program_count} programs</span></td>
+                        <td><a class="program-badge" href="#admin/programs?department_id=${d.department_id}" style="cursor:pointer;text-decoration:none;">${d.program_count} programs</a></td>
                         <td><span class="badge badge-${d.status}">${d.status}</span></td>
                         <td class="actions-cell">
                             <button class="btn-actions" data-id="${d.department_id}">⋮</button>
                             <div class="actions-dropdown" data-dropdown="${d.department_id}">
+                                <a href="#admin/programs?department_id=${d.department_id}" data-programs="${d.department_id}">📋 Programs</a>
+                                <div class="divider"></div>
                                 <a href="#" data-edit='${JSON.stringify({id:d.department_id,campus_id:d.campus_id,department_code:d.department_code,department_name:d.department_name,description:d.description||'',status:d.status})}'>✏️ Edit</a>
                                 <div class="divider"></div>
                                 <a href="#" class="danger" data-delete="${d.department_id}" data-name="${esc(d.department_name)}">🗑️ Deactivate</a>

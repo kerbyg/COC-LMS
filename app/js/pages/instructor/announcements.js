@@ -22,33 +22,38 @@ async function renderList(container, filterSubject = '', filterStatus = '') {
 
     container.innerHTML = `
         <style>
-            .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
-            .page-header h2 { font-size:22px; font-weight:700; color:#262626; }
-            .page-header .count { background:#E8F5E9; color:#1B4D3E; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; margin-left:8px; }
-            .btn-primary { background:linear-gradient(135deg,#00461B,#006428); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; }
-            .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,70,27,.3); }
+            .ac-banner { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:28px 32px; margin-bottom:24px; position:relative; overflow:hidden; }
+            .ac-banner::before { content:''; position:absolute; top:-40px; right:-40px; width:180px; height:180px; border-radius:50%; background:rgba(255,255,255,.07); pointer-events:none; }
+            .ac-banner::after { content:''; position:absolute; bottom:-60px; left:60px; width:220px; height:220px; border-radius:50%; background:rgba(255,255,255,.05); pointer-events:none; }
+            .ac-banner-inner { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; position:relative; z-index:1; }
+            .ac-banner-title { font-size:26px; font-weight:800; color:#fff; margin:0 0 4px; }
+            .ac-banner-sub { font-size:14px; color:rgba(255,255,255,.75); margin:0; }
+            .btn-primary { background:#fff; color:#1B4D3E; border:none; padding:10px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; transition:all .15s; }
+            .btn-primary:hover { background:#f0fdf4; transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.15); }
 
-            .filters { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
-            .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:200px; }
+            .ac-filter-bar { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+            .ac-filter-bar select { padding:9px 14px; border:1px solid #e8ecef; border-radius:10px; font-size:13px; min-width:200px; background:#fff; color:#374151; outline:none; transition:border-color .15s; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+            .ac-filter-bar select:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
 
             .ann-list { display:flex; flex-direction:column; gap:12px; }
-            .ann-card { background:#fff; border:1px solid #e8e8e8; border-radius:14px; padding:20px; transition:border-color .2s; }
-            .ann-card:hover { border-color:#1B4D3E; }
+            .ann-card { background:#fff; border:1px solid #f1f5f9; border-radius:14px; padding:20px; transition:all .2s; box-shadow:0 1px 3px rgba(0,0,0,.07); }
+            .ann-card:hover { box-shadow:0 6px 20px rgba(0,0,0,.09); transform:translateY(-1px); }
             .ann-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
-            .ann-title { font-size:16px; font-weight:700; color:#262626; }
+            .ann-title { font-size:16px; font-weight:700; color:#111827; }
             .ann-badges { display:flex; gap:6px; }
             .badge { padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; text-transform:capitalize; }
-            .badge-published { background:#E8F5E9; color:#1B4D3E; }
+            .badge-published { background:#dcfce7; color:#16a34a; }
             .badge-draft { background:#FEF3C7; color:#B45309; }
             .badge-subject { background:#DBEAFE; color:#1E40AF; }
 
-            .ann-content { font-size:14px; color:#404040; line-height:1.6; margin-bottom:12px; max-height:80px; overflow:hidden; }
+            .ann-content { font-size:14px; color:#374151; line-height:1.6; margin-bottom:12px; max-height:80px; overflow:hidden; }
             .ann-footer { display:flex; justify-content:space-between; align-items:center; }
-            .ann-meta { font-size:12px; color:#737373; }
+            .ann-meta { font-size:12px; color:#9ca3af; }
             .ann-actions { display:flex; gap:8px; }
-            .btn-sm { padding:6px 14px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid #e0e0e0; background:#fff; color:#404040; }
-            .btn-sm:hover { background:#f5f5f5; }
+            .btn-sm { padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid #e8ecef; background:#fff; color:#374151; transition:all .15s; }
+            .btn-sm:hover { background:#f8fafc; border-color:#d1d5db; }
             .btn-sm.danger { color:#b91c1c; border-color:#fecaca; }
+            .btn-sm.danger:hover { background:#FEE2E2; }
 
             .modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
             .modal { background:#fff; border-radius:16px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; }
@@ -60,20 +65,25 @@ async function renderList(container, filterSubject = '', filterStatus = '') {
             .form-group { margin-bottom:16px; }
             .form-label { display:block; font-size:13px; font-weight:600; color:#404040; margin-bottom:6px; }
             .form-input, .form-select, .form-textarea { width:100%; padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; box-sizing:border-box; font-family:inherit; }
-            .form-input:focus, .form-select:focus, .form-textarea:focus { outline:none; border-color:#00461B; }
+            .form-input:focus, .form-select:focus, .form-textarea:focus { outline:none; border-color:#1B4D3E; }
             .btn-secondary { background:#f5f5f5; color:#404040; border:1px solid #e0e0e0; padding:9px 18px; border-radius:8px; font-weight:500; cursor:pointer; font-size:14px; }
             .alert { padding:12px 16px; border-radius:10px; margin-bottom:16px; font-size:14px; }
             .alert-error { background:#FEE2E2; color:#b91c1c; }
-            .empty-state-sm { text-align:center; padding:40px; color:#737373; }
+            .empty-state-sm { text-align:center; padding:40px; color:#9ca3af; }
             @media(max-width:768px) { .ann-top { flex-direction:column; gap:8px; } }
         </style>
 
-        <div class="page-header">
-            <h2>Announcements <span class="count">${announcements.length}</span></h2>
-            <button class="btn-primary" id="btn-add">+ New Announcement</button>
+        <div class="ac-banner">
+            <div class="ac-banner-inner">
+                <div>
+                    <h2 class="ac-banner-title">Announcements <span style="font-size:16px;font-weight:600;opacity:.8;">(${announcements.length})</span></h2>
+                    <p class="ac-banner-sub">Post updates and notices to your students</p>
+                </div>
+                <button class="btn-primary" id="btn-add">+ New Announcement</button>
+            </div>
         </div>
 
-        <div class="filters">
+        <div class="ac-filter-bar">
             <select id="filter-subject">
                 <option value="">All Subjects</option>
                 ${subjects.map(s => `<option value="${s.subject_id}" ${filterSubject==s.subject_id?'selected':''}>${esc(s.subject_code)} - ${esc(s.subject_name)}</option>`).join('')}

@@ -3,7 +3,7 @@
  */
 import { Api } from '../../api.js';
 
-let mySubjects        = [];
+let mySubjects        = [];   // instructor's own subjects (for publish modals)
 let myQuizzes         = [];
 let section           = 'lessons';   // 'lessons' | 'questions'
 let activeTab         = 'browse';    // 'browse' | 'mine'
@@ -11,12 +11,14 @@ let searchTimer       = null;
 let closeMenusHandler = null;        // tracks document click listener for kebab menus
 
 export async function render(container) {
-    const [subjRes, quizRes] = await Promise.all([
+    const [subjRes, quizRes, bankSubjRes] = await Promise.all([
         Api.get('/LessonsAPI.php?action=subjects'),
-        Api.get('/QuestionBankAPI.php?action=my-quizzes')
+        Api.get('/QuestionBankAPI.php?action=my-quizzes'),
+        Api.get('/LessonBankAPI.php?action=subjects')
     ]);
     mySubjects = subjRes.success ? subjRes.data : [];
     myQuizzes  = quizRes.success ? quizRes.data : [];
+    const initBankSubjects = bankSubjRes.success ? bankSubjRes.data : [];
 
     container.innerHTML = `
         <style>
@@ -160,6 +162,20 @@ export async function render(container) {
             .cb-group-body { display:none; border-top:1px solid #f0f0f0; }
             .cb-group.open .cb-group-body { display:block; }
 
+            /* Lesson sub-groups inside each subject group */
+            .cb-lesson-group { border-bottom:1px solid #f0f0f0; }
+            .cb-lesson-group:last-child { border-bottom:none; }
+            .cb-lesson-header { display:flex; align-items:center; gap:8px; padding:9px 20px 9px 24px; cursor:pointer; background:#f7fbf9; user-select:none; border-left:3px solid #b7dfca; }
+            .cb-lesson-header:hover { background:#edf7f2; }
+            .cb-lesson-icon { font-size:13px; flex-shrink:0; }
+            .cb-lesson-title { font-size:12px; font-weight:700; color:#2D6A4F; flex:1; text-transform:uppercase; letter-spacing:.4px; }
+            .cb-lesson-count { font-size:11px; color:#888; background:#e8e8e8; padding:2px 8px; border-radius:10px; white-space:nowrap; }
+            .cb-lesson-chevron { font-size:11px; color:#aaa; transition:transform .2s; }
+            .cb-lesson-group.open .cb-lesson-chevron { transform:rotate(90deg); }
+            .cb-lesson-body { display:none; }
+            .cb-lesson-group.open .cb-lesson-body { display:block; }
+            .cb-lesson-body .cb-q-row { padding-left:36px; }
+
             /* Question rows inside group */
             .cb-q-row { display:flex; align-items:flex-start; gap:12px; padding:14px 20px; border-bottom:1px solid #f5f5f5; transition:background .1s; cursor:pointer; }
             .cb-q-row:last-child { border-bottom:none; }
@@ -204,7 +220,7 @@ export async function render(container) {
             <input type="text" class="cb-search" id="cb-search" placeholder="Search...">
             <select class="cb-select" id="cb-subject">
                 <option value="">All Subjects</option>
-                ${mySubjects.map(s => `<option value="${s.subject_id}">${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`).join('')}
+                ${initBankSubjects.map(s => `<option value="${s.subject_id}">${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`).join('')}
             </select>
             <select class="cb-select" id="cb-type" style="display:none;">
                 <option value="">All Types</option>
@@ -220,13 +236,17 @@ export async function render(container) {
 
     // Section switching
     container.querySelectorAll('.cb-section-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             container.querySelectorAll('.cb-section-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             section = btn.dataset.section;
             const typeFilter = document.getElementById('cb-type');
             if (typeFilter) typeFilter.style.display = section === 'questions' ? '' : 'none';
             document.getElementById('cb-search').placeholder = section === 'lessons' ? 'Search lessons...' : 'Search questions...';
+            // Reload subject filter with subjects from the selected bank section
+            const bankApi = section === 'lessons' ? '/LessonBankAPI.php?action=subjects' : '/QuestionBankAPI.php?action=subjects';
+            const sRes = await Api.get(bankApi);
+            refreshSubjectDropdown(sRes.success ? sRes.data : []);
             loadContent();
         });
     });
@@ -250,10 +270,11 @@ export async function render(container) {
     document.getElementById('cb-subject').addEventListener('change', loadContent);
     document.getElementById('cb-type').addEventListener('change', loadContent);
 
-    // Publish button
+    // Publish button — pre-fill subject from the active browse filter
     document.getElementById('cb-publish-btn').addEventListener('click', () => {
-        if (section === 'lessons') openLessonPublishModal(container);
-        else openQuestionPublishModal(container);
+        const activeSubject = document.getElementById('cb-subject')?.value || '';
+        if (section === 'lessons') openLessonPublishModal(container, activeSubject);
+        else openQuestionPublishModal(container, activeSubject);
     });
 
     loadContent();
@@ -277,6 +298,11 @@ async function loadLessons(wrap) {
     if (activeTab === 'browse') {
         const search    = document.getElementById('cb-search')?.value  || '';
         const subjectId = document.getElementById('cb-subject')?.value || '';
+        // Show prompt when no subject is selected and no search term
+        if (!subjectId && !search) {
+            wrap.innerHTML = pickSubjectHtml('lesson');
+            return;
+        }
         let url = '/LessonBankAPI.php?action=browse';
         if (search)    url += '&search='    + encodeURIComponent(search);
         if (subjectId) url += '&subject_id=' + subjectId;
@@ -293,6 +319,11 @@ async function loadQuestions(wrap) {
         const search    = document.getElementById('cb-search')?.value  || '';
         const subjectId = document.getElementById('cb-subject')?.value || '';
         const type      = document.getElementById('cb-type')?.value    || '';
+        // Show prompt when no subject is selected and no search term
+        if (!subjectId && !search) {
+            wrap.innerHTML = pickSubjectHtml('question');
+            return;
+        }
         let url = '/QuestionBankAPI.php?action=browse';
         if (search)    url += '&search='    + encodeURIComponent(search);
         if (subjectId) url += '&subject_id=' + subjectId;
@@ -312,8 +343,7 @@ function renderLessonBrowse(wrap, lessons) {
         wrap.innerHTML = emptyHtml('📭', 'No lessons found', 'Try a different search, or be the first to publish a lesson!');
         return;
     }
-    wrap.innerHTML = `<div class="cb-grid">${lessons.map(l => lessonCard(l)).join('')}</div>`;
-    bindLessonEvents(wrap, lessons);
+    renderLessonGroups(wrap, lessons);
 }
 
 function renderLessonMine(wrap, lessons) {
@@ -321,7 +351,45 @@ function renderLessonMine(wrap, lessons) {
         wrap.innerHTML = emptyHtml('✏️', "You haven't published any lessons yet", 'Click "+ Publish" to share a lesson with other instructors.');
         return;
     }
-    wrap.innerHTML = `<div class="cb-grid">${lessons.map(l => lessonCard(l)).join('')}</div>`;
+    renderLessonGroups(wrap, lessons);
+}
+
+function renderLessonGroups(wrap, lessons) {
+    // Group lessons by subject
+    const groups = new Map();
+    for (const l of lessons) {
+        const key   = l.subject_id || '__none__';
+        const label = l.subject_name || 'General / No Subject';
+        const code  = l.subject_code || '';
+        if (!groups.has(key)) groups.set(key, { label, code, lessons: [] });
+        groups.get(key).lessons.push(l);
+    }
+
+    let html = '';
+    for (const [, grp] of groups) {
+        html += `
+        <div class="cb-group">
+            <div class="cb-group-header">
+                <span class="cb-group-icon">📚</span>
+                <div class="cb-group-info">
+                    <div class="cb-group-name">${esc(grp.label)}</div>
+                    ${grp.code ? `<div class="cb-group-code">${esc(grp.code)}</div>` : ''}
+                </div>
+                <span class="cb-group-count">${grp.lessons.length} lesson${grp.lessons.length !== 1 ? 's' : ''}</span>
+                <span class="cb-group-chevron">▶</span>
+            </div>
+            <div class="cb-group-body" style="padding:16px 20px;">
+                <div class="cb-grid">${grp.lessons.map(l => lessonCard(l)).join('')}</div>
+            </div>
+        </div>`;
+    }
+
+    wrap.innerHTML = html;
+
+    wrap.querySelectorAll('.cb-group-header').forEach(hdr => {
+        hdr.addEventListener('click', () => hdr.closest('.cb-group').classList.toggle('open'));
+    });
+
     bindLessonEvents(wrap, lessons);
 }
 
@@ -409,62 +477,94 @@ function renderQuestionMine(wrap, questions) {
 }
 
 function renderQuestionGroups(wrap, questions) {
-    // Group by subject
+    // Group by subject → then by lesson within each subject
     const groups = new Map();
     for (const q of questions) {
-        const key   = q.subject_id || '__none__';
-        const label = q.subject_name || 'General / No Subject';
-        const code  = q.subject_code || '';
-        if (!groups.has(key)) groups.set(key, { label, code, questions: [] });
-        groups.get(key).questions.push(q);
+        const subjKey   = q.subject_id || '__none__';
+        const subjLabel = q.subject_name || 'General / No Subject';
+        const subjCode  = q.subject_code || '';
+        if (!groups.has(subjKey)) groups.set(subjKey, { label: subjLabel, code: subjCode, lessons: new Map() });
+
+        const lessonKey   = q.lessons_id || '__general__';
+        const lessonTitle = q.lesson_title || null;
+        const lessonMap   = groups.get(subjKey).lessons;
+        if (!lessonMap.has(lessonKey)) lessonMap.set(lessonKey, { title: lessonTitle, questions: [] });
+        lessonMap.get(lessonKey).questions.push(q);
     }
 
     const typeLabel = { multiple_choice:'Multiple Choice', true_false:'True/False', short_answer:'Short Answer', essay:'Essay' };
 
+    const qRow = (q, i) => `
+        <div class="cb-q-row" data-qbank="${q.qbank_id}">
+            <span class="cb-q-num">${i + 1}</span>
+            <div class="cb-q-main">
+                <div class="cb-q-text">${esc(q.question_text)}</div>
+                <div class="cb-q-badges">
+                    <span class="cb-type-badge">${typeLabel[q.question_type] || q.question_type}</span>
+                    <span style="font-size:11px;color:#888;">${q.points} pt${q.points != 1 ? 's' : ''}</span>
+                    <span class="cb-vis-badge ${q.visibility}">${q.visibility}</span>
+                    ${q.first_name ? `<span style="font-size:11px;color:#aaa;">by ${esc(q.first_name + ' ' + q.last_name)}</span>` : ''}
+                </div>
+                ${(q.options || []).length ? `<div class="cb-q-opts" style="display:none;">
+                    ${q.options.map(o => `<div class="cb-q-opt ${o.is_correct ? 'correct' : ''}"><span class="dot"></span>${esc(o.option_text)}</div>`).join('')}
+                </div>` : ''}
+            </div>
+            <div class="cb-q-actions">
+                ${!q.is_own ? `<button class="cb-btn cb-btn-copy" data-q-copy="${q.qbank_id}" data-qtitle="${esc(q.question_text)}">Copy</button>` : ''}
+                ${q.is_own  ? `<button class="cb-btn cb-btn-delete" data-q-delete="${q.qbank_id}">Remove</button>` : ''}
+            </div>
+        </div>`;
+
     let html = '';
-    let first = true;
     for (const [, grp] of groups) {
+        const allIds     = [...grp.lessons.values()].flatMap(l => l.questions.map(q => q.qbank_id));
+        const totalCount = allIds.length;
+
+        // Named lessons alphabetically, General last
+        const lessonEntries = [...grp.lessons.entries()].sort(([ka, la], [kb, lb]) => {
+            if (ka === '__general__') return 1;
+            if (kb === '__general__') return -1;
+            return (la.title || '').localeCompare(lb.title || '');
+        });
+
+        const lessonsHtml = lessonEntries.map(([lessonKey, ld]) => {
+            const isGeneral = lessonKey === '__general__';
+            const title     = isGeneral ? 'General' : (ld.title || 'Untitled Lesson');
+            return `
+            <div class="cb-lesson-group open">
+                <div class="cb-lesson-header">
+                    <span class="cb-lesson-icon">${isGeneral ? '📂' : '📖'}</span>
+                    <span class="cb-lesson-title">${esc(title)}</span>
+                    <span class="cb-lesson-count">${ld.questions.length} question${ld.questions.length !== 1 ? 's' : ''}</span>
+                    <span class="cb-lesson-chevron">▶</span>
+                </div>
+                <div class="cb-lesson-body">
+                    ${ld.questions.map((q, i) => qRow(q, i)).join('')}
+                </div>
+            </div>`;
+        }).join('');
+
         html += `
-        <div class="cb-group ${first ? 'open' : ''}">
+        <div class="cb-group">
             <div class="cb-group-header">
                 <span class="cb-group-icon">📚</span>
                 <div class="cb-group-info">
                     <div class="cb-group-name">${esc(grp.label)}</div>
                     ${grp.code ? `<div class="cb-group-code">${esc(grp.code)}</div>` : ''}
                 </div>
-                <span class="cb-group-count">${grp.questions.length} question${grp.questions.length !== 1 ? 's' : ''}</span>
-                <button class="cb-copy-all-btn" data-ids='${JSON.stringify(grp.questions.map(q => q.qbank_id))}' data-label="${esc(grp.label)}">Copy All</button>
+                <span class="cb-group-count">${totalCount} question${totalCount !== 1 ? 's' : ''}</span>
+                <button class="cb-copy-all-btn" data-ids='${JSON.stringify(allIds)}' data-label="${esc(grp.label)}">Copy All</button>
                 <span class="cb-group-chevron">▶</span>
             </div>
             <div class="cb-group-body">
-                ${grp.questions.map((q, i) => `
-                <div class="cb-q-row" data-qbank="${q.qbank_id}">
-                    <span class="cb-q-num">${i + 1}</span>
-                    <div class="cb-q-main">
-                        <div class="cb-q-text">${esc(q.question_text)}</div>
-                        <div class="cb-q-badges">
-                            <span class="cb-type-badge">${typeLabel[q.question_type] || q.question_type}</span>
-                            <span style="font-size:11px;color:#888;">${q.points} pt${q.points != 1 ? 's' : ''}</span>
-                            <span class="cb-vis-badge ${q.visibility}">${q.visibility}</span>
-                            ${q.first_name ? `<span style="font-size:11px;color:#aaa;">by ${esc(q.first_name + ' ' + q.last_name)}</span>` : ''}
-                        </div>
-                        ${(q.options || []).length ? `<div class="cb-q-opts" style="display:none;">
-                            ${(q.options).map(o => `<div class="cb-q-opt ${o.is_correct ? 'correct' : ''}"><span class="dot"></span>${esc(o.option_text)}</div>`).join('')}
-                        </div>` : ''}
-                    </div>
-                    <div class="cb-q-actions">
-                        ${!q.is_own ? `<button class="cb-btn cb-btn-copy" data-q-copy="${q.qbank_id}" data-qtitle="${esc(q.question_text)}">Copy</button>` : ''}
-                        ${q.is_own  ? `<button class="cb-btn cb-btn-delete" data-q-delete="${q.qbank_id}">Remove</button>` : ''}
-                    </div>
-                </div>`).join('')}
+                ${lessonsHtml}
             </div>
         </div>`;
-        first = false;
     }
 
     wrap.innerHTML = html;
 
-    // Toggle group open/close (but not when clicking Copy All)
+    // Toggle subject group open/close
     wrap.querySelectorAll('.cb-group-header').forEach(hdr => {
         hdr.addEventListener('click', e => {
             if (e.target.closest('.cb-copy-all-btn')) return;
@@ -472,20 +572,25 @@ function renderQuestionGroups(wrap, questions) {
         });
     });
 
+    // Toggle lesson sub-group open/close
+    wrap.querySelectorAll('.cb-lesson-header').forEach(hdr => {
+        hdr.addEventListener('click', () => {
+            hdr.closest('.cb-lesson-group').classList.toggle('open');
+        });
+    });
+
     // Copy All button
     wrap.querySelectorAll('.cb-copy-all-btn').forEach(btn => {
         btn.addEventListener('click', e => {
             e.stopPropagation();
-            const ids   = JSON.parse(btn.dataset.ids);
-            const label = btn.dataset.label;
-            openGroupCopyModal(ids, label);
+            openGroupCopyModal(JSON.parse(btn.dataset.ids), btn.dataset.label);
         });
     });
 
-    // Toggle options inline (click row body, not buttons)
+    // Toggle answer options inline
     wrap.querySelectorAll('.cb-q-row').forEach(row => {
         row.addEventListener('click', e => {
-            if (e.target.closest('.cb-q-actions')) return; // don't interfere with buttons
+            if (e.target.closest('.cb-q-actions')) return;
             const opts = row.querySelector('.cb-q-opts');
             if (opts) {
                 const open = opts.style.display !== 'none';
@@ -512,7 +617,7 @@ function renderQuestionGroups(wrap, questions) {
 
 // ─── Lesson Modals ────────────────────────────────────────────────────────────
 
-function openLessonPublishModal(container) {
+function openLessonPublishModal(_container, preSelectedSubjectId = '') {
     const overlay = createOverlay(`
         <div class="cb-modal">
             <div class="cb-modal-header">
@@ -521,104 +626,114 @@ function openLessonPublishModal(container) {
             </div>
             <div class="cb-modal-body">
                 <div id="lp-alert"></div>
+                <p style="font-size:13px;color:#666;margin:0 0 18px;line-height:1.5;">Select one of your existing lessons to share in the Content Bank. Other instructors can discover and copy it to their own classes.</p>
                 <div class="cb-form-group">
-                    <label>Lesson Title *</label>
-                    <input type="text" class="cb-input" id="lp-title" placeholder="e.g. Introduction to Binary Numbers" maxlength="200">
+                    <label>Subject *</label>
+                    <select class="cb-form-select" id="lp-subject">
+                        <option value="">-- Select Subject --</option>
+                        ${mySubjects.map(s => `<option value="${s.subject_id}" ${preSelectedSubjectId == s.subject_id ? 'selected' : ''}>${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`).join('')}
+                    </select>
                 </div>
                 <div class="cb-form-group">
-                    <label>Short Description</label>
-                    <textarea class="cb-textarea" id="lp-desc" rows="2" placeholder="Brief summary of what this lesson covers..."></textarea>
+                    <label>Lesson *</label>
+                    <select class="cb-form-select" id="lp-lesson" disabled>
+                        <option value="">-- Select a subject first --</option>
+                    </select>
+                </div>
+                <div id="lp-preview" style="display:none;margin-bottom:16px;padding:14px 16px;background:#f7fbf9;border:1px solid #b7dfca;border-radius:10px;">
+                    <div style="font-size:13px;font-weight:700;color:#1B4D3E;margin-bottom:5px;" id="lp-prev-title"></div>
+                    <div style="font-size:12px;color:#555;line-height:1.5;" id="lp-prev-desc"></div>
+                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;" id="lp-prev-meta"></div>
                 </div>
                 <div class="cb-form-group">
-                    <label>Lesson Content</label>
-                    <textarea class="cb-textarea" id="lp-content" rows="4" placeholder="Paste or type the lesson content here..."></textarea>
-                </div>
-                <div class="cb-form-group">
-                    <label>Attachment (Optional)</label>
-                    <div class="cb-att-type-row">
-                        <label class="cb-att-radio"><input type="radio" name="lp-att-type" value="none" checked> None</label>
-                        <label class="cb-att-radio"><input type="radio" name="lp-att-type" value="file"> Upload File</label>
-                        <label class="cb-att-radio"><input type="radio" name="lp-att-type" value="link"> Add Link</label>
-                    </div>
-                    <div id="lp-att-file" style="display:none;margin-top:10px;">
-                        <input type="file" class="cb-att-file-input" id="lp-file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif">
-                        <p class="cb-att-hint">Accepted: PDF, Word (.doc/.docx), Images (PNG/JPG/GIF) · Max 10MB</p>
-                    </div>
-                    <div id="lp-att-link" style="display:none;margin-top:10px;">
-                        <input type="text" class="cb-input" id="lp-link-url" placeholder="https://drive.google.com/... or any URL">
-                        <input type="text" class="cb-input" id="lp-link-name" placeholder="Link title (e.g. Week 1 Slides)" style="margin-top:6px;">
-                    </div>
-                </div>
-                <div class="cb-row">
-                    <div class="cb-form-group">
-                        <label>Subject (optional)</label>
-                        <select class="cb-form-select" id="lp-subject">
-                            <option value="">-- General --</option>
-                            ${mySubjects.map(s => `<option value="${s.subject_id}">${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="cb-form-group">
-                        <label>Visibility</label>
-                        <select class="cb-form-select" id="lp-vis">
-                            <option value="public">Public</option>
-                            <option value="private">Private (only me)</option>
-                        </select>
-                    </div>
+                    <label>Visibility</label>
+                    <select class="cb-form-select" id="lp-vis">
+                        <option value="public">Public — any instructor can browse &amp; copy</option>
+                        <option value="private">Private — only visible to me</option>
+                    </select>
                 </div>
             </div>
             <div class="cb-modal-footer">
                 <button class="btn-outline-sm modal-cancel">Cancel</button>
-                <button class="btn-primary-sm" id="lp-save">Publish Lesson</button>
+                <button class="btn-primary-sm" id="lp-save" disabled>Publish Lesson</button>
             </div>
         </div>`);
 
-    // Show/hide attachment sections
-    overlay.querySelectorAll('input[name="lp-att-type"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-            overlay.querySelector('#lp-att-file').style.display = radio.value === 'file' ? 'block' : 'none';
-            overlay.querySelector('#lp-att-link').style.display = radio.value === 'link' ? 'block' : 'none';
-        });
+    let allLessons = [];
+    const subjectSel = overlay.querySelector('#lp-subject');
+    const lessonSel  = overlay.querySelector('#lp-lesson');
+    const saveBtn    = overlay.querySelector('#lp-save');
+    const preview    = overlay.querySelector('#lp-preview');
+
+    async function loadLessons(subjectId) {
+        lessonSel.innerHTML = '<option value="">Loading…</option>';
+        lessonSel.disabled = true;
+        saveBtn.disabled = true;
+        preview.style.display = 'none';
+
+        const res = await Api.get(`/LessonsAPI.php?action=instructor-lessons&subject_id=${subjectId}`);
+        allLessons = res.success ? res.data : [];
+
+        if (!allLessons.length) {
+            lessonSel.innerHTML = '<option value="">No lessons found for this subject</option>';
+            return;
+        }
+        lessonSel.innerHTML = '<option value="">-- Select Lesson --</option>' +
+            allLessons.map(l => `<option value="${l.lessons_id}">${esc(l.lesson_title)}${l.status === 'draft' ? ' (draft)' : ''}</option>`).join('');
+        lessonSel.disabled = false;
+    }
+
+    function showPreview(lessonId) {
+        const lesson = allLessons.find(l => String(l.lessons_id) === String(lessonId));
+        if (!lesson) { preview.style.display = 'none'; saveBtn.disabled = true; return; }
+
+        overlay.querySelector('#lp-prev-title').textContent = lesson.lesson_title;
+        overlay.querySelector('#lp-prev-desc').textContent  = lesson.lesson_description
+            ? (lesson.lesson_description.length > 160
+                ? lesson.lesson_description.slice(0, 160) + '…'
+                : lesson.lesson_description)
+            : 'No description provided.';
+        const statusColor = lesson.status === 'published' ? '#1B4D3E' : '#B45309';
+        const statusBg    = lesson.status === 'published' ? '#E8F5E9' : '#FEF3C7';
+        overlay.querySelector('#lp-prev-meta').innerHTML =
+            `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:${statusBg};color:${statusColor};">${lesson.status}</span>` +
+            `<span style="font-size:11px;color:#888;">Lesson order: ${lesson.lesson_order}</span>`;
+        preview.style.display = 'block';
+        saveBtn.disabled = false;
+    }
+
+    subjectSel.addEventListener('change', () => {
+        const subjectId = subjectSel.value;
+        if (subjectId) {
+            loadLessons(subjectId);
+        } else {
+            lessonSel.innerHTML = '<option value="">-- Select a subject first --</option>';
+            lessonSel.disabled = true;
+            preview.style.display = 'none';
+            saveBtn.disabled = true;
+        }
     });
 
-    overlay.querySelector('#lp-save').addEventListener('click', async () => {
-        const title = overlay.querySelector('#lp-title').value.trim();
-        if (!title) { overlay.querySelector('#lp-alert').innerHTML = alertHtml('error', 'Lesson title is required.'); return; }
+    lessonSel.addEventListener('change', () => showPreview(lessonSel.value));
 
-        const attType = overlay.querySelector('input[name="lp-att-type"]:checked')?.value || 'none';
-        const btn = overlay.querySelector('#lp-save');
-        btn.disabled = true; btn.textContent = 'Publishing...';
+    // Auto-load if subject already pre-selected
+    if (preSelectedSubjectId) loadLessons(preSelectedSubjectId);
 
-        let res;
-        if (attType === 'file') {
-            const fileInput = overlay.querySelector('#lp-file');
-            if (!fileInput.files.length) {
-                overlay.querySelector('#lp-alert').innerHTML = alertHtml('error', 'Please select a file to upload.');
-                btn.disabled = false; btn.textContent = 'Publish Lesson'; return;
-            }
-            const fd = new FormData();
-            fd.append('lesson_title',       title);
-            fd.append('lesson_description', overlay.querySelector('#lp-desc').value.trim());
-            fd.append('lesson_content',     overlay.querySelector('#lp-content').value.trim());
-            fd.append('subject_id',         overlay.querySelector('#lp-subject').value || '');
-            fd.append('visibility',         overlay.querySelector('#lp-vis').value);
-            fd.append('attachment_type',    'file');
-            fd.append('attachment',         fileInput.files[0]);
-            res = await Api.postForm('/LessonBankAPI.php?action=publish', fd);
-        } else {
-            res = await Api.post('/LessonBankAPI.php?action=publish', {
-                lesson_title:       title,
-                lesson_description: overlay.querySelector('#lp-desc').value.trim(),
-                lesson_content:     overlay.querySelector('#lp-content').value.trim(),
-                subject_id:         overlay.querySelector('#lp-subject').value || null,
-                visibility:         overlay.querySelector('#lp-vis').value,
-                attachment_type:    attType,
-                attachment_url:     attType === 'link' ? overlay.querySelector('#lp-link-url').value.trim() : '',
-                attachment_name:    attType === 'link' ? overlay.querySelector('#lp-link-name').value.trim() : '',
-            });
-        }
+    saveBtn.addEventListener('click', async () => {
+        const lessonId  = lessonSel.value;
+        const subjectId = subjectSel.value;
+        if (!subjectId) { overlay.querySelector('#lp-alert').innerHTML = alertHtml('error', 'Please select a subject.'); return; }
+        if (!lessonId)  { overlay.querySelector('#lp-alert').innerHTML = alertHtml('error', 'Please select a lesson.'); return; }
+
+        saveBtn.disabled = true; saveBtn.textContent = 'Publishing…';
+
+        const res = await Api.post('/LessonBankAPI.php?action=publish', {
+            lessons_id: lessonId,
+            visibility: overlay.querySelector('#lp-vis').value,
+        });
 
         if (res.success) { overlay.remove(); loadContent(); showToast('Lesson published to bank!'); }
-        else { btn.disabled = false; btn.textContent = 'Publish Lesson'; overlay.querySelector('#lp-alert').innerHTML = alertHtml('error', res.message || 'Failed to publish.'); }
+        else { saveBtn.disabled = false; saveBtn.textContent = 'Publish Lesson'; overlay.querySelector('#lp-alert').innerHTML = alertHtml('error', res.message || 'Failed to publish.'); }
     });
 }
 
@@ -713,7 +828,7 @@ async function confirmLessonDelete(bankId) {
 
 // ─── Question Modals ──────────────────────────────────────────────────────────
 
-function openQuestionPublishModal(container) {
+function openQuestionPublishModal(_container, preSelectedSubjectId = '') {
     const overlay = createOverlay(`
         <div class="cb-modal">
             <div class="cb-modal-header">
@@ -743,9 +858,9 @@ function openQuestionPublishModal(container) {
                 </div>
                 <div class="cb-row">
                     <div class="cb-form-group">
-                        <label>Subject (optional)</label>
+                        <label>Subject *</label>
                         <select class="cb-form-select" id="qp-subject">
-                            <option value="">-- General --</option>
+                            <option value="">-- Select Subject --</option>
                             ${mySubjects.map(s => `<option value="${s.subject_id}">${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`).join('')}
                         </select>
                     </div>
@@ -756,6 +871,12 @@ function openQuestionPublishModal(container) {
                             <option value="private">Private (only me)</option>
                         </select>
                     </div>
+                </div>
+                <div class="cb-form-group">
+                    <label>Lesson <span style="font-weight:400;text-transform:none;color:#aaa;">(optional — select subject first)</span></label>
+                    <select class="cb-form-select" id="qp-lesson" disabled>
+                        <option value="">-- Select a lesson --</option>
+                    </select>
                 </div>
                 <div id="qp-options-section">
                     <div class="cb-form-group">
@@ -771,6 +892,32 @@ function openQuestionPublishModal(container) {
                 <button class="btn-primary-sm" id="qp-save">Publish Question</button>
             </div>
         </div>`);
+
+    // Pre-select subject if coming from a filtered browse view
+    if (preSelectedSubjectId) overlay.querySelector('#qp-subject').value = preSelectedSubjectId;
+
+    // Dynamic lesson loader
+    const qpSubject = overlay.querySelector('#qp-subject');
+    const qpLesson  = overlay.querySelector('#qp-lesson');
+
+    async function loadLessonsForSubject(subjectId) {
+        qpLesson.innerHTML = '<option value="">Loading…</option>';
+        qpLesson.disabled = true;
+        if (!subjectId) {
+            qpLesson.innerHTML = '<option value="">-- Select a lesson --</option>';
+            return;
+        }
+        const r = await Api.get('/LessonsAPI.php?action=instructor-lessons&subject_id=' + subjectId);
+        const lessons = r.success ? r.data : [];
+        qpLesson.innerHTML = '<option value="">-- None / General --</option>' +
+            lessons.map(l => `<option value="${l.lessons_id}">${esc(l.lesson_title)}</option>`).join('');
+        qpLesson.disabled = false;
+    }
+
+    qpSubject.addEventListener('change', () => loadLessonsForSubject(qpSubject.value));
+
+    // If subject is already pre-selected, load its lessons immediately
+    if (preSelectedSubjectId) loadLessonsForSubject(preSelectedSubjectId);
 
     // Seed options
     const optList = overlay.querySelector('#qp-options-list');
@@ -800,6 +947,8 @@ function openQuestionPublishModal(container) {
     overlay.querySelector('#qp-save').addEventListener('click', async () => {
         const text = overlay.querySelector('#qp-text').value.trim();
         if (!text) { overlay.querySelector('#qp-alert').innerHTML = alertHtml('error', 'Question text is required.'); return; }
+        const subjectId = overlay.querySelector('#qp-subject').value;
+        if (!subjectId) { overlay.querySelector('#qp-alert').innerHTML = alertHtml('error', 'Please select a subject.'); return; }
 
         const type = overlay.querySelector('#qp-type').value;
         const options = [];
@@ -818,6 +967,7 @@ function openQuestionPublishModal(container) {
             question_type: type,
             points:        parseInt(overlay.querySelector('#qp-points').value) || 1,
             subject_id:    overlay.querySelector('#qp-subject').value || null,
+            lessons_id:    overlay.querySelector('#qp-lesson').value  || null,
             visibility:    overlay.querySelector('#qp-vis').value,
             options
         });
@@ -962,6 +1112,14 @@ function openGroupCopyModal(qbankIds, groupLabel) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function refreshSubjectDropdown(subjects) {
+    const sel = document.getElementById('cb-subject');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Subjects</option>' +
+        subjects.map(s => `<option value="${s.subject_id}" ${current == s.subject_id ? 'selected' : ''}>${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`).join('');
+}
+
 function createOverlay(html) {
     const overlay = document.createElement('div');
     overlay.className = 'cb-overlay';
@@ -976,6 +1134,14 @@ function createOverlay(html) {
 
 function emptyHtml(icon, title, msg) {
     return `<div class="cb-empty"><div style="font-size:44px;">${icon}</div><h3>${title}</h3><p>${msg}</p></div>`;
+}
+
+function pickSubjectHtml(type) {
+    return `<div style="text-align:center;padding:70px 20px;color:#aaa;">
+        <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+        <div style="font-size:16px;font-weight:700;color:#555;margin-bottom:8px;">Select a subject to browse</div>
+        <div style="font-size:13px;color:#aaa;">Pick a subject from the dropdown above to see shared ${type}s.</div>
+    </div>`;
 }
 
 function showToast(msg) {

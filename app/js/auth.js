@@ -7,6 +7,7 @@ import { Api, BASE_URL } from './api.js';
 
 export const Auth = {
     _user: null,
+    _permissions: null,   // cached Set of permission slugs
 
     /**
      * Check if user is logged in (calls AuthAPI check endpoint)
@@ -54,6 +55,29 @@ export const Auth = {
     },
 
     /**
+     * Fetch and cache the current user's permission slugs.
+     * Returns a Set<string>.
+     */
+    async fetchPermissions() {
+        try {
+            const res = await Api.get('/RBACApi.php?action=my-permissions');
+            this._permissions = new Set(res.success ? res.data : []);
+        } catch (e) {
+            this._permissions = new Set();
+        }
+        return this._permissions;
+    },
+
+    /**
+     * Check if the current user has a given permission slug.
+     * @param {string} perm  e.g. 'users.create'
+     */
+    can(perm) {
+        if (!this._permissions) return false;
+        return this._permissions.has(perm);
+    },
+
+    /**
      * Logout
      */
     async logout() {
@@ -63,6 +87,7 @@ export const Auth = {
             // Ignore errors
         }
         this._user = null;
+        this._permissions = null;
         window.location.href = BASE_URL + '/app/login.html';
     },
 

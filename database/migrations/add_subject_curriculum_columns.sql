@@ -28,11 +28,11 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- semester: Which semester (1st, 2nd, summer)
+-- semester: Which semester (1=1st, 2=2nd, 3=Summer)
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.columns
     WHERE table_schema = DATABASE() AND table_name = 'subject' AND column_name = 'semester');
 SET @sql = IF(@col_exists = 0,
-    'ALTER TABLE `subject` ADD COLUMN `semester` ENUM(''1st'',''2nd'',''summer'') DEFAULT NULL AFTER `year_level`',
+    'ALTER TABLE `subject` ADD COLUMN `semester` TINYINT(1) DEFAULT NULL AFTER `year_level`',
     'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;

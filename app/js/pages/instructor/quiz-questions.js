@@ -43,26 +43,49 @@ async function loadPage(container, quizId) {
             .btn-secondary { background:#f5f5f5; color:#404040; border:1px solid #e0e0e0; padding:9px 18px; border-radius:8px; font-weight:500; cursor:pointer; font-size:14px; }
             .btn-bank { background:#fff; color:#1B4D3E; border:1px solid #1B4D3E; padding:9px 18px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; }
             .btn-bank:hover { background:#E8F5E9; }
+            .btn-ai { background:#fff; color:#6D28D9; border:1px solid #6D28D9; padding:9px 18px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+            .btn-ai:hover { background:#EDE9FE; }
 
             .bank-modal { max-width:780px; }
             .bank-filters { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
             .bank-filters input, .bank-filters select { padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; font-size:13px; }
             .bank-filters input { flex:1; min-width:160px; }
-            .bank-list { display:flex; flex-direction:column; gap:10px; max-height:420px; overflow-y:auto; }
-            .bq-card { background:#fafafa; border:1px solid #e8e8e8; border-radius:10px; padding:14px 16px; display:flex; align-items:flex-start; gap:12px; }
-            .bq-card:hover { border-color:#1B4D3E; background:#f0fdf4; }
+            .bank-list { display:flex; flex-direction:column; gap:8px; max-height:440px; overflow-y:auto; }
+
+            /* ── Subject folder groups ── */
+            .bank-group { border:1px solid #e0e0e0; border-radius:12px; overflow:hidden; }
+            .bank-group-header { display:flex; align-items:center; gap:10px; padding:11px 14px; background:#f8fdf9; cursor:pointer; border-bottom:1px solid #e8e8e8; user-select:none; }
+            .bank-group-header:hover { background:#edf7f0; }
+            .bank-group-header.is-closed { border-bottom:none; }
+            .folder-icon { font-size:15px; flex-shrink:0; }
+            .group-info { flex:1; display:flex; align-items:center; gap:8px; min-width:0; overflow:hidden; }
+            .group-code { background:#1B4D3E; color:#fff; padding:2px 8px; border-radius:5px; font-family:monospace; font-size:11px; font-weight:700; flex-shrink:0; }
+            .group-name { font-size:13px; font-weight:600; color:#262626; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+            .group-count { font-size:11px; color:#737373; white-space:nowrap; flex-shrink:0; }
+            .btn-copy-group { white-space:nowrap; padding:4px 11px; border-radius:7px; font-size:11px; font-weight:700; cursor:pointer; background:#E8F5E9; color:#1B4D3E; border:1px solid #a7d7b0; flex-shrink:0; }
+            .btn-copy-group:hover { background:#d1f0d9; }
+            .btn-copy-group:disabled { background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; cursor:not-allowed; }
+            .group-chevron { font-size:11px; color:#9ca3af; flex-shrink:0; transition:transform .2s; }
+            .bank-group-header.is-closed .group-chevron { transform:rotate(-90deg); }
+
+            /* ── Question cards inside a folder ── */
+            .bank-group-body { display:flex; flex-direction:column; }
+            .bank-group-body.collapsed { display:none; }
+            .bq-card { background:#fff; border:none; border-bottom:1px solid #f0f0f0; padding:12px 16px; display:flex; align-items:flex-start; gap:12px; }
+            .bq-card:last-child { border-bottom:none; }
+            .bq-card:hover { background:#f8fdf9; }
             .bq-body { flex:1; min-width:0; }
-            .bq-text { font-size:14px; font-weight:600; color:#262626; margin-bottom:6px; }
-            .bq-meta { font-size:11px; color:#737373; display:flex; gap:8px; flex-wrap:wrap; }
+            .bq-text { font-size:13px; font-weight:600; color:#262626; margin-bottom:5px; line-height:1.4; }
+            .bq-meta { font-size:11px; color:#737373; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
             .bq-tag { background:#f3f4f6; color:#404040; padding:2px 7px; border-radius:5px; font-size:11px; font-weight:600; }
             .bq-tag.mc { background:#EDE9FE; color:#5B21B6; }
             .bq-tag.tf { background:#FEF3C7; color:#B45309; }
             .bq-tag.sa { background:#DBEAFE; color:#1D4ED8; }
             .bq-tag.es { background:#FCE7F3; color:#9D174D; }
-            .bq-opts { margin-top:8px; display:flex; flex-direction:column; gap:3px; }
+            .bq-opts { margin-top:7px; display:flex; flex-direction:column; gap:2px; }
             .bq-opt { font-size:12px; color:#404040; display:flex; align-items:center; gap:6px; }
             .bq-opt.correct { color:#1B4D3E; font-weight:600; }
-            .btn-copy-q { white-space:nowrap; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; background:#1B4D3E; color:#fff; border:none; flex-shrink:0; }
+            .btn-copy-q { white-space:nowrap; padding:6px 13px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; background:#1B4D3E; color:#fff; border:none; flex-shrink:0; }
             .btn-copy-q:hover { background:#006428; }
             .btn-copy-q:disabled { background:#ccc; cursor:not-allowed; }
             .bank-empty { text-align:center; padding:40px; color:#737373; font-size:14px; }
@@ -132,7 +155,8 @@ async function loadPage(container, quizId) {
                 <div class="qq-title">${esc(quiz.quiz_title)} <span class="qq-count">${questions.length} questions</span></div>
                 <div class="qq-meta"><span class="code">${esc(quiz.subject_id)}</span> <span class="badge badge-${quiz.status}">${quiz.status}</span> &middot; ${quiz.time_limit} min &middot; ${quiz.passing_rate}% to pass</div>
             </div>
-            <div style="display:flex;gap:10px;">
+            <div style="display:flex;gap:10px;align-items:center;">
+                <button class="btn-ai" id="btn-ai-gen">🤖 AI Generate</button>
                 <button class="btn-bank" id="btn-copy-bank">📋 Copy from Bank</button>
                 <button class="btn-primary" id="btn-add-q">+ Add Question</button>
             </div>
@@ -156,6 +180,13 @@ async function loadPage(container, quizId) {
 
     container.querySelector('#btn-add-q').addEventListener('click', () => openQuestionModal(container, quizId));
     container.querySelector('#btn-copy-bank').addEventListener('click', () => openBankModal(container, quizId));
+
+    // AI Generate — navigate to generator pre-linked to this quiz
+    container.querySelector('#btn-ai-gen').addEventListener('click', () => {
+        const title   = encodeURIComponent(quiz.quiz_title || '');
+        const subject = encodeURIComponent(quiz.subject_id || '');
+        window.location.hash = `#instructor/quiz-ai-generate?quiz_id=${quizId}&quiz_title=${title}&subject_id=${subject}`;
+    });
 
     const emptyBtn = container.querySelector('#btn-add-q-empty');
     if (emptyBtn) emptyBtn.addEventListener('click', () => openQuestionModal(container, quizId));
@@ -235,7 +266,10 @@ function openQuestionModal(container, quizId, question = null) {
                         <label class="form-label">Question Type</label>
                         <select class="form-select" id="m-qtype">
                             <option value="multiple_choice" ${currentType === 'multiple_choice' ? 'selected' : ''}>Multiple Choice</option>
-                            <option value="true_false" ${currentType === 'true_false' ? 'selected' : ''}>True / False</option>
+                            <option value="true_false"      ${currentType === 'true_false'      ? 'selected' : ''}>True / False</option>
+                            <option value="fill_blank"      ${currentType === 'fill_blank'      ? 'selected' : ''}>Fill in the Blank</option>
+                            <option value="short_answer"    ${currentType === 'short_answer'    ? 'selected' : ''}>Short Answer</option>
+                            <option value="essay"           ${currentType === 'essay'           ? 'selected' : ''}>Essay</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -247,6 +281,15 @@ function openQuestionModal(container, quizId, question = null) {
                     <h4>Answer Options</h4>
                     <div id="options-list"></div>
                     <button class="btn-add-opt" id="btn-add-opt">+ Add Option</button>
+                </div>
+                <div id="model-answer-section" style="display:none;">
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label" id="model-answer-label">Model Answer <span style="color:#737373;font-weight:400;font-size:11px;">(used by AI for grading)</span></label>
+                        <textarea class="form-textarea" id="m-model-answer" rows="4"
+                            placeholder="Enter the expected answer or key points the student should cover..."
+                            style="border-color:#1B4D3E;">${esc(question?.options?.find(o => o.is_correct)?.option_text || '')}</textarea>
+                        <p style="font-size:11px;color:#737373;margin-top:4px;">The AI will score students based on how close their answer is to this.</p>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -286,7 +329,7 @@ function openQuestionModal(container, quizId, question = null) {
         if (inputType === 'radio') {
             optionsList.querySelectorAll('input[type="radio"]').forEach(r => {
                 r.addEventListener('change', () => {
-                    opts.forEach((o, i) => o.is_correct = false);
+                    opts.forEach(o => o.is_correct = false);
                     const idx = parseInt(r.dataset.correctIdx);
                     opts[idx].is_correct = true;
                 });
@@ -296,33 +339,60 @@ function openQuestionModal(container, quizId, question = null) {
 
     let options = defaultOptions.map(o => ({ ...o }));
 
-    // Handle type change
-    typeSelect.addEventListener('change', () => {
-        if (typeSelect.value === 'true_false') {
-            options = [
-                { option_text: 'True', is_correct: true },
-                { option_text: 'False', is_correct: false }
-            ];
-            overlay.querySelector('#btn-add-opt').style.display = 'none';
-        } else {
-            if (options.length < 2) {
-                options = [
-                    { option_text: '', is_correct: false },
-                    { option_text: '', is_correct: false },
-                    { option_text: '', is_correct: false },
-                    { option_text: '', is_correct: false }
-                ];
+    const optionsSection     = overlay.querySelector('#options-section');
+    const modelAnswerSection = overlay.querySelector('#model-answer-section');
+    const modelAnswerLabel   = overlay.querySelector('#model-answer-label');
+
+    function isSubjective(type) {
+        return ['short_answer', 'essay', 'fill_blank'].includes(type);
+    }
+
+    function applyTypeUI(type) {
+        if (isSubjective(type)) {
+            optionsSection.style.display     = 'none';
+            modelAnswerSection.style.display = '';
+            if (type === 'fill_blank') {
+                modelAnswerLabel.childNodes[0].textContent = 'Correct Answer ';
+                overlay.querySelector('#m-model-answer').placeholder = 'Enter the exact word or phrase that fills the blank…';
+                overlay.querySelector('#m-model-answer').rows = 2;
+            } else if (type === 'short_answer') {
+                modelAnswerLabel.childNodes[0].textContent = 'Model Answer ';
+                overlay.querySelector('#m-model-answer').placeholder = 'Enter a 1-3 sentence model answer with the key points expected…';
+                overlay.querySelector('#m-model-answer').rows = 4;
+            } else {
+                modelAnswerLabel.childNodes[0].textContent = 'Model Answer ';
+                overlay.querySelector('#m-model-answer').placeholder = 'Enter the key points and ideas a good essay response should cover…';
+                overlay.querySelector('#m-model-answer').rows = 6;
             }
-            overlay.querySelector('#btn-add-opt').style.display = '';
+        } else {
+            optionsSection.style.display     = '';
+            modelAnswerSection.style.display = 'none';
+            if (type === 'true_false') {
+                options = [
+                    { option_text: 'True',  is_correct: true  },
+                    { option_text: 'False', is_correct: false }
+                ];
+                overlay.querySelector('#btn-add-opt').style.display = 'none';
+            } else {
+                if (options.length < 2) {
+                    options = [
+                        { option_text: '', is_correct: false },
+                        { option_text: '', is_correct: false },
+                        { option_text: '', is_correct: false },
+                        { option_text: '', is_correct: false }
+                    ];
+                }
+                overlay.querySelector('#btn-add-opt').style.display = '';
+            }
+            renderOptions(options);
         }
-        renderOptions(options);
-    });
+    }
+
+    // Handle type change
+    typeSelect.addEventListener('change', () => applyTypeUI(typeSelect.value));
 
     // Initial render
-    if (currentType === 'true_false') {
-        overlay.querySelector('#btn-add-opt').style.display = 'none';
-    }
-    renderOptions(options);
+    applyTypeUI(currentType);
 
     overlay.querySelector('#btn-add-opt').addEventListener('click', () => {
         options.push({ option_text: '', is_correct: false });
@@ -347,12 +417,20 @@ function openQuestionModal(container, quizId, question = null) {
             });
         });
 
+        // For subjective types, model answer becomes the single correct option
+        const qType = typeSelect.value;
+        let finalPayloadOptions = finalOptions.filter(o => o.option_text !== '');
+        if (isSubjective(qType)) {
+            const modelAns = overlay.querySelector('#m-model-answer').value.trim();
+            finalPayloadOptions = modelAns ? [{ option_text: modelAns, is_correct: true }] : [];
+        }
+
         const payload = {
             quiz_id: quizId,
             question_text: overlay.querySelector('#m-qtext').value.trim(),
-            question_type: typeSelect.value,
+            question_type: qType,
             points: parseInt(overlay.querySelector('#m-qpoints').value) || 1,
-            options: finalOptions.filter(o => o.option_text !== '')
+            options: finalPayloadOptions
         };
 
         if (isEdit) payload.questions_id = question.questions_id;
@@ -390,7 +468,10 @@ async function openBankModal(container, quizId) {
             </div>
             <div class="modal-body">
                 <div class="bank-filters">
-                    <input type="text" id="bank-search" placeholder="Search questions...">
+                    <input type="text" id="bank-search" placeholder="Search questions..." style="flex:1;min-width:140px;">
+                    <select id="bank-subject" style="min-width:140px;">
+                        <option value="">All Subjects</option>
+                    </select>
                     <select id="bank-type">
                         <option value="">All Types</option>
                         <option value="multiple_choice">Multiple Choice</option>
@@ -413,31 +494,31 @@ async function openBankModal(container, quizId) {
     overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-    let searchTimer = null;
-    let currentQuestions = [];
-    const searchInput = overlay.querySelector('#bank-search');
-    const typeSelect  = overlay.querySelector('#bank-type');
-    const copyAllBtn  = overlay.querySelector('#btn-copy-all');
-    const statusEl    = overlay.querySelector('#bank-status');
+    let searchTimer   = null;
+    let allQuestions  = [];   // full result from API
+    let currentQuestions = []; // after subject filter
+    const searchInput   = overlay.querySelector('#bank-search');
+    const subjectSelect = overlay.querySelector('#bank-subject');
+    const typeSelect    = overlay.querySelector('#bank-type');
+    const copyAllBtn    = overlay.querySelector('#btn-copy-all');
+    const statusEl      = overlay.querySelector('#bank-status');
 
-    async function loadBank() {
-        const listEl = overlay.querySelector('#bank-list');
-        listEl.innerHTML = '<div class="bank-loading">Loading...</div>';
-        copyAllBtn.style.display = 'none';
-        currentQuestions = [];
+    const typeTagClass = { multiple_choice: 'mc', true_false: 'tf', short_answer: 'sa', essay: 'es' };
+    const typeLabel    = { multiple_choice: 'Multiple Choice', true_false: 'True/False', short_answer: 'Short Answer', essay: 'Essay' };
 
-        const search = searchInput.value.trim();
-        const type   = typeSelect.value;
-        let url = '/QuestionBankAPI.php?action=browse';
-        if (search) url += '&search=' + encodeURIComponent(search);
-        if (type)   url += '&type=' + encodeURIComponent(type);
+    // ── Render questions grouped by subject folder ──────────────────
+    function renderBank() {
+        const listEl     = overlay.querySelector('#bank-list');
+        const subjFilter = subjectSelect.value;
 
-        const res = await Api.get(url);
-        currentQuestions = res.success ? res.data : [];
+        currentQuestions = subjFilter
+            ? allQuestions.filter(q => q.subject_code === subjFilter)
+            : allQuestions;
 
         if (currentQuestions.length === 0) {
-            listEl.innerHTML = '<div class="bank-empty">No questions found in the bank.</div>';
+            listEl.innerHTML = '<div class="bank-empty">No questions match the selected filters.</div>';
             statusEl.innerHTML = 'No questions found.';
+            copyAllBtn.style.display = 'none';
             return;
         }
 
@@ -446,30 +527,68 @@ async function openBankModal(container, quizId) {
         copyAllBtn.disabled = false;
         statusEl.innerHTML = `${currentQuestions.length} question${currentQuestions.length > 1 ? 's' : ''} found`;
 
-        const typeTagClass = { multiple_choice: 'mc', true_false: 'tf', short_answer: 'sa', essay: 'es' };
-        const typeLabel    = { multiple_choice: 'Multiple Choice', true_false: 'True/False', short_answer: 'Short Answer', essay: 'Essay' };
+        // Group questions by subject
+        const groups = new Map();
+        for (const q of currentQuestions) {
+            const key = q.subject_code || '__none__';
+            if (!groups.has(key)) {
+                groups.set(key, { code: q.subject_code || '', name: q.subject_name || 'No Subject', questions: [] });
+            }
+            groups.get(key).questions.push(q);
+        }
 
-        listEl.innerHTML = currentQuestions.map(q => `
-            <div class="bq-card">
-                <div class="bq-body">
-                    <div class="bq-text">${esc(q.question_text)}</div>
-                    <div class="bq-meta">
-                        <span class="bq-tag ${typeTagClass[q.question_type] || ''}">${typeLabel[q.question_type] || q.question_type}</span>
-                        <span>${q.points} pt${q.points > 1 ? 's' : ''}</span>
-                        ${q.subject_code ? `<span class="bq-tag">${esc(q.subject_code)}</span>` : ''}
-                        <span>${esc(q.first_name)} ${esc(q.last_name)}</span>
-                        ${q.copy_count > 0 ? `<span>Used ${q.copy_count}×</span>` : ''}
-                    </div>
-                    ${q.options && q.options.length > 0 ? `
-                        <div class="bq-opts">
-                            ${q.options.map(o => `<div class="bq-opt ${o.is_correct ? 'correct' : ''}">${o.is_correct ? '✓' : '○'} ${esc(o.option_text)}</div>`).join('')}
+        let html = '';
+        for (const [, group] of groups) {
+            const gid = 'grp-' + (group.code || 'none').replace(/[^a-z0-9]/gi, '-');
+            html += `
+                <div class="bank-group">
+                    <div class="bank-group-header" data-gid="${gid}">
+                        <span class="folder-icon">📁</span>
+                        <div class="group-info">
+                            ${group.code ? `<span class="group-code">${esc(group.code)}</span>` : ''}
+                            <span class="group-name">${esc(group.name)}</span>
                         </div>
-                    ` : ''}
-                </div>
-                <button class="btn-copy-q" data-qbank="${q.qbank_id}">Copy</button>
-            </div>
-        `).join('');
+                        <span class="group-count">${group.questions.length} question${group.questions.length !== 1 ? 's' : ''}</span>
+                        <button class="btn-copy-group" data-gid="${gid}">Copy All (${group.questions.length})</button>
+                        <span class="group-chevron">▾</span>
+                    </div>
+                    <div class="bank-group-body" id="${gid}">
+                        ${group.questions.map(q => `
+                            <div class="bq-card" data-qbank="${q.qbank_id}">
+                                <div class="bq-body">
+                                    <div class="bq-text">${esc(q.question_text)}</div>
+                                    <div class="bq-meta">
+                                        <span class="bq-tag ${typeTagClass[q.question_type] || ''}">${typeLabel[q.question_type] || q.question_type}</span>
+                                        <span>${q.points} pt${q.points > 1 ? 's' : ''}</span>
+                                        <span>👤 ${esc(q.first_name)} ${esc(q.last_name)}</span>
+                                        ${q.copy_count > 0 ? `<span>Used ${q.copy_count}×</span>` : ''}
+                                    </div>
+                                    ${q.options && q.options.length > 0 ? `
+                                        <div class="bq-opts">
+                                            ${q.options.map(o => `<div class="bq-opt ${o.is_correct ? 'correct' : ''}">${o.is_correct ? '✓' : '○'} ${esc(o.option_text)}</div>`).join('')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <button class="btn-copy-q" data-qbank="${q.qbank_id}">Copy</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+        listEl.innerHTML = html;
 
+        // Toggle folder open/close
+        listEl.querySelectorAll('.bank-group-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-copy-group')) return;
+                const body = document.getElementById(header.dataset.gid);
+                const isOpen = !body.classList.contains('collapsed');
+                body.classList.toggle('collapsed', isOpen);
+                header.classList.toggle('is-closed', isOpen);
+            });
+        });
+
+        // Copy single question
         listEl.querySelectorAll('.btn-copy-q').forEach(btn => {
             btn.addEventListener('click', async () => {
                 btn.disabled = true;
@@ -489,15 +608,77 @@ async function openBankModal(container, quizId) {
                 }
             });
         });
+
+        // Copy all questions in a folder
+        listEl.querySelectorAll('.btn-copy-group').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const body    = document.getElementById(btn.dataset.gid);
+                const cards   = body.querySelectorAll('.bq-card');
+                btn.disabled  = true;
+                btn.textContent = 'Copying...';
+                let done = 0;
+                for (const card of cards) {
+                    const qbankId = parseInt(card.dataset.qbank);
+                    const qBtn = card.querySelector('.btn-copy-q');
+                    if (qBtn) { qBtn.disabled = true; qBtn.textContent = '...'; }
+                    const res = await Api.post('/QuestionBankAPI.php?action=copy', {
+                        qbank_id: qbankId,
+                        quiz_id:  parseInt(quizId)
+                    });
+                    if (res.success) {
+                        done++;
+                        if (qBtn) { qBtn.textContent = '✓'; qBtn.style.background = '#1a6635'; }
+                    } else {
+                        if (qBtn) { qBtn.disabled = false; qBtn.textContent = 'Copy'; }
+                    }
+                }
+                btn.textContent = `✓ Done (${done})`;
+                if (done > 0) loadPage(container, quizId);
+            });
+        });
     }
 
-    // Copy All handler — copies every visible question sequentially
+    // ── Fetch from API (search + type), then populate subject dropdown ──
+    async function loadBank() {
+        const listEl = overlay.querySelector('#bank-list');
+        listEl.innerHTML = '<div class="bank-loading">Loading...</div>';
+        copyAllBtn.style.display = 'none';
+        allQuestions = [];
+        currentQuestions = [];
+
+        const search = searchInput.value.trim();
+        const type   = typeSelect.value;
+        let url = '/QuestionBankAPI.php?action=browse';
+        if (search) url += '&search=' + encodeURIComponent(search);
+        if (type)   url += '&type='   + encodeURIComponent(type);
+
+        const res = await Api.get(url);
+        allQuestions = res.success ? res.data : [];
+
+        // Rebuild subject dropdown from fetched results
+        const prevSubj = subjectSelect.value;
+        const subjects = [...new Set(allQuestions.map(q => q.subject_code).filter(Boolean))].sort();
+        subjectSelect.innerHTML = `<option value="">All Subjects</option>` +
+            subjects.map(s => `<option value="${esc(s)}" ${prevSubj === s ? 'selected' : ''}>${esc(s)}</option>`).join('');
+
+        if (allQuestions.length === 0) {
+            listEl.innerHTML = '<div class="bank-empty">No questions found in the bank.</div>';
+            statusEl.innerHTML = 'No questions found.';
+            return;
+        }
+
+        renderBank();
+    }
+
+    // ── Copy All — copies only currently visible (filtered) questions ──
     copyAllBtn.addEventListener('click', async () => {
         if (!currentQuestions.length) return;
         copyAllBtn.disabled = true;
         copyAllBtn.textContent = 'Copying...';
-        searchInput.disabled = true;
-        typeSelect.disabled  = true;
+        searchInput.disabled   = true;
+        typeSelect.disabled    = true;
+        subjectSelect.disabled = true;
 
         const copyBtns = overlay.querySelectorAll('.btn-copy-q');
         let done = 0, failed = 0;
@@ -519,14 +700,14 @@ async function openBankModal(container, quizId) {
                 failed++;
                 if (btn) { btn.textContent = '✗'; btn.style.background = '#b91c1c'; btn.disabled = false; }
             }
-
-            statusEl.textContent = `Copying... ${done + failed}/${currentQuestions.length}`;
+            statusEl.textContent = `Copying… ${done + failed}/${currentQuestions.length}`;
         }
 
         statusEl.innerHTML = `<strong style="color:#1B4D3E;">✓ ${done} copied${failed ? `, ${failed} failed` : ''}</strong>`;
         copyAllBtn.textContent = 'Done';
-        searchInput.disabled = false;
-        typeSelect.disabled  = false;
+        searchInput.disabled   = false;
+        typeSelect.disabled    = false;
+        subjectSelect.disabled = false;
         loadPage(container, quizId);
     });
 
@@ -535,6 +716,8 @@ async function openBankModal(container, quizId) {
         searchTimer = setTimeout(loadBank, 350);
     });
     typeSelect.addEventListener('change', loadBank);
+    // Subject filter is client-side only — no new API call needed
+    subjectSelect.addEventListener('change', renderBank);
 
     loadBank();
 }

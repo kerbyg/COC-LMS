@@ -6,7 +6,7 @@
 require_once __DIR__ . '/config/database.php';
 
 // The Groq API key
-$apiKey = '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';
+$apiKey = 'YOUR_GROQ_API_KEY_HERE'; // Replace with your actual Groq API key before running
 
 try {
     // Save Groq API key to system_settings

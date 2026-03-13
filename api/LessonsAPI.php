@@ -17,6 +17,28 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_lessonPerms = [
+    'get'             => 'lessons.view',
+    'list'            => 'lessons.view',
+    'materials'       => 'lessons.view',
+    'instructor-lessons' => 'lessons.view',
+    'students'        => 'lessons.view',
+    'subjects'        => 'lessons.view',
+    'complete'        => 'lessons.view',
+    'create'          => 'lessons.create',
+    'update'          => 'lessons.edit',
+    'add-link'        => 'lessons.edit',
+    'upload-material' => 'lessons.edit',
+    'delete-material' => 'lessons.edit',
+    'delete'          => 'lessons.delete',
+];
+if (isset($_lessonPerms[$action]) && !Auth::can($_lessonPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_lessonPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'get':
         getLesson();
@@ -92,10 +114,13 @@ function getLesson() {
             return;
         }
 
-        // Verify enrollment
+        // Verify enrollment — check if student is enrolled in any offering of this subject
         $enrollment = db()->fetchOne(
-            "SELECT * FROM student_subject WHERE user_student_id = ? AND subject_offered_id = ? AND status = 'enrolled'",
-            [$userId, $lesson['subject_offered_id']]
+            "SELECT ss.student_subject_id FROM student_subject ss
+             JOIN subject_offered so ON so.subject_offered_id = ss.subject_offered_id
+             WHERE ss.user_student_id = ? AND so.subject_id = ? AND ss.status = 'enrolled'
+             LIMIT 1",
+            [$userId, $lesson['subject_id']]
         );
         if (!$enrollment) {
             echo json_encode(['success' => false, 'message' => 'Not enrolled']);
@@ -173,11 +198,10 @@ function getLessons() {
                 l.created_at,
                 CASE WHEN sp.status = 'completed' THEN 1 ELSE 0 END as is_completed,
                 sp.completed_at,
-                ql.quiz_id as linked_quiz_id
+                (SELECT ql.quiz_id FROM quiz_lessons ql WHERE ql.lessons_id = l.lessons_id LIMIT 1) as linked_quiz_id
             FROM lessons l
             LEFT JOIN student_progress sp
                 ON l.lessons_id = sp.lessons_id AND sp.user_student_id = ?
-            LEFT JOIN quiz_lessons ql ON l.lessons_id = ql.lessons_id
             WHERE l.subject_id = (SELECT subject_id FROM subject_offered WHERE subject_offered_id = ?)
             AND l.status = 'published'
             ORDER BY l.lesson_order",
@@ -269,7 +293,7 @@ function getInstructorSubjects() {
         "SELECT DISTINCT s.subject_id, s.subject_code, s.subject_name
          FROM subject_offered so
          JOIN subject s ON so.subject_id = s.subject_id
-         WHERE so.user_teacher_id = ?
+         WHERE so.user_teacher_id = ? AND so.status = 'open'
          ORDER BY s.subject_code",
         [$userId]
     );
@@ -294,7 +318,7 @@ function getInstructorLessons() {
          JOIN subject s ON l.subject_id = s.subject_id
          WHERE s.subject_id IN (
              SELECT DISTINCT so.subject_id FROM subject_offered so
-             WHERE so.user_teacher_id = ?
+             WHERE so.user_teacher_id = ? AND so.status = 'open'
          ) $where
          ORDER BY s.subject_code, l.lesson_order",
         $params
@@ -522,7 +546,16 @@ function uploadMaterial() {
         'application/vnd.ms-excel' => 'document',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'document',
         'text/plain' => 'document',
-        'application/zip' => 'other'
+        'application/zip' => 'other',
+        'audio/mpeg' => 'audio',
+        'audio/mp3' => 'audio',
+        'audio/wav' => 'audio',
+        'audio/ogg' => 'audio',
+        'audio/mp4' => 'audio',
+        'audio/aac' => 'audio',
+        'audio/flac' => 'audio',
+        'audio/x-wav' => 'audio',
+        'audio/x-m4a' => 'audio'
     ];
 
     if ($file['error'] !== UPLOAD_ERR_OK) {

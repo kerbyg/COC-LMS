@@ -153,7 +153,7 @@ class Auth {
     
     /**
      * Log in a user (store user data in session)
-     * 
+     *
      * @param array $user - User data from database
      * @return bool
      */
@@ -161,7 +161,7 @@ class Auth {
         if (empty($user) || !isset($user['users_id'])) {
             return false;
         }
-        
+
         // Regenerate session ID to prevent session fixation
         session_regenerate_id(true);
 
@@ -174,14 +174,100 @@ class Auth {
         $_SESSION['user_role'] = $user['role'];
         $_SESSION['login_time'] = time();
         $_SESSION['last_activity'] = time();
-        
+
         // Store additional useful data
         $_SESSION['employee_id'] = $user['employee_id'] ?? null;
         $_SESSION['student_id'] = $user['student_id'] ?? null;
         $_SESSION['department_id'] = $user['department_id'] ?? null;
         $_SESSION['program_id'] = $user['program_id'] ?? null;
-        
+
+        // Load RBAC permissions for this role into session
+        self::loadPermissions($user['role']);
+
         return true;
+    }
+
+    // ----------------------------------------------------------------
+    // RBAC – Permission helpers
+    // ----------------------------------------------------------------
+
+    /**
+     * Load all permissions for the given role from the database
+     * and cache them in the session.
+     *
+     * @param string $role
+     */
+    public static function loadPermissions($role) {
+        try {
+            require_once __DIR__ . '/database.php';
+            $pdo = Database::getInstance()->getConnection();
+            $stmt = $pdo->prepare(
+                'SELECT p.name
+                 FROM role_permissions rp
+                 JOIN permissions p ON p.id = rp.permission_id
+                 WHERE rp.role = ?'
+            );
+            $stmt->execute([$role]);
+            $_SESSION['permissions'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (Exception $e) {
+            // Table may not exist yet — fall back to empty set
+            $_SESSION['permissions'] = [];
+        }
+    }
+
+    /**
+     * Re-load the current user's permissions (useful after an admin
+     * changes role permissions in the same session).
+     */
+    public static function refreshPermissions() {
+        $role = self::role();
+        if ($role) {
+            self::loadPermissions($role);
+        }
+    }
+
+    /**
+     * Get all permission slugs for the current user.
+     *
+     * @return array
+     */
+    public static function permissions() {
+        if (!isset($_SESSION['permissions'])) {
+            self::loadPermissions(self::role());
+        }
+        return $_SESSION['permissions'] ?? [];
+    }
+
+    /**
+     * Check if the current user has a specific permission.
+     *
+     * @param string $permission  e.g. 'users.create'
+     * @return bool
+     */
+    public static function can($permission) {
+        if (!self::check()) {
+            return false;
+        }
+        return in_array($permission, self::permissions());
+    }
+
+    /**
+     * Require the current user to have a permission.
+     * Returns a 403 JSON response if they don't (API-friendly).
+     *
+     * @param string $permission
+     */
+    public static function requirePermission($permission) {
+        self::requireLogin();
+        if (!self::can($permission)) {
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => "Permission denied: {$permission}"
+            ]);
+            exit;
+        }
     }
     
     /**

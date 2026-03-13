@@ -30,7 +30,7 @@ export async function render(container) {
 
             /* ─── Stat Cards Row ─── */
             .sp-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(155px, 1fr)); gap:14px; margin-bottom:28px; }
-            .sp-stat { background:#fff; border:1px solid #e8e8e8; border-radius:12px; padding:18px; display:flex; align-items:flex-start; gap:12px; }
+            .sp-stat { background:#fff; border:1px solid #f1f5f9; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.07); padding:18px; display:flex; align-items:flex-start; gap:12px; }
             .sp-stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
             .sp-stat-icon.green { background:#E8F5E9; }
             .sp-stat-icon.blue { background:#DBEAFE; }
@@ -45,7 +45,7 @@ export async function render(container) {
             .sp-columns { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:28px; }
 
             /* ─── Section Cards ─── */
-            .sp-section { background:#fff; border:1px solid #e8e8e8; border-radius:14px; overflow:hidden; }
+            .sp-section { background:#fff; border:1px solid #f1f5f9; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.07); overflow:hidden; }
             .sp-section-head { padding:16px 20px; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; justify-content:space-between; }
             .sp-section-title { font-size:15px; font-weight:700; color:#262626; display:flex; align-items:center; gap:8px; }
             .sp-section-badge { font-size:11px; background:#f5f5f5; color:#737373; padding:2px 8px; border-radius:10px; font-weight:600; }
@@ -115,7 +115,17 @@ export async function render(container) {
                 .sp-stats { grid-template-columns:1fr; }
                 .sp-bar-label { width:90px; font-size:12px; }
             }
+
+            .btn-back {
+                display: inline-flex; align-items: center; gap: 6px;
+                font-size: 13px; font-weight: 600; color: #6B7280;
+                text-decoration: none; margin-bottom: 16px;
+                transition: color .15s;
+            }
+            .btn-back:hover { color: #1B4D3E; }
         </style>
+
+        <a href="#student/my-subjects" class="btn-back">← Back to My Subjects</a>
 
         <div class="sp-wrap">
             <div class="sp-header">
@@ -277,7 +287,7 @@ async function loadProgress(container, subjectId) {
                                       <div class="sp-quiz-meta">
                                           <span class="sp-quiz-type ${tCls}">${tLabel}</span>
                                           <span>Pass: ${q.passing_rate}%</span>
-                                          ${q.attempts_used ? `<span>${q.attempts_used}/${q.max_attempts} attempts</span>` : ''}
+                                          ${q.attempts_used ? `<span>${q.attempts_used} attempt${q.attempts_used != 1 ? 's' : ''}</span>` : ''}
                                           ${q.best_earned !== null ? `<span>${q.best_earned}/${q.best_total} pts</span>` : ''}
                                       </div>
                                   </div>

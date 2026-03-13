@@ -26,6 +26,27 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_subjPerms = [
+    'enrolled'    => 'subjects.view',
+    'details'     => 'subjects.view',
+    'all'         => 'subjects.view',
+    'by-program'  => 'subjects.view',
+    'list'        => 'subjects.view',
+    'get'         => 'subjects.view',
+    'programs'    => 'subjects.view',
+    'departments' => 'subjects.view',
+    'semesters'   => 'subjects.view',
+    'create'      => 'subjects.create',
+    'update'      => 'subjects.edit',
+    'delete'      => 'subjects.delete',
+];
+if (isset($_subjPerms[$action]) && !Auth::can($_subjPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_subjPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     
     /**
@@ -78,6 +99,14 @@ switch ($action) {
 
     case 'programs':
         getPrograms();
+        break;
+
+    case 'departments':
+        getDepartments();
+        break;
+
+    case 'semesters':
+        getSubjectSemesters();
         break;
 
     default:
@@ -373,21 +402,105 @@ function getSubjectsByProgram() {
 // ─── Admin CRUD Functions ─────────────────────────────────
 
 function listSubjects() {
-    $search = $_GET['search'] ?? '';
-    $where = '';
-    $params = [];
-    if ($search) {
-        $where = "WHERE s.subject_code LIKE ? OR s.subject_name LIKE ?";
-        $params = ["%$search%", "%$search%"];
+    $search = $_GET['search']        ?? '';
+    $deptId = (int)($_GET['department_id'] ?? 0);
+    $progId = (int)($_GET['program_id']    ?? 0);
+    $semId  = (int)($_GET['semester_id']   ?? 0);
+
+    // Resolve active semester for "This Semester" column only — does NOT restrict rows shown
+    $activeSemId = $semId;
+    if (!$activeSemId) {
+        $activeSem = db()->fetchOne("SELECT semester_id FROM semester WHERE status = 'active' LIMIT 1");
+        $activeSemId = $activeSem ? (int)$activeSem['semester_id'] : 0;
     }
-    $subjects = db()->fetchAll(
-        "SELECT s.*, p.program_code,
-            (SELECT COUNT(*) FROM subject_offered so WHERE so.subject_id = s.subject_id) as offering_count,
-            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id) as lesson_count
-         FROM subject s LEFT JOIN program p ON s.program_id = p.program_id $where ORDER BY s.subject_code",
-        $params
+
+    $conditions = ["s.status = 'active'"];
+    $params     = [];
+
+    if ($search) {
+        $conditions[] = "(s.subject_code LIKE ? OR s.subject_name LIKE ?)";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+    if ($deptId) {
+        $conditions[] = "p.department_id = ?";
+        $params[] = $deptId;
+    }
+    if ($progId) {
+        $conditions[] = "p.program_id = ?";
+        $params[] = $progId;
+    }
+    if ($semId) {
+        // Filter rows to subjects whose curriculum semester type matches the selected semester
+        // sem_type_id (1=1st, 2=2nd, 3=Summer) maps directly to s.semester values
+        $conditions[] = "s.semester = (SELECT sem_type_id FROM semester WHERE semester_id = $semId)";
+    }
+    $where = 'WHERE ' . implode(' AND ', $conditions);
+
+    // Only filter by semester_id if the column actually exists on subject_offered
+    $soHasSemId = (db()->fetchOne(
+        "SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subject_offered' AND COLUMN_NAME = 'semester_id'"
+    )['cnt'] ?? 0) > 0;
+    // Each subquery uses a different alias — generate a filter per alias
+    $sf2 = ($soHasSemId && $activeSemId) ? "AND so2.semester_id = $activeSemId" : '';
+    $sf3 = ($soHasSemId && $activeSemId) ? "AND so3.semester_id = $activeSemId" : '';
+    $sf4 = ($soHasSemId && $activeSemId) ? "AND so4.semester_id = $activeSemId" : '';
+
+    try {
+        $subjects = pdo()->prepare(
+            "SELECT s.subject_id, s.subject_code, s.subject_name, s.units,
+                    s.year_level, s.semester,
+                    s.status, s.description,
+                    p.program_id, p.program_code, p.program_name,
+                    d.department_id, d.department_code, d.department_name,
+                    IF((SELECT so2.subject_offered_id
+                        FROM subject_offered so2
+                        WHERE so2.subject_id = s.subject_id $sf2 AND so2.status = 'open'
+                        LIMIT 1) IS NOT NULL, 1, 0) AS is_offered,
+                    (SELECT CONCAT(u.first_name, ' ', u.last_name)
+                     FROM subject_offered so3
+                     LEFT JOIN users u ON u.users_id = so3.user_teacher_id
+                     WHERE so3.subject_id = s.subject_id $sf3 AND so3.status = 'open'
+                     LIMIT 1) AS current_instructor,
+                    (SELECT COUNT(*)
+                     FROM subject_offered so4
+                     JOIN section_subject ss ON ss.subject_offered_id = so4.subject_offered_id
+                     WHERE so4.subject_id = s.subject_id $sf4
+                       AND so4.status = 'open' AND ss.status = 'active') AS current_section_count
+             FROM subject s
+             JOIN program p  ON p.program_id  = s.program_id
+             LEFT JOIN department d ON d.department_id = p.department_id
+             $where
+             ORDER BY d.department_name, p.program_code, s.year_level, s.semester, s.subject_code"
+        );
+        $subjects->execute($params);
+        $subjects = $subjects->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'data' => $subjects]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage(), 'data' => []]);
+    }
+}
+
+function getSubjectSemesters() {
+    $sems = db()->fetchAll(
+        "SELECT MIN(sem.semester_id) AS semester_id, sem.semester_name, sem.academic_year,
+                MAX(CASE sem.status WHEN 'active' THEN 'active' WHEN 'upcoming' THEN 'upcoming' ELSE 'inactive' END) AS status
+         FROM semester sem
+         GROUP BY sem.semester_name, sem.academic_year
+         ORDER BY sem.academic_year DESC, MIN(sem.semester_id)"
     );
-    echo json_encode(['success' => true, 'data' => $subjects]);
+    echo json_encode(['success' => true, 'data' => $sems]);
+}
+
+function getDepartments() {
+    $depts = db()->fetchAll(
+        "SELECT d.department_id, d.department_name, d.department_code
+         FROM department d
+         WHERE d.status = 'active'
+         ORDER BY d.department_name"
+    );
+    echo json_encode(['success' => true, 'data' => $depts]);
 }
 
 function getSubject() {
@@ -441,5 +554,10 @@ function deleteSubject() {
 }
 
 function getPrograms() {
-    echo json_encode(['success' => true, 'data' => db()->fetchAll("SELECT program_id, program_code, program_name FROM program WHERE status='active' ORDER BY program_code")]);
+    echo json_encode(['success' => true, 'data' => db()->fetchAll(
+        "SELECT p.program_id, p.program_code, p.program_name, p.department_id
+         FROM program p
+         WHERE p.status = 'active'
+         ORDER BY p.program_code"
+    )]);
 }

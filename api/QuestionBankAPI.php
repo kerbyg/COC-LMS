@@ -17,7 +17,38 @@ if (!Auth::check()) {
 
 Auth::requireRole('instructor');
 
+// Auto-migrate: add lessons_id to question_bank if it doesn't exist yet
+(function() {
+    $exists = db()->fetchOne(
+        "SELECT COUNT(*) AS cnt FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'question_bank' AND column_name = 'lessons_id'"
+    )['cnt'] ?? 0;
+    if (!$exists) {
+        try {
+            pdo()->exec("ALTER TABLE `question_bank` ADD COLUMN `lessons_id` INT NULL AFTER `subject_id`");
+            pdo()->exec("ALTER TABLE `question_bank` ADD CONSTRAINT `fk_qbank_lesson`
+                         FOREIGN KEY (`lessons_id`) REFERENCES `lessons`(`lessons_id`) ON DELETE SET NULL");
+        } catch (PDOException $e) { /* already exists or FK conflict — safe to ignore */ }
+    }
+})();
+
 $action = $_GET['action'] ?? '';
+
+// RBAC: enforce permission per action
+$_qbPerms = [
+    'browse'     => 'question_bank.view',
+    'my-bank'    => 'question_bank.view',
+    'my-quizzes' => 'question_bank.view',
+    'subjects'   => 'question_bank.view',
+    'publish'    => 'question_bank.create',
+    'copy'       => 'question_bank.create',
+    'delete'     => 'question_bank.delete',
+];
+if (isset($_qbPerms[$action]) && !Auth::can($_qbPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_qbPerms[$action]}"]);
+    exit;
+}
 
 switch ($action) {
     case 'browse':   browseBank();    break;
@@ -26,6 +57,7 @@ switch ($action) {
     case 'publish':  publishQuestion(); break;
     case 'copy':     copyQuestion();  break;
     case 'delete':   deleteQuestion(); break;
+    case 'subjects': bankSubjects();   break;
     default:
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
@@ -57,12 +89,14 @@ function browseBank() {
 
     $questions = db()->fetchAll(
         "SELECT qb.qbank_id, qb.question_text, qb.question_type, qb.points,
-                qb.subject_id, qb.visibility, qb.copy_count, qb.created_at,
+                qb.subject_id, qb.lessons_id, qb.visibility, qb.copy_count, qb.created_at,
                 s.subject_code, s.subject_name,
+                l.lesson_title,
                 u.first_name, u.last_name,
                 (qb.created_by = ?) AS is_own
          FROM question_bank qb
          LEFT JOIN subject s ON qb.subject_id = s.subject_id
+         LEFT JOIN lessons l ON qb.lessons_id = l.lessons_id
          JOIN users u ON qb.created_by = u.users_id
          WHERE $where
          ORDER BY qb.copy_count DESC, qb.created_at DESC",
@@ -88,10 +122,12 @@ function myBank() {
 
     $questions = db()->fetchAll(
         "SELECT qb.qbank_id, qb.question_text, qb.question_type, qb.points,
-                qb.subject_id, qb.visibility, qb.copy_count, qb.created_at, qb.updated_at,
-                s.subject_code, s.subject_name
+                qb.subject_id, qb.lessons_id, qb.visibility, qb.copy_count, qb.created_at, qb.updated_at,
+                s.subject_code, s.subject_name,
+                l.lesson_title
          FROM question_bank qb
          LEFT JOIN subject s ON qb.subject_id = s.subject_id
+         LEFT JOIN lessons l ON qb.lessons_id = l.lessons_id
          WHERE qb.created_by = ?
          ORDER BY qb.updated_at DESC",
         [$userId]
@@ -117,8 +153,7 @@ function myQuizzes() {
         "SELECT q.quiz_id, q.quiz_title,
                 s.subject_code, s.subject_name
          FROM quiz q
-         LEFT JOIN subject_offered so ON q.subject_offered_id = so.subject_offered_id
-         LEFT JOIN subject s ON so.subject_id = s.subject_id
+         LEFT JOIN subject s ON q.subject_id = s.subject_id
          WHERE q.user_teacher_id = ?
          ORDER BY q.created_at DESC",
         [$userId]
@@ -147,7 +182,8 @@ function publishQuestion() {
     $type    = in_array($data['question_type'] ?? '', ['multiple_choice','true_false','short_answer','essay'])
                ? $data['question_type'] : 'multiple_choice';
     $points  = max(1, (int)($data['points'] ?? 1));
-    $subjectId = !empty($data['subject_id']) ? (int)$data['subject_id'] : null;
+    $subjectId  = !empty($data['subject_id'])  ? (int)$data['subject_id']  : null;
+    $lessonsId  = !empty($data['lessons_id'])  ? (int)$data['lessons_id']  : null;
     $visibility = in_array($data['visibility'] ?? 'public', ['public','private'])
                   ? $data['visibility'] : 'public';
     $options = $data['options'] ?? [];
@@ -167,9 +203,9 @@ function publishQuestion() {
     try {
         $pdo = pdo();
         $pdo->prepare(
-            "INSERT INTO question_bank (question_text, question_type, points, subject_id, created_by, visibility)
-             VALUES (?, ?, ?, ?, ?, ?)"
-        )->execute([$text, $type, $points, $subjectId, $userId, $visibility]);
+            "INSERT INTO question_bank (question_text, question_type, points, subject_id, lessons_id, created_by, visibility)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )->execute([$text, $type, $points, $subjectId, $lessonsId, $userId, $visibility]);
 
         $qbankId = $pdo->lastInsertId();
 
@@ -315,4 +351,19 @@ function deleteQuestion() {
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'Failed to delete question']);
     }
+}
+
+// ─── Subjects: distinct subjects visible in question bank ─────────────────────
+
+function bankSubjects() {
+    $userId = Auth::id();
+    $subjects = db()->fetchAll(
+        "SELECT DISTINCT s.subject_id, s.subject_code, s.subject_name
+         FROM question_bank qb
+         JOIN subject s ON qb.subject_id = s.subject_id
+         WHERE qb.visibility = 'public' OR qb.created_by = ?
+         ORDER BY s.subject_code",
+        [$userId]
+    );
+    echo json_encode(['success' => true, 'data' => $subjects ?: []]);
 }

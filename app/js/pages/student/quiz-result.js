@@ -92,7 +92,7 @@ export async function render(container) {
                     ${lessonsId ? `<a class="btn primary" href="#student/lessons">✅ Continue to Next Lesson</a>` : `<a class="btn primary" href="#student/lessons">Back to Lessons</a>`}
                     <a class="btn" href="#student/grades">View Grades</a>
                 ` : `
-                    ${lessonsId ? `<a class="btn" style="background:#fff3cd;border-color:#f59e0b;color:#92400E" href="#student/lesson-view?id=${lessonsId}">📖 Re-study: ${esc(lessonTitle || 'Lesson')}</a>` : ''}
+                    ${lessonsId ? `<a class="btn" style="background:#fff3cd;border-color:#f59e0b;color:#92400E" href="#student/lesson-view?id=${lessonsId}">📖 Re-study: ${esc(lessonTitle || 'Lesson')} <span style="font-size:10px;opacity:.7;">(${esc(attempt.subject_code)})</span></a>` : `<a class="btn" style="background:#fff3cd;border-color:#f59e0b;color:#92400E" href="#student/lessons">📖 Back to Lessons</a>`}
                     <a class="btn primary" style="background:#b91c1c;border-color:#b91c1c" href="#student/remedials">📌 Go to Remedials</a>
                 `}
             </div>

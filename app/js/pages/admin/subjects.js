@@ -4,18 +4,30 @@
  */
 import { Api } from '../../api.js';
 
-let programs = [];
+let programs    = [];
+let departments = [];
+let semesters   = [];
 
 export async function render(container) {
-    const progRes = await Api.get('/SubjectsAPI.php?action=programs');
-    programs = progRes.success ? progRes.data : [];
+    const [progRes, deptRes, semRes] = await Promise.all([
+        Api.get('/SubjectsAPI.php?action=programs'),
+        Api.get('/SubjectsAPI.php?action=departments'),
+        Api.get('/SubjectsAPI.php?action=semesters'),
+    ]);
+    programs    = progRes.success ? progRes.data : [];
+    departments = deptRes.success ? deptRes.data : [];
+    semesters   = semRes.success  ? semRes.data  : [];
     renderList(container);
 }
 
-async function renderList(container, search = '') {
-    const params = search ? '&search=' + encodeURIComponent(search) : '';
-    const result = await Api.get('/SubjectsAPI.php?action=list' + params);
+async function renderList(container, search = '', deptId = '', progId = '', semId = '') {
+    let params = search ? '&search=' + encodeURIComponent(search) : '';
+    if (deptId) params += '&department_id=' + deptId;
+    if (progId) params += '&program_id='    + progId;
+    if (semId)  params += '&semester_id='   + semId;
+    const result   = await Api.get('/SubjectsAPI.php?action=list' + params);
     const subjects = result.success ? result.data : [];
+    const dbError  = !result.success && result.error ? result.error : null;
 
     container.innerHTML = `
         <style>
@@ -26,7 +38,8 @@ async function renderList(container, search = '') {
             .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,70,27,.3); }
 
             .filters { display:flex; gap:12px; margin-bottom:20px; align-items:center; }
-            .filters input { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:280px; }
+            .filters input { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:260px; }
+            .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:200px; background:#fff; }
             .filters .clear-btn { color:#00461B; font-size:13px; cursor:pointer; text-decoration:underline; }
 
             .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #e8e8e8; }
@@ -71,6 +84,12 @@ async function renderList(container, search = '') {
             .alert { padding:12px 16px; border-radius:10px; margin-bottom:16px; font-size:14px; }
             .alert-error { background:#FEE2E2; color:#b91c1c; border:1px solid #FECACA; }
             .empty-state-sm { text-align:center; padding:40px; color:#737373; }
+            .off-badge { padding:3px 8px; border-radius:20px; font-size:11px; font-weight:700; display:inline-block; }
+            .off-open  { background:#E8F5E9; color:#1B4D3E; }
+            .off-none  { background:#f3f4f6; color:#9ca3af; }
+            .off-warn  { background:#FEF3C7; color:#B45309; }
+            .off-sec-pill { background:#EFF6FF; color:#1D4ED8; padding:2px 7px; border-radius:20px; font-size:10px; font-weight:600; margin-left:4px; }
+            .off-sec-none { background:#FEF3C7; color:#B45309; }
             @media(max-width:768px) { .form-grid { grid-template-columns:1fr; } .filters { flex-direction:column; } }
         </style>
 
@@ -81,7 +100,20 @@ async function renderList(container, search = '') {
 
         <div class="filters">
             <input type="text" id="filter-search" placeholder="Search subject code or name..." value="${esc(search)}">
-            ${search ? '<span class="clear-btn" id="clear-search">Clear</span>' : ''}
+            <select id="filter-dept">
+                <option value="">All Departments</option>
+                ${departments.map(d => `<option value="${d.department_id}" ${deptId==d.department_id?'selected':''}>${esc(d.department_code)} — ${esc(d.department_name)}</option>`).join('')}
+            </select>
+            <select id="filter-prog">
+                <option value="">All Programs</option>
+                ${(deptId ? programs.filter(p => p.department_id == deptId) : programs)
+                    .map(p => `<option value="${p.program_id}" ${progId==p.program_id?'selected':''}>${esc(p.program_code)} — ${esc(p.program_name)}</option>`).join('')}
+            </select>
+            <select id="filter-sem">
+                <option value="">All Semesters</option>
+                ${semesters.map(s => `<option value="${s.semester_id}" ${semId==s.semester_id?'selected':''}>${esc(s.semester_name)} – ${esc(s.academic_year)}</option>`).join('')}
+            </select>
+            ${(search || deptId || progId || semId) ? '<span class="clear-btn" id="clear-search">Clear</span>' : ''}
         </div>
 
         <table class="data-table">
@@ -93,15 +125,22 @@ async function renderList(container, search = '') {
                     <th>Year</th>
                     <th>Semester</th>
                     <th>Units</th>
+                    <th>This Semester</th>
                     <th>Status</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                ${subjects.length === 0 ? '<tr><td colspan="8"><div class="empty-state-sm">No subjects found</div></td></tr>' :
+                ${subjects.length === 0 ? `<tr><td colspan="9"><div class="empty-state-sm">${dbError ? '⚠️ DB Error: ' + esc(dbError) : 'No subjects found'}</div></td></tr>` :
                   subjects.map(s => {
-                    const yr = s.year_level ? s.year_level + 'Y' : '—';
-                    const sem = s.semester === '1' ? '1st' : s.semester === '2' ? '2nd' : s.semester === 'summer' ? 'Sum' : '—';
+                    const yr  = s.year_level ? s.year_level + 'Y' : '—';
+                    const sem = s.semester == 1 ? '1st' : s.semester == 2 ? '2nd' : s.semester == 3 ? 'Sum' : '—';
+                    const secCount = parseInt(s.current_section_count) || 0;
+                    const offeringCell = !parseInt(s.is_offered)
+                        ? `<span class="off-badge off-none">Not Offered</span>`
+                        : `<span class="off-badge ${s.current_instructor ? 'off-open' : 'off-warn'}">Offered</span>
+                           <span class="off-sec-pill ${secCount === 0 ? 'off-sec-none' : ''}">${secCount} section${secCount !== 1 ? 's' : ''}</span>
+                           ${s.current_instructor ? `<div style="font-size:11px;color:#737373;margin-top:2px;">${esc(s.current_instructor)}</div>` : `<div style="font-size:11px;color:#B45309;margin-top:2px;">No instructor</div>`}`;
                     return `
                         <tr>
                             <td><span class="subj-code">${esc(s.subject_code)}</span></td>
@@ -110,6 +149,7 @@ async function renderList(container, search = '') {
                             <td class="meta-text">${yr}</td>
                             <td class="meta-text">${sem}</td>
                             <td><span class="units-badge">${s.units}</span></td>
+                            <td>${offeringCell}</td>
                             <td><span class="badge badge-${s.status}">${s.status}</span></td>
                             <td class="actions-cell">
                                 <button class="btn-actions" data-id="${s.subject_id}">⋮</button>
@@ -128,13 +168,34 @@ async function renderList(container, search = '') {
     // Events
     container.querySelector('#btn-add').addEventListener('click', () => openModal(container));
 
+    const getFilters = () => ({
+        s:   container.querySelector('#filter-search').value,
+        d:   container.querySelector('#filter-dept').value,
+        p:   container.querySelector('#filter-prog').value,
+        sem: container.querySelector('#filter-sem').value,
+    });
+
     let debounce;
-    container.querySelector('#filter-search').addEventListener('input', (e) => {
+    container.querySelector('#filter-search').addEventListener('input', () => {
         clearTimeout(debounce);
-        debounce = setTimeout(() => renderList(container, e.target.value), 400);
+        const { s, d, p, sem } = getFilters();
+        debounce = setTimeout(() => renderList(container, s, d, p, sem), 400);
+    });
+    // Department change → reset program filter
+    container.querySelector('#filter-dept').addEventListener('change', () => {
+        const { s, d, sem } = getFilters();
+        renderList(container, s, d, '', sem);
+    });
+    container.querySelector('#filter-prog').addEventListener('change', () => {
+        const { s, d, p, sem } = getFilters();
+        renderList(container, s, d, p, sem);
+    });
+    container.querySelector('#filter-sem').addEventListener('change', () => {
+        const { s, d, p, sem } = getFilters();
+        renderList(container, s, d, p, sem);
     });
     const clearBtn = container.querySelector('#clear-search');
-    if (clearBtn) clearBtn.addEventListener('click', () => renderList(container, ''));
+    if (clearBtn) clearBtn.addEventListener('click', () => renderList(container, '', '', '', ''));
 
     container.querySelectorAll('.btn-actions').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -158,7 +219,7 @@ async function renderList(container, search = '') {
             e.preventDefault();
             if (!confirm(`Deactivate "${a.dataset.name}"?`)) return;
             const res = await Api.post('/SubjectsAPI.php?action=delete', { subject_id: parseInt(a.dataset.delete) });
-            if (res.success) renderList(container, search);
+            if (res.success) { const { s, d, p, sem } = getFilters(); renderList(container, s, d, p, sem); }
             else alert(res.message);
         });
     });
@@ -212,7 +273,7 @@ function openModal(container, subj = null) {
                             <option value="">Not Set</option>
                             <option value="1" ${subj?.semester=='1'?'selected':''}>1st Semester</option>
                             <option value="2" ${subj?.semester=='2'?'selected':''}>2nd Semester</option>
-                            <option value="summer" ${subj?.semester==='summer'?'selected':''}>Summer</option>
+                            <option value="3" ${subj?.semester==3?'selected':''}>Summer</option>
                         </select>
                     </div>
                     <div class="form-group full">

@@ -12,11 +12,63 @@ export async function render(container) {
     const data = res.success ? res.data : {};
     const stats = data.stats || {};
     const subjects = data.subjects || [];
+    const pendingQuizzes = data.pending_quizzes || [];
     const user = Auth.user();
 
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    // Build My Subjects cards
+    const subjectCards = subjects.length === 0
+        ? `<div class="sd-empty">No enrolled subjects yet. <a href="#student/enroll" style="color:#1B4D3E;font-weight:600;">Enroll in a section</a> to get started.</div>`
+        : subjects.map(s => {
+            const pct = s.progress || 0;
+            const barColor = pct >= 75 ? '#1B4D3E' : pct >= 40 ? '#B45309' : '#e8e8e8';
+            const qDone = parseInt(s.completed_quizzes || 0);
+            const qTotal = parseInt(s.total_quizzes || 0);
+            return `
+            <div class="sd-subj-card">
+                <div class="sd-subj-top">
+                    <span class="sd-subj-code">${esc(s.subject_code)}</span>
+                    <span class="sd-subj-units">${s.units || 0} units</span>
+                </div>
+                <div class="sd-subj-name">${esc(s.subject_name)}</div>
+                <div class="sd-subj-meta">
+                    <span>👨‍🏫 ${esc(s.instructor_name || 'TBA')}</span>
+                    ${s.schedule ? `<span>🕐 ${esc(s.schedule)}</span>` : ''}
+                    ${s.room ? `<span>📍 ${esc(s.room)}</span>` : ''}
+                    ${s.section_name ? `<span>🏫 ${esc(s.section_name)}</span>` : ''}
+                </div>
+                <div class="sd-subj-progress-label">
+                    <span>Lessons</span>
+                    <span>${s.completed_lessons}/${s.total_lessons} &bull; ${pct}%</span>
+                </div>
+                <div class="sd-subj-progress-track">
+                    <div class="sd-subj-progress-fill" style="width:${pct}%;background:${barColor}"></div>
+                </div>
+                <div class="sd-subj-footer">
+                    <span class="sd-subj-quiz-stat">📝 ${qDone}/${qTotal} quizzes done</span>
+                    <a href="#student/quizzes" class="sd-subj-link">Quizzes →</a>
+                </div>
+            </div>`;
+        }).join('');
+
+    // Build To-Do quiz list
+    const todoRows = pendingQuizzes.length === 0
+        ? `<div class="sd-empty">All caught up! No pending quizzes.</div>`
+        : pendingQuizzes.map(q => {
+            const timeLabel = q.time_limit ? `${q.time_limit} min` : 'No limit';
+            return `
+            <div class="sd-todo-row">
+                <span class="sd-todo-badge-subj">${esc(q.subject_code)}</span>
+                <div class="sd-todo-info">
+                    <span class="sd-todo-title">${esc(q.quiz_title)}</span>
+                    <span class="sd-todo-sub">⏱ ${timeLabel}</span>
+                </div>
+                <a href="#student/quizzes" class="sd-todo-btn">Take Quiz</a>
+            </div>`;
+        }).join('');
 
     container.innerHTML = `
         <style>
@@ -37,7 +89,8 @@ export async function render(container) {
             /* ===== Stats ===== */
             .sd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
             .sd-stat {
-                background: #fff; border: 1px solid #e8e8e8; border-radius: 14px;
+                background: #fff; border: 1px solid #f1f5f9; border-radius: 14px;
+                box-shadow: 0 1px 3px rgba(0,0,0,.07);
                 padding: 20px; display: flex; align-items: center; gap: 16px;
             }
             .sd-stat-icon {
@@ -49,11 +102,12 @@ export async function render(container) {
             .sd-stat-lbl { font-size: 12px; color: #6b7280; font-weight: 500; margin-top: 2px; }
 
             /* ===== Quick Actions ===== */
-            .sd-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+            .sd-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
             .sd-action {
                 display: flex; align-items: center; gap: 14px;
-                padding: 18px 20px; background: #fff; border: 1px solid #e8e8e8;
+                padding: 18px 20px; background: #fff; border: 1px solid #f1f5f9;
                 border-radius: 14px; text-decoration: none; color: #374151;
+                box-shadow: 0 1px 3px rgba(0,0,0,.07);
                 transition: all 0.2s;
             }
             .sd-action:hover {
@@ -68,6 +122,69 @@ export async function render(container) {
             .sd-action-text { font-size: 14px; font-weight: 600; }
             .sd-action-sub { font-size: 11px; color: #9ca3af; font-weight: 400; margin-top: 1px; }
 
+            /* ===== Section title ===== */
+            .sd-section-hdr {
+                display: flex; align-items: center; gap: 10px;
+                margin-bottom: 14px;
+            }
+            .sd-section-hdr h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0; }
+            .sd-count-pill {
+                background: #1B4D3E; color: #fff; font-size: 11px; font-weight: 700;
+                padding: 2px 8px; border-radius: 12px;
+            }
+            .sd-count-pill.warn { background: #B45309; }
+
+            /* ===== My Subjects grid ===== */
+            .sd-subjects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 28px; }
+            .sd-subj-card {
+                background: #fff; border: 1px solid #f1f5f9; border-radius: 14px;
+                box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+                padding: 18px; display: flex; flex-direction: column; gap: 8px;
+                transition: box-shadow .22s, transform .22s;
+            }
+            .sd-subj-card:hover {
+                box-shadow: 0 8px 24px rgba(0,0,0,.1), 0 4px 8px rgba(0,0,0,.06);
+                transform: translateY(-2px);
+            }
+            .sd-subj-top { display: flex; align-items: center; justify-content: space-between; }
+            .sd-subj-code { font-size: 13px; font-weight: 700; color: #1B4D3E; background: #E8F5E9; padding: 3px 10px; border-radius: 8px; }
+            .sd-subj-units { font-size: 11px; color: #9ca3af; }
+            .sd-subj-name { font-size: 15px; font-weight: 700; color: #1f2937; }
+            .sd-subj-meta { display: flex; flex-direction: column; gap: 3px; }
+            .sd-subj-meta span { font-size: 12px; color: #6b7280; }
+            .sd-subj-progress-label { display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-top: 4px; }
+            .sd-subj-progress-track { height: 7px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+            .sd-subj-progress-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+            .sd-subj-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+            .sd-subj-quiz-stat { font-size: 12px; color: #6b7280; }
+            .sd-subj-link { font-size: 12px; font-weight: 600; color: #1B4D3E; text-decoration: none; }
+            .sd-subj-link:hover { text-decoration: underline; }
+
+            /* ===== To-Do ===== */
+            .sd-todo-card { background: #fff; border: 1px solid #f1f5f9; border-radius: 14px; overflow: hidden; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+            .sd-todo-row {
+                display: flex; align-items: center; gap: 14px;
+                padding: 14px 20px; border-bottom: 1px solid #f5f5f5;
+            }
+            .sd-todo-row:last-child { border-bottom: none; }
+            .sd-todo-badge-subj {
+                flex-shrink: 0; font-size: 11px; font-weight: 700;
+                background: #FEF3C7; color: #92400E; padding: 3px 8px; border-radius: 8px;
+                white-space: nowrap;
+            }
+            .sd-todo-info { flex: 1; min-width: 0; }
+            .sd-todo-title { display: block; font-size: 14px; font-weight: 600; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .sd-todo-sub { font-size: 12px; color: #9ca3af; }
+            .sd-todo-btn {
+                flex-shrink: 0; padding: 7px 16px; background: #1B4D3E; color: #fff;
+                border-radius: 8px; font-size: 13px; font-weight: 600;
+                text-decoration: none; transition: background .2s;
+            }
+            .sd-todo-btn:hover { background: #2D6A4F; }
+
+            /* ===== Empty ===== */
+            .sd-empty { padding: 24px; text-align: center; color: #9ca3af; font-size: 14px; }
+
             /* ===== Responsive ===== */
             @media(max-width: 1100px) {
                 .sd-stats { grid-template-columns: repeat(2, 1fr); }
@@ -76,7 +193,7 @@ export async function render(container) {
             @media(max-width: 640px) {
                 .sd-stats { grid-template-columns: 1fr; }
                 .sd-actions { grid-template-columns: 1fr; }
-                .sd-subjects { grid-template-columns: 1fr; }
+                .sd-subjects-grid { grid-template-columns: 1fr; }
             }
         </style>
 
@@ -166,6 +283,21 @@ export async function render(container) {
             </a>
         </div>
 
+        <!-- To-Do: Pending Quizzes -->
+        ${pendingQuizzes.length > 0 ? `
+        <div class="sd-section-hdr">
+            <h3>To-Do</h3>
+            <span class="sd-count-pill warn">${pendingQuizzes.length} quiz${pendingQuizzes.length !== 1 ? 'zes' : ''} pending</span>
+        </div>
+        <div class="sd-todo-card">${todoRows}</div>
+        ` : ''}
+
+        <!-- My Subjects -->
+        <div class="sd-section-hdr">
+            <h3>My Subjects</h3>
+            <span class="sd-count-pill">${subjects.length}</span>
+        </div>
+        <div class="sd-subjects-grid">${subjectCards}</div>
     `;
 }
 

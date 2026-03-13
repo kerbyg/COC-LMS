@@ -16,11 +16,26 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_remPerms = [
+    'instructor-list'   => 'remedials.view',
+    'student-list'      => 'remedials.view',
+    'students-for-quiz' => 'remedials.view',
+    'create'            => 'remedials.create',
+    'update'            => 'remedials.edit',
+];
+if (isset($_remPerms[$action]) && !Auth::can($_remPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_remPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
-    case 'instructor-list': getInstructorRemedials(); break;
-    case 'student-list': getStudentRemedials(); break;
-    case 'create': createRemedial(); break;
-    case 'update': updateRemedial(); break;
+    case 'instructor-list':   getInstructorRemedials(); break;
+    case 'student-list':      getStudentRemedials();    break;
+    case 'create':            createRemedial();         break;
+    case 'update':            updateRemedial();         break;
+    case 'students-for-quiz': getStudentsForQuiz();     break;
     default:
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
@@ -32,16 +47,24 @@ function getInstructorRemedials() {
     $status = $_GET['status'] ?? '';
 
     try {
-        $sql = "SELECT ra.*,
+        // Match remedials for quizzes the instructor created OR subjects they teach via subject_offered
+        $sql = "SELECT DISTINCT ra.*,
                     u.first_name, u.last_name, u.student_id,
                     q.quiz_title, q.passing_rate,
-                    s.subject_code, s.subject_name
+                    s.subject_code, s.subject_name,
+                    ra.created_at as assigned_at
                 FROM remedial_assignment ra
                 JOIN users u ON ra.user_student_id = u.users_id
                 JOIN quiz q ON ra.quiz_id = q.quiz_id
                 JOIN subject s ON q.subject_id = s.subject_id
-                WHERE q.user_teacher_id = ?";
-        $params = [$userId];
+                WHERE (
+                    q.user_teacher_id = ?
+                    OR s.subject_id IN (
+                        SELECT DISTINCT so.subject_id FROM subject_offered so
+                        WHERE so.user_teacher_id = ? AND so.status = 'open'
+                    )
+                )";
+        $params = [$userId, $userId];
 
         if ($subjectId) {
             $sql .= " AND q.subject_id = ?";
@@ -68,13 +91,17 @@ function getStudentRemedials() {
         $data = db()->fetchAll(
             "SELECT ra.*, q.quiz_title, q.passing_rate, q.quiz_id,
                 s.subject_code, s.subject_name,
-                ql.lessons_id as linked_lessons_id,
-                l.lesson_title as linked_lesson_title
+                (SELECT ql.lessons_id FROM quiz_lessons ql
+                 JOIN lessons l ON l.lessons_id = ql.lessons_id
+                 WHERE ql.quiz_id = q.quiz_id AND l.subject_id = s.subject_id
+                 LIMIT 1) as linked_lessons_id,
+                (SELECT l.lesson_title FROM quiz_lessons ql
+                 JOIN lessons l ON l.lessons_id = ql.lessons_id
+                 WHERE ql.quiz_id = q.quiz_id AND l.subject_id = s.subject_id
+                 LIMIT 1) as linked_lesson_title
              FROM remedial_assignment ra
              JOIN quiz q ON ra.quiz_id = q.quiz_id
              JOIN subject s ON q.subject_id = s.subject_id
-             LEFT JOIN quiz_lessons ql ON ql.quiz_id = q.quiz_id
-             LEFT JOIN lessons l ON l.lessons_id = ql.lessons_id
              WHERE ra.user_student_id = ?
              ORDER BY ra.created_at DESC",
             [$userId]
@@ -166,4 +193,27 @@ function updateRemedial() {
         error_log("Remedial update error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Failed to update remedial']);
     }
+}
+
+// Get all students enrolled in the subject of a given quiz
+function getStudentsForQuiz() {
+    $quizId = (int)($_GET['quiz_id'] ?? 0);
+    if (!$quizId) {
+        echo json_encode(['success' => true, 'data' => []]);
+        return;
+    }
+
+    $data = db()->fetchAll(
+        "SELECT DISTINCT u.users_id, u.first_name, u.last_name, u.student_id
+         FROM quiz q
+         JOIN subject s ON s.subject_id = q.subject_id
+         JOIN subject_offered so ON so.subject_id = s.subject_id
+         JOIN student_subject ss ON ss.subject_offered_id = so.subject_offered_id
+                                 AND ss.status = 'enrolled'
+         JOIN users u ON u.users_id = ss.user_student_id
+         WHERE q.quiz_id = ?
+         ORDER BY u.last_name, u.first_name",
+        [$quizId]
+    );
+    echo json_encode(['success' => true, 'data' => $data]);
 }

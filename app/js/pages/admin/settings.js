@@ -4,8 +4,6 @@
  */
 import { Api } from '../../api.js';
 
-let activeSection = 'general';
-
 export async function render(container) {
     container.innerHTML = `
         <style>
@@ -232,6 +230,11 @@ export async function render(container) {
                         <span class="nav-icon">🤖</span> AI Generation
                     </div>
                     <div class="set-nav-divider"></div>
+                    <div class="set-nav-label">Academic</div>
+                    <div class="set-nav-item" data-section="school-year">
+                        <span class="nav-icon">📅</span> School Year
+                    </div>
+                    <div class="set-nav-divider"></div>
                     <div class="set-nav-label">Advanced</div>
                     <div class="set-nav-item" data-section="maintenance">
                         <span class="nav-icon">🔧</span> Maintenance
@@ -427,6 +430,25 @@ export async function render(container) {
                         </div>
                     </div>
 
+                    <!-- ── School Year ── -->
+                    <div class="set-panel" data-panel="school-year">
+                        <div class="set-card">
+                            <div class="set-card-head">
+                                <div class="set-card-head-icon blue">📅</div>
+                                <div class="set-card-title">
+                                    <h3>School Year Records</h3>
+                                    <p>Manage academic semesters and their active/inactive status for record keeping</p>
+                                </div>
+                            </div>
+                            <div class="set-card-body" id="sy-body">
+                                <div style="text-align:center;padding:32px;color:#737373;">Loading...</div>
+                            </div>
+                            <div class="set-card-foot">
+                                <button class="btn-primary" id="btn-add-sem">+ Add Semester</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- ── Maintenance ── -->
                     <div class="set-panel" data-panel="maintenance">
                         <div class="set-card">
@@ -474,7 +496,7 @@ export async function render(container) {
             container.querySelectorAll('.set-panel').forEach(p => p.classList.remove('active'));
             item.classList.add('active');
             container.querySelector(`.set-panel[data-panel="${sec}"]`).classList.add('active');
-            activeSection = sec;
+            if (sec === 'school-year') loadSchoolYear();
         });
     });
 
@@ -528,9 +550,10 @@ export async function render(container) {
         inp.type = inp.type === 'password' ? 'text' : 'password';
     });
 
-    // ── Save handlers ──
+    // ── Save handlers (static panels) ──
     container.querySelectorAll('[data-section]').forEach(btn => {
         if (btn.tagName !== 'BUTTON') return;
+        if (['btn-add-sem'].includes(btn.id)) return; // handled separately
         btn.addEventListener('click', async () => {
             const orig = btn.innerHTML;
             btn.disabled = true;
@@ -542,6 +565,259 @@ export async function render(container) {
             setTimeout(() => { btn.innerHTML = orig; }, 1800);
         });
     });
+
+    // ── School Year: load semesters ──────────────────────────────────────────
+
+    const SEM_NAMES = { 1: '1st Semester', 2: '2nd Semester', 3: 'Summer' };
+
+    function fmtDate(d) {
+        if (!d) return null;
+        const dt = new Date(d);
+        return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    async function loadSchoolYear() {
+        const body = container.querySelector('#sy-body');
+        body.innerHTML = '<div style="text-align:center;padding:32px;color:#737373;">Loading...</div>';
+
+        const res = await Api.get('/SemesterAPI.php?action=list');
+        const semesters = res.success ? res.data : [];
+
+        if (semesters.length === 0) {
+            body.innerHTML = '<p style="color:#737373;text-align:center;padding:24px 0;">No semesters yet. Click "+ Add Semester" to create one.</p>';
+            return;
+        }
+
+        const active = semesters.find(s => s.status === 'active');
+
+        // Group by academic_year (already sorted DESC)
+        const grouped = {};
+        for (const s of semesters) {
+            if (!grouped[s.academic_year]) grouped[s.academic_year] = [];
+            grouped[s.academic_year].push(s);
+        }
+
+        const statusBadge = (s) => {
+            const cfg = {
+                active:   { bg:'#E8F5E9', color:'#1B4D3E', dot:'#22c55e', label:'Active'   },
+                upcoming: { bg:'#DBEAFE', color:'#1E40AF', dot:'#3b82f6', label:'Upcoming'  },
+                inactive: { bg:'#f3f4f6', color:'#6b7280', dot:'#9ca3af', label:'Inactive'  },
+            }[s.status] || { bg:'#f3f4f6', color:'#6b7280', dot:'#9ca3af', label: s.status };
+            return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${cfg.bg};color:${cfg.color};">
+                <span style="width:7px;height:7px;border-radius:50%;background:${cfg.dot};display:inline-block;"></span>${cfg.label}
+            </span>`;
+        };
+
+        const dateRange = (s) => {
+            if (!s.start_date && !s.end_date) return '<span style="color:#bbb;">No dates set</span>';
+            return `${fmtDate(s.start_date) || '?'} → ${fmtDate(s.end_date) || '?'}`;
+        };
+
+        body.innerHTML = `
+            <style>
+                .sy-active-card {
+                    background: linear-gradient(135deg,#f0fdf4,#dcfce7);
+                    border: 1.5px solid #86efac; border-radius: 12px;
+                    padding: 14px 18px; margin-bottom: 20px;
+                    display: flex; align-items: center; gap: 14px;
+                }
+                .sy-active-dot { width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0;box-shadow:0 0 0 3px #bbf7d0; }
+                .sy-active-info .sy-active-title { font-size:14px;font-weight:700;color:#15803d; }
+                .sy-active-info .sy-active-sub   { font-size:12px;color:#4ade80; margin-top:2px; }
+                .sy-no-active { background:#FEF3C7;border:1.5px solid #FDE68A;border-radius:12px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400e;font-weight:600; }
+                .sy-ay-block { margin-bottom:16px; }
+                .sy-ay-label { font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.7px;padding:6px 0 8px;border-bottom:2px solid #f0f0f0;margin-bottom:0; }
+                .sy-row {
+                    display:grid; grid-template-columns:1fr 180px 110px auto;
+                    align-items:center; gap:12px;
+                    padding:11px 4px; border-bottom:1px solid #f5f5f5;
+                    font-size:13.5px;
+                }
+                .sy-row:last-child { border-bottom:none; }
+                .sy-row:hover { background:#fafafa; border-radius:8px; }
+                .sy-row-name { font-weight:600; color:#262626; }
+                .sy-row-name.active-row { color:#15803d; }
+                .sy-row-date { font-size:12px; color:#737373; }
+                .sy-row-actions { display:flex; gap:6px; justify-content:flex-end; }
+                .sy-btn { padding:5px 12px; border-radius:7px; border:1px solid #e0e0e0; background:#fff; font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
+                .sy-btn:hover { background:#f5f5f5; }
+                .sy-btn.activate { border-color:#1B4D3E;color:#1B4D3E;background:#f0fdf4; }
+                .sy-btn.activate:hover { background:#dcfce7; }
+                .sy-btn.del { color:#b91c1c; background:none; border:none; font-size:16px; padding:4px 8px; }
+                .sy-btn.del:hover { background:#fef2f2; border-radius:6px; }
+                .sy-btn.del:disabled { color:#d1d5db; cursor:not-allowed; }
+            </style>
+
+            ${active
+                ? `<div class="sy-active-card">
+                    <div class="sy-active-dot"></div>
+                    <div class="sy-active-info">
+                        <div class="sy-active-title">${escSy(active.semester_name)} &nbsp;·&nbsp; AY ${escSy(active.academic_year)}</div>
+                        <div class="sy-active-sub">${dateRange(active)}</div>
+                    </div>
+                   </div>`
+                : `<div class="sy-no-active">⚠️ No active semester — set one below so offerings and student data resolve correctly.</div>`
+            }
+
+            ${Object.entries(grouped).map(([ay, rows]) => `
+                <div class="sy-ay-block">
+                    <div class="sy-ay-label">AY ${escSy(ay)}</div>
+                    ${rows.map(s => `
+                    <div class="sy-row" data-sem-id="${s.semester_id}">
+                        <span class="sy-row-name ${s.status === 'active' ? 'active-row' : ''}">${escSy(s.semester_name)}</span>
+                        <span class="sy-row-date">${dateRange(s)}</span>
+                        <span>${statusBadge(s)}</span>
+                        <div class="sy-row-actions">
+                            <button class="sy-btn" data-edit="${s.semester_id}">✏️ Edit</button>
+                            ${s.status !== 'active'
+                                ? `<button class="sy-btn activate" data-activate="${s.semester_id}">Set Active</button>`
+                                : ''}
+                            <button class="sy-btn del" data-del="${s.semester_id}" ${s.status === 'active' ? 'disabled title="Cannot delete active semester"' : ''}>🗑</button>
+                        </div>
+                    </div>`).join('')}
+                </div>
+            `).join('')}
+        `;
+
+        // Edit
+        body.querySelectorAll('[data-edit]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const s = semesters.find(x => x.semester_id == btn.dataset.edit);
+                if (s) openSemModal(s);
+            });
+        });
+
+        // Set Active — one click, no extra confirm needed (modal already warned)
+        body.querySelectorAll('[data-activate]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const s = semesters.find(x => x.semester_id == btn.dataset.activate);
+                btn.disabled = true; btn.textContent = '...';
+                const r = await Api.post('/SemesterAPI.php?action=update', {
+                    semester_id: parseInt(btn.dataset.activate),
+                    semester_name: s.semester_name,
+                    academic_year: s.academic_year,
+                    start_date: s.start_date,
+                    end_date: s.end_date,
+                    status: 'active'
+                });
+                if (r.success) { showToast(`${s.semester_name} (${s.academic_year}) is now active`, 'success'); loadSchoolYear(); }
+                else { showToast(r.message || 'Failed', 'error'); btn.disabled = false; btn.textContent = 'Set Active'; }
+            });
+        });
+
+        // Delete
+        body.querySelectorAll('[data-del]:not([disabled])').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const s = semesters.find(x => x.semester_id == btn.dataset.del);
+                if (!confirm(`Delete "${s.semester_name} ${s.academic_year}"?\nThis cannot be undone.`)) return;
+                const r = await Api.post('/SemesterAPI.php?action=delete', { semester_id: parseInt(btn.dataset.del) });
+                if (r.success) { showToast('Semester deleted', 'success'); loadSchoolYear(); }
+                else showToast(r.message || 'Failed', 'error');
+            });
+        });
+    }
+
+    // ── Add/Edit Semester Modal ──────────────────────────────────────────────
+
+    function openSemModal(sem = null) {
+        const isEdit = !!sem;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:2000;';
+        overlay.innerHTML = `
+            <div style="background:#fff;border-radius:16px;width:90%;max-width:460px;overflow:hidden;">
+                <div style="padding:20px 24px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="font-size:17px;font-weight:700;color:#262626;">${isEdit ? 'Edit Semester' : 'Add Semester'}</h3>
+                    <button id="sem-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#737373;">&times;</button>
+                </div>
+                <div style="padding:24px;">
+                    <div id="sem-alert"></div>
+                    <div class="fg">
+                        <label>Academic Year *</label>
+                        <input class="f-input" id="sem-ay" placeholder="e.g. 2025-2026" value="${escSy(sem?.academic_year || '')}">
+                        <div class="fg-hint">Format: YYYY-YYYY</div>
+                    </div>
+                    <div class="fg">
+                        <label>Semester *</label>
+                        <select class="f-select" id="sem-type">
+                            <option value="1" ${sem?.sem_level == 1 ? 'selected' : ''}>1st Semester</option>
+                            <option value="2" ${sem?.sem_level == 2 ? 'selected' : ''}>2nd Semester</option>
+                            <option value="3" ${sem?.sem_level == 3 ? 'selected' : ''}>Summer</option>
+                        </select>
+                    </div>
+                    ${isEdit ? `
+                    <div class="fg">
+                        <label>Custom Name</label>
+                        <input class="f-input" id="sem-name" value="${escSy(sem?.semester_name || '')}">
+                        <div class="fg-hint">Leave as default or customize (e.g. "Midyear")</div>
+                    </div>` : ''}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="fg">
+                            <label>Start Date</label>
+                            <input type="date" class="f-input" id="sem-start" value="${sem?.start_date || ''}">
+                        </div>
+                        <div class="fg">
+                            <label>End Date</label>
+                            <input type="date" class="f-input" id="sem-end" value="${sem?.end_date || ''}">
+                        </div>
+                    </div>
+                    <div class="fg">
+                        <label>Status</label>
+                        <select class="f-select" id="sem-status">
+                            <option value="upcoming" ${(sem?.status || 'upcoming') === 'upcoming' ? 'selected' : ''}>🔵 Upcoming</option>
+                            <option value="active"   ${sem?.status === 'active'   ? 'selected' : ''}>🟢 Active</option>
+                            <option value="inactive" ${sem?.status === 'inactive' ? 'selected' : ''}>⚫ Inactive</option>
+                        </select>
+                        <div class="fg-hint">Setting as "Active" will mark all other semesters as inactive</div>
+                    </div>
+                </div>
+                <div style="padding:14px 24px;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:10px;">
+                    <button class="btn-primary" id="sem-cancel" style="background:#f5f5f5;color:#404040;border:1px solid #e0e0e0;box-shadow:none;">Cancel</button>
+                    <button class="btn-primary" id="sem-save">${isEdit ? 'Update' : 'Create'} Semester</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('#sem-close').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#sem-cancel').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+        overlay.querySelector('#sem-save').addEventListener('click', async () => {
+            const ay     = overlay.querySelector('#sem-ay').value.trim();
+            const lvl    = overlay.querySelector('#sem-type').value;
+            const name   = isEdit ? overlay.querySelector('#sem-name').value.trim() : SEM_NAMES[lvl];
+            const start  = overlay.querySelector('#sem-start').value || null;
+            const end    = overlay.querySelector('#sem-end').value || null;
+            const status = overlay.querySelector('#sem-status').value;
+
+            if (!ay) {
+                overlay.querySelector('#sem-alert').innerHTML = '<div style="background:#FEE2E2;color:#b91c1c;padding:9px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;">Academic year is required</div>';
+                return;
+            }
+
+            const payload = { semester_name: name || SEM_NAMES[lvl], academic_year: ay, sem_level: parseInt(lvl), start_date: start, end_date: end, status };
+            if (isEdit) payload.semester_id = sem.semester_id;
+
+            const action = isEdit ? 'update' : 'create';
+            const r = await Api.post(`/SemesterAPI.php?action=${action}`, payload);
+
+            if (r.success) {
+                overlay.remove();
+                showToast(isEdit ? 'Semester updated' : 'Semester created', 'success');
+                loadSchoolYear();
+            } else {
+                overlay.querySelector('#sem-alert').innerHTML = `<div style="background:#FEE2E2;color:#b91c1c;padding:9px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;">${escSy(r.message)}</div>`;
+            }
+        });
+    }
+
+    container.querySelector('#btn-add-sem').addEventListener('click', () => openSemModal());
+}
+
+function escSy(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
 }
 
 function showToast(msg, type = 'success') {

@@ -9,13 +9,22 @@ let extractedText = '';
 let generatedQuestions = null;
 let formState = { subject_id: '', lessons_id: '', quiz_title: '', quiz_type: 'graded' };
 let questionSettings = { num_mc: 5, num_tf: 5, num_fib: 0, num_sa: 0, num_essay: 0, difficulty: 'medium' };
+let linkedQuizId = null;
+let linkedQuizTitle = '';
 
-export async function render(container) {
+export async function render(container, params = {}) {
     // Reset state
     currentStep = 1;
     extractedText = '';
     generatedQuestions = null;
-    formState = { subject_id: '', lessons_id: '', quiz_title: '', quiz_type: 'graded' };
+    linkedQuizId = params.quiz_id ? parseInt(params.quiz_id) : null;
+    linkedQuizTitle = params.quiz_title ? decodeURIComponent(params.quiz_title) : '';
+    formState = {
+        subject_id: params.subject_id ? decodeURIComponent(params.subject_id) : '',
+        lessons_id: '',
+        quiz_title: linkedQuizTitle || '',
+        quiz_type: 'graded'
+    };
     questionSettings = { num_mc: 5, num_tf: 5, num_fib: 0, num_sa: 0, num_essay: 0, difficulty: 'medium' };
 
     const subjRes = await Api.get('/AIQuizAPI.php?action=subjects');
@@ -120,13 +129,21 @@ export async function render(container) {
             .save-result h3 { font-size:20px; font-weight:700; margin-bottom:8px; }
             .save-result p { font-size:14px; color:#737373; margin-bottom:16px; }
 
+            .btn-back { display:inline-flex; align-items:center; gap:6px; color:#1B4D3E; font-size:13px; font-weight:600; text-decoration:none; margin-bottom:16px; }
+            .btn-back:hover { text-decoration:underline; }
             @media(max-width:768px) { .form-row, .type-grid, .qty-grid { grid-template-columns:1fr; } .stepper { flex-direction:column; } }
         </style>
 
+        <a href="#instructor/quizzes" class="btn-back">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            Back to Quizzes
+        </a>
         <div class="aiq-header">
             <h2>🤖 AI Quiz Generator</h2>
             <p>Upload a PDF/DOCX or paste text content, and AI will generate quiz questions for you</p>
         </div>
+
+        ${linkedQuizId ? `<div style="background:#E8F5E9;border:1.5px solid #bbf7d0;border-radius:10px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px;"><span style="font-size:18px">🔗</span><div><div style="font-size:12px;font-weight:700;color:#2D6A4F;text-transform:uppercase;letter-spacing:.5px">Adding to existing quiz</div><div style="font-size:15px;color:#262626;font-weight:600">${esc(linkedQuizTitle)}</div></div></div>` : ''}
 
         <div class="stepper" id="stepper">
             <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">Configure</span></div>
@@ -163,13 +180,13 @@ function renderStep1(container, subjects) {
                 <div class="form-group">
                     <label>Link to Lesson (optional)</label>
                     <select id="ai-lesson" ${!formState.subject_id?'disabled':''}>
-                        <option value="">None</option>
+                        <option value="">General (no specific lesson)</option>
                     </select>
                 </div>
             </div>
             <div class="form-group">
                 <label>Quiz Title *</label>
-                <input type="text" id="ai-title" placeholder="e.g. Chapter 3 Assessment" value="${esc(formState.quiz_title)}">
+                <input type="text" id="ai-title" placeholder="e.g. Chapter 3 Assessment" value="${esc(formState.quiz_title)}" ${linkedQuizId ? 'readonly style="background:#f5f5f5;color:#737373"' : ''}>
             </div>
             <div class="form-group">
                 <label>Quiz Type</label>
@@ -197,7 +214,7 @@ function renderStep1(container, subjects) {
         formState.subject_id = subjectEl.value;
         lessonEl.disabled = !subjectEl.value;
         if (subjectEl.value) loadLessons(subjectEl.value, lessonEl);
-        else lessonEl.innerHTML = '<option value="">None</option>';
+        else lessonEl.innerHTML = '<option value="">General (no specific lesson)</option>';
     });
 
     lessonEl.addEventListener('change', () => { formState.lessons_id = lessonEl.value; });
@@ -222,7 +239,7 @@ async function loadLessons(subjectId, selectEl, selectedId) {
     selectEl.innerHTML = '<option value="">Loading...</option>';
     const res = await Api.get('/AIQuizAPI.php?action=lessons&subject_id=' + subjectId);
     const lessons = res.success ? res.data : [];
-    selectEl.innerHTML = '<option value="">None</option>' +
+    selectEl.innerHTML = '<option value="">General (no specific lesson)</option>' +
         lessons.map(l => `<option value="${l.lessons_id}" ${selectedId==l.lessons_id?'selected':''}>${esc(l.lesson_title)}</option>`).join('');
     selectEl.disabled = false;
 }
@@ -521,7 +538,7 @@ function renderStep4(container, subjects) {
                 <button class="btn" id="btn-back4">Back to Settings</button>
                 <div style="display:flex;gap:8px">
                     <button class="btn" id="btn-regenerate">Regenerate</button>
-                    <button class="btn btn-green" id="btn-save" ${allQ.length===0?'disabled':''}>Save Quiz (${allQ.length} questions)</button>
+                    <button class="btn btn-green" id="btn-save" ${allQ.length===0?'disabled':''}>${linkedQuizId ? `Add ${allQ.length} Questions to Quiz` : `Save Quiz (${allQ.length} questions)`}</button>
                 </div>
             </div>
         </div>
@@ -531,7 +548,6 @@ function renderStep4(container, subjects) {
     panel.querySelectorAll('.btn-del-q').forEach(btn => {
         btn.addEventListener('click', () => {
             const idx = parseInt(btn.dataset.idx);
-            const allArr = [...(generatedQuestions.objective || []), ...(generatedQuestions.subjective || [])];
             const objLen = (generatedQuestions.objective || []).length;
             if (idx < objLen) {
                 generatedQuestions.objective.splice(idx, 1);
@@ -641,6 +657,7 @@ async function doSave(container, subjects, panel) {
             lessons_id: formState.lessons_id || null,
             quiz_title: formState.quiz_title,
             quiz_type: formState.quiz_type,
+            ...(linkedQuizId ? { quiz_id: linkedQuizId } : {}),
             questions: { objective, subjective }
         });
 
@@ -667,6 +684,7 @@ async function doSave(container, subjects, panel) {
                         question_type: qType,
                         points:        q.points || 1,
                         subject_id:    formState.subject_id || null,
+                        lessons_id:    formState.lessons_id || null,
                         visibility:    bankVisibility,
                         options:       opts
                     });
@@ -678,30 +696,36 @@ async function doSave(container, subjects, panel) {
                 ? `<p style="font-size:12px;color:#1B4D3E;margin:4px 0 0;">🏦 ${bankPublished} question${bankPublished !== 1 ? 's' : ''} published to the Content Bank.</p>`
                 : '';
 
+            const successButtons = linkedQuizId
+                ? `<a href="#instructor/quiz-questions?quiz_id=${linkedQuizId}" class="btn btn-green" style="text-decoration:none">Go to Quiz Questions</a>
+                   <a href="#instructor/content-bank" class="btn" style="text-decoration:none">View Content Bank</a>`
+                : `<a href="#instructor/quizzes" class="btn btn-green" style="text-decoration:none">Go to Quizzes</a>
+                   <a href="#instructor/content-bank" class="btn" style="text-decoration:none">View Content Bank</a>
+                   <button class="btn btn-purple" id="btn-new">Create Another</button>`;
             panel.innerHTML = `
                 <div class="step-panel">
                     <div class="save-result">
                         <div style="font-size:48px;margin-bottom:12px">✅</div>
                         <h3 style="color:#1B4D3E">${esc(res.message || 'Quiz saved successfully!')}</h3>
-                        <p>Your AI-generated quiz has been saved as a draft. You can edit it further in the Quizzes page.</p>
+                        <p>${linkedQuizId ? `Questions added to "<strong>${esc(linkedQuizTitle)}</strong>" successfully.` : 'Your AI-generated quiz has been saved as a draft. You can edit it further in the Quizzes page.'}</p>
                         ${bankNote}
                         <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
-                            <a href="#instructor/quizzes" class="btn btn-green" style="text-decoration:none">Go to Quizzes</a>
-                            <a href="#instructor/content-bank" class="btn" style="text-decoration:none">View Content Bank</a>
-                            <button class="btn btn-purple" id="btn-new">Create Another</button>
+                            ${successButtons}
                         </div>
                     </div>
                 </div>
             `;
-            panel.querySelector('#btn-new')?.addEventListener('click', () => render(container));
+            if (!linkedQuizId) {
+                panel.querySelector('#btn-new')?.addEventListener('click', () => render(container));
+            }
         } else {
             saveBtn.disabled = false;
-            saveBtn.innerHTML = `Save Quiz (${allQ.length} questions)`;
+            saveBtn.innerHTML = linkedQuizId ? `Add ${allQ.length} Questions to Quiz` : `Save Quiz (${allQ.length} questions)`;
             alert('Save failed: ' + (res.error || res.message || 'Unknown error'));
         }
     } catch (err) {
         saveBtn.disabled = false;
-        saveBtn.innerHTML = `Save Quiz (${allQ.length} questions)`;
+        saveBtn.innerHTML = linkedQuizId ? `Add ${allQ.length} Questions to Quiz` : `Save Quiz (${allQ.length} questions)`;
         alert('Save error: ' + err.message);
     }
 }

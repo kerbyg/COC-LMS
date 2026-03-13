@@ -124,6 +124,9 @@ async function boot() {
     // Get detailed user data
     await Auth.getUser();
 
+    // Load RBAC permissions for the current user
+    await Auth.fetchPermissions();
+
     // Hide loading, show app
     document.getElementById('app-loading').style.display = 'none';
     document.getElementById('app').style.display = 'flex';

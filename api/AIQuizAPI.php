@@ -19,6 +19,19 @@ $userId = Auth::id();
 $input = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = $_GET['action'] ?? $input['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_aiPerms = [
+    'subjects'  => 'quizzes.view',
+    'lessons'   => 'lessons.view',
+    'generate'  => 'quizzes.create',
+    'save'      => 'quizzes.create',
+];
+if (isset($_aiPerms[$action]) && !Auth::can($_aiPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_aiPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'generate':
         generateQuestions($input);
@@ -41,7 +54,7 @@ function getInstructorSubjects($userId) {
         "SELECT DISTINCT s.subject_id, s.subject_code, s.subject_name
          FROM subject s
          JOIN subject_offered so ON s.subject_id = so.subject_id
-         WHERE so.user_teacher_id = ?
+         WHERE so.user_teacher_id = ? AND so.status = 'open'
          ORDER BY s.subject_code",
         [$userId]
     );
@@ -55,9 +68,10 @@ function getSubjectLessons($userId) {
         return;
     }
     $data = db()->fetchAll(
-        "SELECT lessons_id, lesson_title FROM lessons
-         WHERE subject_id = ? AND user_teacher_id = ? AND status = 'published'
-         ORDER BY lesson_order",
+        "SELECT l.lessons_id, l.lesson_title FROM lessons l
+         JOIN subject_offered so ON so.subject_id = l.subject_id
+         WHERE l.subject_id = ? AND so.user_teacher_id = ? AND l.status = 'published'
+         ORDER BY l.lesson_order",
         [$subjectId, $userId]
     );
     echo json_encode(['success' => true, 'data' => $data]);
@@ -174,21 +188,23 @@ ANSWER: [correct word/phrase]
 
     if ($numSA > 0) {
         $prompt .= "SHORT ANSWER ({$numSA} questions):
-Format each as:
+Format each EXACTLY as:
 SA[number]: [question requiring 1-2 sentence answer]
+ANSWER: [model answer with key points expected]
 
 ";
     }
 
     if ($numEssay > 0) {
         $prompt .= "ESSAY ({$numEssay} questions):
-Format each as:
-ESSAY[number]: [open-ended question requiring detailed response]
+Format each EXACTLY as:
+ESSAY[number]: [open-ended question requiring a detailed paragraph response]
+ANSWER: [model answer listing the key points and ideas expected in a good response]
 
 ";
     }
 
-    $prompt .= "Generate questions now:";
+    $prompt .= "IMPORTANT: Follow the format exactly. Do not add extra labels or numbering outside the format. Generate questions now:";
 
     return $prompt;
 }
@@ -269,6 +285,20 @@ function callGroqAPI($apiKey, $prompt) {
 
 
 /**
+ * Strip meta-text artifacts from AI-generated question text
+ * e.g. "(1 questions)**", "**", trailing asterisks, numbering leftovers
+ */
+function cleanQuestionText($text) {
+    // Remove markdown bold markers
+    $text = preg_replace('/\*{1,3}/', '', $text);
+    // Remove patterns like "(N questions)" or "(N question)"
+    $text = preg_replace('/\(\d+\s+questions?\)/i', '', $text);
+    // Remove leading/trailing punctuation artifacts
+    $text = trim($text, " \t\n\r\0\x0B:-");
+    return trim($text);
+}
+
+/**
  * Parse AI response into structured questions
  */
 function parseAIResponse($text, $numMC, $numTF, $numFIB, $numSA, $numEssay) {
@@ -282,7 +312,7 @@ function parseAIResponse($text, $numMC, $numTF, $numFIB, $numSA, $numEssay) {
         $correctIndex = ord(strtoupper(trim($match[6]))) - ord('A');
         $objective[] = [
             'type' => 'multiple_choice',
-            'question' => trim($match[1]),
+            'question' => cleanQuestionText(trim($match[1])),
             'options' => [trim($match[2]), trim($match[3]), trim($match[4]), trim($match[5])],
             'correct_index' => $correctIndex,
             'points' => 2
@@ -313,25 +343,33 @@ function parseAIResponse($text, $numMC, $numTF, $numFIB, $numSA, $numEssay) {
         ];
     }
 
-    // Parse Short Answer questions
-    preg_match_all('/SA\d*[:\.]?\s*(.+?)(?=\n(?:SA|ESSAY|$)|\n\n|$)/is', $text, $saMatches, PREG_SET_ORDER);
+    // Parse Short Answer questions (with required ANSWER: field)
+    preg_match_all('/SA\d*[:\.]?\s*(.+?)\n\s*ANSWER:\s*(.+?)(?=\n\s*(?:SA|ESSAY)\d|$)/is', $text, $saMatches, PREG_SET_ORDER);
 
     foreach (array_slice($saMatches, 0, $numSA) as $match) {
+        $q = cleanQuestionText(trim($match[1]));
+        $a = cleanQuestionText(trim($match[2]));
+        if (empty($q)) continue;
         $subjective[] = [
-            'type' => 'short_answer',
-            'question' => trim($match[1]),
-            'points' => 3
+            'type'     => 'short_answer',
+            'question' => $q,
+            'answer'   => $a,
+            'points'   => 3
         ];
     }
 
-    // Parse Essay questions
-    preg_match_all('/ESSAY\d*[:\.]?\s*(.+?)(?=\n(?:ESSAY|$)|\n\n|$)/is', $text, $essayMatches, PREG_SET_ORDER);
+    // Parse Essay questions (with required ANSWER: field)
+    preg_match_all('/ESSAY\d*[:\.]?\s*(.+?)\n\s*ANSWER:\s*(.+?)(?=\n\s*ESSAY\d|$)/is', $text, $essayMatches, PREG_SET_ORDER);
 
     foreach (array_slice($essayMatches, 0, $numEssay) as $match) {
+        $q = cleanQuestionText(trim($match[1]));
+        $a = cleanQuestionText(trim($match[2]));
+        if (empty($q)) continue;
         $subjective[] = [
-            'type' => 'essay',
-            'question' => trim($match[1]),
-            'points' => 5
+            'type'     => 'essay',
+            'question' => $q,
+            'answer'   => $a,
+            'points'   => 5
         ];
     }
 
@@ -402,17 +440,33 @@ function fillMissingQuestions($questions, $category, $num1, $num2, $num3) {
 
 /**
  * Save generated quiz to database
+ * If quiz_id is provided, appends questions to the existing quiz instead of creating a new one.
  */
 function saveQuiz($input, $userId) {
-    $subjectId = (int)($input['subject_id'] ?? 0);
-    $lessonId = !empty($input['lessons_id']) ? (int)$input['lessons_id'] : null;
-    $quizTitle = trim($input['quiz_title'] ?? '');
-    $quizType = $input['quiz_type'] ?? 'graded';
-    $questions = $input['questions'] ?? ['objective' => [], 'subjective' => []];
+    $linkedQuizId = !empty($input['quiz_id']) ? (int)$input['quiz_id'] : null;
+    $subjectId    = (int)($input['subject_id'] ?? 0);
+    $lessonId     = !empty($input['lessons_id']) ? (int)$input['lessons_id'] : null;
+    $quizTitle    = trim($input['quiz_title'] ?? '');
+    $quizType     = $input['quiz_type'] ?? 'graded';
+    $questions    = $input['questions'] ?? ['objective' => [], 'subjective' => []];
 
-    if (!$subjectId || !$quizTitle) {
-        echo json_encode(['success' => false, 'error' => 'Subject and quiz title are required']);
-        return;
+    if ($linkedQuizId) {
+        // Appending to existing quiz — verify ownership
+        $existing = db()->fetchOne(
+            "SELECT quiz_id, subject_id FROM quiz WHERE quiz_id = ? AND user_teacher_id = ?",
+            [$linkedQuizId, $userId]
+        );
+        if (!$existing) {
+            echo json_encode(['success' => false, 'error' => 'Quiz not found or not yours']);
+            return;
+        }
+        $subjectId = (int)$existing['subject_id'];
+    } else {
+        // Creating a new quiz — subject and title are required
+        if (!$subjectId || !$quizTitle) {
+            echo json_encode(['success' => false, 'error' => 'Subject and quiz title are required']);
+            return;
+        }
     }
 
     $allQuestions = array_merge($questions['objective'] ?? [], $questions['subjective'] ?? []);
@@ -421,62 +475,71 @@ function saveQuiz($input, $userId) {
         return;
     }
 
-    // Calculate total points
     $totalPoints = array_sum(array_column($allQuestions, 'points'));
 
     try {
         $pdo = pdo();
         $pdo->beginTransaction();
 
-        // Insert quiz
-        $stmt = $pdo->prepare("INSERT INTO quiz (user_teacher_id, subject_id, quiz_title, quiz_description, time_limit, passing_rate, max_attempts, total_points, status, quiz_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
-        $stmt->execute([$userId, $subjectId, $quizTitle, 'Generated by AI', 30, 60, ($quizType === 'pre_test' ? 1 : 3), $totalPoints, 'draft', $quizType]);
-        $quizId = $pdo->lastInsertId();
+        if ($linkedQuizId) {
+            $quizId = $linkedQuizId;
+            // Bump total_points on the existing quiz
+            $pdo->prepare("UPDATE quiz SET total_points = total_points + ?, updated_at = NOW() WHERE quiz_id = ?")
+                ->execute([$totalPoints, $quizId]);
+        } else {
+            // Insert new quiz
+            $stmt = $pdo->prepare("INSERT INTO quiz (user_teacher_id, subject_id, quiz_title, quiz_description, time_limit, passing_rate, max_attempts, total_points, status, quiz_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            $stmt->execute([$userId, $subjectId, $quizTitle, 'Generated by AI', 30, 60, ($quizType === 'pre_test' ? 1 : 3), $totalPoints, 'draft', $quizType]);
+            $quizId = $pdo->lastInsertId();
 
-        if (!$quizId) {
-            throw new Exception('Failed to create quiz');
-        }
+            if (!$quizId) {
+                throw new Exception('Failed to create quiz');
+            }
 
-        // Link quiz to lesson via junction table (if table exists)
-        if ($lessonId) {
-            try {
-                $pdo->prepare("INSERT INTO quiz_lessons (quiz_id, lessons_id) VALUES (?, ?)")->execute([$quizId, $lessonId]);
-            } catch (Exception $e) {
-                // quiz_lessons table may not exist, skip
+            // Link quiz to lesson via junction table (if table exists)
+            if ($lessonId) {
+                try {
+                    $pdo->prepare("INSERT INTO quiz_lessons (quiz_id, lessons_id) VALUES (?, ?)")->execute([$quizId, $lessonId]);
+                } catch (Exception $e) { /* quiz_lessons may not exist */ }
             }
         }
 
-        // Insert questions into `questions` table, then link via `quiz_questions`
-        $pdo = pdo();
-        $orderNum = 1;
+        // Start inserting after the current last question order for this quiz
+        $maxOrder = (int)(db()->fetchOne(
+            "SELECT COALESCE(MAX(q.question_order), 0) AS max_order
+             FROM quiz_questions qq JOIN questions q ON qq.questions_id = q.questions_id
+             WHERE qq.quiz_id = ?",
+            [$quizId]
+        )['max_order'] ?? 0);
+        $orderNum = $maxOrder + 1;
+
         foreach ($allQuestions as $q) {
             $questionType = mapQuestionType($q['type']);
 
-            // 1. Insert into `questions` master table
             $stmt = $pdo->prepare("INSERT INTO questions (question_text, question_type, points, question_order, users_id) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$q['question'], $questionType, $q['points'] ?? 1, $orderNum, $userId]);
             $questionId = $pdo->lastInsertId();
 
-            // 2. Link to quiz via junction table
-            $stmt = $pdo->prepare("INSERT INTO quiz_questions (quiz_id, questions_id) VALUES (?, ?)");
-            $stmt->execute([$quizId, $questionId]);
+            $pdo->prepare("INSERT INTO quiz_questions (quiz_id, questions_id) VALUES (?, ?)")
+                ->execute([$quizId, $questionId]);
 
-            // 3. Insert options (quiz_question_id references questions.questions_id)
             if ($q['type'] === 'multiple_choice' && !empty($q['options'])) {
                 foreach ($q['options'] as $idx => $optText) {
                     $isCorrect = ($idx === ($q['correct_index'] ?? 0)) ? 1 : 0;
                     $pdo->prepare("INSERT INTO question_option (quiz_question_id, option_text, is_correct, order_number) VALUES (?, ?, ?, ?)")
                         ->execute([$questionId, $optText, $isCorrect, $idx + 1]);
                 }
-            }
-            elseif ($q['type'] === 'true_false') {
+            } elseif ($q['type'] === 'true_false') {
                 $answer = $q['answer'] ?? true;
                 $pdo->prepare("INSERT INTO question_option (quiz_question_id, option_text, is_correct, order_number) VALUES (?, 'True', ?, 1)")
                     ->execute([$questionId, $answer ? 1 : 0]);
                 $pdo->prepare("INSERT INTO question_option (quiz_question_id, option_text, is_correct, order_number) VALUES (?, 'False', ?, 2)")
                     ->execute([$questionId, $answer ? 0 : 1]);
-            }
-            elseif ($q['type'] === 'fill_blank' && !empty($q['answer'])) {
+            } elseif ($q['type'] === 'fill_blank' && !empty($q['answer'])) {
+                $pdo->prepare("INSERT INTO question_option (quiz_question_id, option_text, is_correct, order_number) VALUES (?, ?, 1, 1)")
+                    ->execute([$questionId, $q['answer']]);
+            } elseif (in_array($q['type'], ['short_answer', 'essay']) && !empty($q['answer'])) {
+                // Store model answer so AI grading has something to compare against
                 $pdo->prepare("INSERT INTO question_option (quiz_question_id, option_text, is_correct, order_number) VALUES (?, ?, 1, 1)")
                     ->execute([$questionId, $q['answer']]);
             }
@@ -486,10 +549,14 @@ function saveQuiz($input, $userId) {
 
         $pdo->commit();
 
+        $msg = $linkedQuizId
+            ? count($allQuestions) . ' questions added to your quiz successfully'
+            : 'Quiz saved successfully with ' . count($allQuestions) . ' questions';
+
         echo json_encode([
             'success' => true,
             'quiz_id' => $quizId,
-            'message' => 'Quiz saved successfully with ' . count($allQuestions) . ' questions'
+            'message' => $msg
         ]);
 
     } catch (Exception $e) {

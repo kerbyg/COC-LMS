@@ -109,11 +109,9 @@ export function renderTopbar(container) {
         document.querySelectorAll('.dropdown.active').forEach(d => d.classList.remove('active'));
     });
 
-    // Logout
+    // Logout — custom modal
     document.getElementById('topbar-logout').addEventListener('click', () => {
-        if (confirm('Are you sure you want to logout?')) {
-            Auth.logout();
-        }
+        showLogoutModal();
     });
 }
 
@@ -184,6 +182,79 @@ function addTopbarStyles() {
         @media (max-width: 768px) { .topbar-user-info, .dropdown-arrow { display: none; } }
     `;
     document.head.appendChild(style);
+}
+
+function showLogoutModal() {
+    document.getElementById('logout-modal-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'logout-modal-overlay';
+    overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,.45);
+        display:flex; align-items:center; justify-content:center;
+        z-index:9999;
+    `;
+    overlay.innerHTML = `
+        <style>
+            @keyframes lmFadeIn  { from{opacity:0} to{opacity:1} }
+            @keyframes lmSlideUp { from{transform:translateY(18px);opacity:0} to{transform:translateY(0);opacity:1} }
+            #logout-modal {
+                background:#fff; border-radius:18px; padding:36px 32px 28px;
+                width:380px; max-width:92vw; text-align:center;
+                box-shadow:0 32px 80px rgba(0,0,0,.2);
+                animation:lmSlideUp .22s cubic-bezier(.4,0,.2,1);
+            }
+            #logout-modal .lm-icon-wrap {
+                width:60px; height:60px; border-radius:16px;
+                background:linear-gradient(135deg,#E8F5E9,#d1fae5);
+                display:flex; align-items:center; justify-content:center;
+                font-size:28px; margin:0 auto 18px;
+                box-shadow:0 4px 12px rgba(27,77,62,.12);
+            }
+            #logout-modal h3 {
+                font-size:19px; font-weight:800; color:#111827; margin:0 0 8px;
+                letter-spacing:-.3px;
+            }
+            #logout-modal p {
+                font-size:14px; color:#6B7280; margin:0 0 28px; line-height:1.55;
+            }
+            #logout-modal .lm-actions { display:flex; gap:10px; }
+            #logout-modal .lm-cancel {
+                flex:1; padding:12px; border-radius:10px;
+                border:1.5px solid #E5E7EB; background:#fff;
+                font-size:14px; font-weight:600; color:#374151;
+                cursor:pointer; transition:all .15s;
+            }
+            #logout-modal .lm-cancel:hover { background:#F9FAFB; border-color:#D1D5DB; }
+            #logout-modal .lm-confirm {
+                flex:1; padding:12px; border-radius:10px;
+                border:none; background:#1B4D3E;
+                font-size:14px; font-weight:600; color:#fff;
+                cursor:pointer; transition:background .15s;
+            }
+            #logout-modal .lm-confirm:hover { background:#2D6A4F; }
+        </style>
+        <div id="logout-modal">
+            <div class="lm-icon-wrap">🚪</div>
+            <h3>Logging out?</h3>
+            <p>You'll need to sign in again to access your account.</p>
+            <div class="lm-actions">
+                <button class="lm-cancel" id="lm-cancel">Stay</button>
+                <button class="lm-confirm" id="lm-confirm">Yes, Logout</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    document.getElementById('lm-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('lm-confirm').addEventListener('click', () => {
+        overlay.remove();
+        Auth.logout();
+    });
+    const onKey = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
 }
 
 function escapeHtml(str) {

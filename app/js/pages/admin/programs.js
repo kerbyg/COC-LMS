@@ -5,16 +5,27 @@
 import { Api } from '../../api.js';
 
 let departments = [];
+let deptFilter = '';
 
 export async function render(container) {
+    const hashQuery = window.location.hash.split('?')[1] || '';
+    const hashParams = new URLSearchParams(hashQuery);
+    deptFilter = hashParams.get('department_id') || '';
+
     const deptRes = await Api.get('/ProgramsAPI.php?action=departments');
     departments = deptRes.success ? deptRes.data : [];
     await renderList(container);
 }
 
 async function renderList(container) {
-    const result = await Api.get('/ProgramsAPI.php?action=list');
+    const url = deptFilter
+        ? `/ProgramsAPI.php?action=list&department_id=${deptFilter}`
+        : '/ProgramsAPI.php?action=list';
+    const result = await Api.get(url);
     const programs = result.success ? result.data : [];
+    const deptName = deptFilter && departments.length
+        ? (departments.find(d => String(d.department_id) === String(deptFilter))?.department_name || '')
+        : '';
 
     container.innerHTML = `
         <style>
@@ -71,8 +82,9 @@ async function renderList(container) {
             @media(max-width:768px) { .form-grid { grid-template-columns:1fr; } .programs-grid { grid-template-columns:1fr; } }
         </style>
 
+        ${deptFilter ? `<a href="#admin/departments" style="display:inline-flex;align-items:center;gap:6px;color:#00461B;font-size:14px;font-weight:500;text-decoration:none;margin-bottom:16px;">← Back to Departments</a>` : ''}
         <div class="page-header">
-            <h2>Programs <span class="count">${programs.length}</span></h2>
+            <h2>${deptFilter && deptName ? `${esc(deptName)} — ` : ''}Programs <span class="count">${programs.length}</span></h2>
             <button class="btn-primary" id="btn-add">+ Add Program</button>
         </div>
 
@@ -111,7 +123,10 @@ async function renderList(container) {
     `;
 
     // Events
-    container.querySelector('#btn-add').addEventListener('click', () => openModal(container));
+    container.querySelector('#btn-add').addEventListener('click', () => {
+        const preselect = deptFilter ? { department_id: deptFilter } : null;
+        openModal(container, null, preselect);
+    });
 
     container.querySelectorAll('.btn-actions').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -141,12 +156,13 @@ async function renderList(container) {
     });
 }
 
-function openModal(container, prog = null) {
+function openModal(container, prog = null, preselect = null) {
     const isEdit = !!prog;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
 
-    const deptOpts = departments.map(d => `<option value="${d.department_id}" ${prog && prog.department_id==d.department_id?'selected':''}>${esc(d.department_name)}</option>`).join('');
+    const activeDeptId = prog?.department_id ?? preselect?.department_id ?? '';
+    const deptOpts = departments.map(d => `<option value="${d.department_id}" ${activeDeptId && String(activeDeptId)==String(d.department_id)?'selected':''}>${esc(d.department_name)}</option>`).join('');
 
     overlay.innerHTML = `
         <div class="modal">

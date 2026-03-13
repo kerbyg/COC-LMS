@@ -14,6 +14,8 @@ export async function render(container) {
             .eg-header { background:linear-gradient(135deg,#1B4D3E,#2D6A4F); border-radius:16px; padding:24px 28px; color:#fff; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
             .eg-header h2 { font-size:20px; font-weight:700; margin:0; }
             .eg-header p { font-size:13px; opacity:.85; margin:4px 0 0; }
+            .btn-back { display:inline-flex; align-items:center; gap:6px; color:#1B4D3E; font-size:13px; font-weight:600; text-decoration:none; margin-bottom:16px; }
+            .btn-back:hover { text-decoration:underline; }
 
             .eg-stats { display:flex; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
             .eg-stat { background:#fff; border:1px solid #e8e8e8; border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:12px; min-width:150px; }
@@ -44,6 +46,20 @@ export async function render(container) {
             .empty-state { text-align:center; padding:60px 24px; background:#fafafa; border:1px dashed #ddd; border-radius:12px; }
             .empty-state h3 { font-size:18px; font-weight:600; color:#333; margin:0 0 8px; }
             .empty-state p { font-size:14px; color:#666; margin:0; }
+
+            /* Student group card */
+            .eg-student-group { background:#fff; border:1px solid #e8e8e8; border-radius:12px; margin-bottom:10px; overflow:hidden; }
+            .eg-student-header { display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:16px; padding:16px 20px; cursor:pointer; transition:background .15s; }
+            .eg-student-header:hover { background:#f0fdf4; }
+            .eg-expand-icon { font-size:11px; color:#737373; transition:transform .2s; }
+            .eg-expand-icon.open { transform:rotate(90deg); }
+            .eg-attempts-list { display:none; border-top:1px solid #f0f0f0; }
+            .eg-attempts-list.open { display:block; }
+            .eg-attempt-row { display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:14px; padding:12px 20px 12px 60px; border-bottom:1px solid #f5f5f5; background:#fafffe; }
+            .eg-attempt-row:last-child { border-bottom:none; }
+            .eg-attempt-row:hover { background:#f0fdf4; }
+            .eg-attempt-meta { font-size:12px; color:#888; }
+            .eg-attempt-meta strong { color:#333; font-size:13px; display:block; }
 
             /* Grading Panel */
             .eg-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex; justify-content:flex-end; }
@@ -99,10 +115,14 @@ export async function render(container) {
             @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
         </style>
 
+        <a href="#instructor/gradebook" class="btn-back">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            Back to Gradebook
+        </a>
         <div class="eg-header">
             <div>
-                <h2>Essay Grading</h2>
-                <p>Review and grade essay and short answer responses from students</p>
+                <h2>Subjective Grading</h2>
+                <p>Review and grade essay, short answer, and fill-in-the-blank responses from students</p>
             </div>
         </div>
 
@@ -147,39 +167,87 @@ async function loadList(container, subjectId) {
         wrap.innerHTML = `<div class="empty-state">
             <div style="font-size:48px;margin-bottom:12px;">✅</div>
             <h3>All Caught Up!</h3>
-            <p>No essay or short answer responses are waiting to be graded.</p>
+            <p>No subjective responses are waiting to be graded.</p>
         </div>`;
         return;
     }
 
-    wrap.innerHTML = `<div class="eg-list">${attempts.map(a => {
-        const initials = (a.first_name?.[0] || '') + (a.last_name?.[0] || '');
-        const total = parseInt(a.pending_count || 0) + parseInt(a.graded_count || 0);
-        const graded = parseInt(a.graded_count || 0);
-        const pct = total > 0 ? Math.round(graded / total * 100) : 0;
-        const date = a.completed_at ? new Date(a.completed_at).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        return `
-        <div class="eg-card" data-attempt="${a.attempt_id}">
-            <div class="eg-avatar">${esc(initials)}</div>
-            <div class="eg-info">
-                <div class="eg-student">${esc(a.first_name)} ${esc(a.last_name)}</div>
-                <div class="eg-meta">${esc(a.quiz_title)} &bull; ${date}</div>
-                <span class="eg-subject">${esc(a.subject_code)}</span>
-            </div>
-            <div class="eg-progress">
-                <div class="eg-prog-label"><span>${graded}/${total} graded</span></div>
-                <div class="eg-prog-bar"><div class="eg-prog-fill" style="width:${pct}%"></div></div>
-            </div>
-            <span class="eg-pending-count">${a.pending_count} pending</span>
-            <button class="eg-btn">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                Grade
-            </button>
-        </div>`;
-    }).join('')}</div>`;
+    // Group attempts by student
+    const byStudent = new Map();
+    attempts.forEach(a => {
+        const key = a.first_name + '_' + a.last_name;
+        if (!byStudent.has(key)) byStudent.set(key, { first_name: a.first_name, last_name: a.last_name, attempts: [] });
+        byStudent.get(key).attempts.push(a);
+    });
 
-    wrap.querySelectorAll('.eg-card').forEach(card => {
-        card.addEventListener('click', () => openPanel(container, card.dataset.attempt, subjectId));
+    let html = '';
+    let gid = 0;
+    for (const [, st] of byStudent) {
+        gid++;
+        const groupId = `sg-${gid}`;
+        const initials = (st.first_name?.[0] || '') + (st.last_name?.[0] || '');
+        const totalPending = st.attempts.reduce((s, a) => s + parseInt(a.pending_count || 0), 0);
+        const totalAttempts = st.attempts.length;
+
+        html += `
+        <div class="eg-student-group">
+            <div class="eg-student-header" data-group="${groupId}">
+                <span class="eg-expand-icon">▶</span>
+                <div class="eg-info" style="display:flex;align-items:center;gap:12px;">
+                    <div class="eg-avatar">${esc(initials)}</div>
+                    <div>
+                        <div class="eg-student">${esc(st.first_name)} ${esc(st.last_name)}</div>
+                        <div class="eg-meta">${totalAttempts} submission${totalAttempts!==1?'s':''} to review</div>
+                    </div>
+                </div>
+                <span class="eg-pending-count">${totalPending} pending</span>
+                <span style="font-size:12px;color:#9ca3af;">${totalAttempts} attempt${totalAttempts!==1?'s':''}</span>
+            </div>
+            <div class="eg-attempts-list" id="${groupId}">
+                ${st.attempts.map(a => {
+                    const total  = parseInt(a.pending_count || 0) + parseInt(a.graded_count || 0);
+                    const graded = parseInt(a.graded_count || 0);
+                    const pct    = total > 0 ? Math.round(graded / total * 100) : 0;
+                    const date   = a.completed_at ? new Date(a.completed_at).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+                    return `
+                    <div class="eg-attempt-row">
+                        <div class="eg-attempt-meta">
+                            <strong>${esc(a.quiz_title)}</strong>
+                            <span>${esc(a.subject_code)} &bull; ${date}</span>
+                        </div>
+                        <div class="eg-progress" style="min-width:120px;">
+                            <div class="eg-prog-label"><span style="font-size:11px;color:#888;">${graded}/${total} graded</span></div>
+                            <div class="eg-prog-bar"><div class="eg-prog-fill" style="width:${pct}%"></div></div>
+                        </div>
+                        <span class="eg-pending-count" style="font-size:11px;">${a.pending_count} pending</span>
+                        <button class="eg-btn grade-btn" data-attempt="${a.attempt_id}">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Grade
+                        </button>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+    }
+
+    wrap.innerHTML = html;
+
+    // Toggle expand/collapse
+    wrap.querySelectorAll('.eg-student-header').forEach(hdr => {
+        hdr.addEventListener('click', () => {
+            const list = document.getElementById(hdr.dataset.group);
+            const icon = hdr.querySelector('.eg-expand-icon');
+            const isOpen = list.classList.toggle('open');
+            icon.classList.toggle('open', isOpen);
+        });
+    });
+
+    // Grade button opens panel
+    wrap.querySelectorAll('.grade-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openPanel(container, btn.dataset.attempt, subjectId);
+        });
     });
 }
 
@@ -232,9 +300,10 @@ async function openPanel(container, attemptId, subjectId) {
     let qn = 0;
     answers.forEach(a => {
         qn++;
-        const isSubj = a.question_type === 'essay' || a.question_type === 'short_answer';
-        const isPending = a.grading_status === 'pending';
-        const isGraded = a.grading_status === 'graded';
+        const isSubj     = ['essay','short_answer','fill_blank','fill_in_the_blank'].includes(a.question_type);
+        const isPending  = a.grading_status === 'pending';
+        const isAiGraded = a.grading_status === 'auto_graded';
+        const isGraded   = a.grading_status === 'graded';
         const studentText = (a.answer_text || '').trim();
 
         html += `<div class="qblock${isGraded ? ' graded' : ''}" id="qb_${a.answer_id}">
@@ -243,6 +312,7 @@ async function openPanel(container, attemptId, subjectId) {
                 <div style="display:flex;gap:8px;align-items:center;">
                     <span class="qtype-badge ${a.question_type}">${formatType(a.question_type)}</span>
                     <span style="font-size:11px;color:#999;">${a.max_points} pt${a.max_points != 1 ? 's' : ''}</span>
+                    ${isAiGraded ? `<span style="font-size:10px;background:#EDE9FE;color:#7C3AED;padding:2px 7px;border-radius:4px;font-weight:600;">🤖 AI Graded</span>` : ''}
                 </div>
             </div>
             <div class="qblock-body">
@@ -250,21 +320,29 @@ async function openPanel(container, attemptId, subjectId) {
 
         if (isSubj) {
             html += `<div class="student-ans${!studentText ? ' empty' : ''}">${studentText ? esc(studentText) : '(No answer provided)'}</div>`;
-            if (isPending) {
-                html += `<div class="grade-row">
+            if (isPending || isAiGraded) {
+                // Show grade form — for AI graded, pre-fill with AI score so instructor can review/override
+                const currentPts = isAiGraded ? (parseFloat(a.points_earned) || 0) : 0;
+                const currentFb  = isAiGraded ? (a.grader_feedback || '') : '';
+                html += `
+                ${isAiGraded ? `<div style="background:#EDE9FE;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#5B21B6;">
+                    🤖 <strong>AI Score: ${currentPts}/${a.max_points} pts</strong>${currentFb ? ` — <em>${esc(currentFb)}</em>` : ''}<br>
+                    <span style="opacity:.75">Review and adjust below if needed.</span>
+                </div>` : ''}
+                <div class="grade-row">
                     <div class="pts-wrap">
                         <span class="pts-label">Points</span>
-                        <input type="number" class="pts-input" id="pts_${a.answer_id}" min="0" max="${a.max_points}" step="0.5" value="0">
+                        <input type="number" class="pts-input" id="pts_${a.answer_id}" min="0" max="${a.max_points}" step="0.5" value="${currentPts}">
                         <div class="pts-max">/ ${a.max_points}</div>
                     </div>
                     <div class="fb-wrap">
                         <span class="pts-label">Feedback (optional)</span>
-                        <textarea class="fb-input" id="fb_${a.answer_id}" placeholder="Add feedback..."></textarea>
+                        <textarea class="fb-input" id="fb_${a.answer_id}" placeholder="Add feedback...">${esc(currentFb)}</textarea>
                     </div>
                 </div>
                 <button class="save-btn" id="sbtn_${a.answer_id}" data-answer="${a.answer_id}" data-max="${a.max_points}">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
-                    Save Grade
+                    ${isAiGraded ? 'Override / Confirm Grade' : 'Save Grade'}
                 </button>`;
             } else {
                 html += `<div class="graded-badge">

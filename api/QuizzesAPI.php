@@ -23,6 +23,26 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_quizPerms = [
+    'list'            => 'quizzes.view',
+    'get'             => 'quizzes.view',
+    'questions'       => 'quizzes.view',
+    'instructor-list' => 'quizzes.view',
+    'list-questions'  => 'quizzes.view',
+    'create'          => 'quizzes.create',
+    'update'          => 'quizzes.edit',
+    'add-question'    => 'quizzes.edit',
+    'update-question' => 'quizzes.edit',
+    'delete'          => 'quizzes.delete',
+    'delete-question' => 'quizzes.delete',
+];
+if (isset($_quizPerms[$action]) && !Auth::can($_quizPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_quizPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'list':
         getQuizzes();
@@ -113,8 +133,8 @@ function getQuizzes() {
                 $quiz['status'] = 'available';
             }
             
-            $quiz['can_take'] = !$isOverdue && ($quiz['max_attempts'] - $quiz['attempts_used']) > 0;
-            $quiz['attempts_remaining'] = $quiz['max_attempts'] - $quiz['attempts_used'];
+            $quiz['can_take'] = !$isOverdue; // unlimited attempts
+            $quiz['attempts_remaining'] = null;
         }
         
         echo json_encode([
@@ -211,7 +231,7 @@ function getQuestions() {
             [$quizId, $userId]
         )['count'] ?? 0;
         
-        if ($attemptCount >= $quiz['max_attempts']) {
+        if (false) { // unlimited attempts — check removed
             http_response_code(403);
             echo json_encode(['success' => false, 'message' => 'No attempts remaining']);
             return;

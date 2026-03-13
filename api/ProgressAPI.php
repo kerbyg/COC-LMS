@@ -16,6 +16,19 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_progPerms = [
+    'grades'           => 'grades.view',
+    'subject-progress' => 'grades.view',
+    'student-quizzes'  => 'quizzes.view',
+    'quiz-result'      => 'quizzes.view',
+];
+if (isset($_progPerms[$action]) && !Auth::can($_progPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_progPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'grades': getGrades(); break;
     case 'subject-progress': getSubjectProgress(); break;
@@ -206,11 +219,11 @@ function getStudentQuizzes() {
 
         // Compute status
         foreach ($quizzes as &$quiz) {
-            $quiz['attempts_remaining'] = max(0, $quiz['max_attempts'] - $quiz['attempts_used']);
+            $quiz['attempts_remaining'] = null; // unlimited
             if ($quiz['passed']) $quiz['quiz_status'] = 'passed';
             elseif ($quiz['attempts_used'] > 0) $quiz['quiz_status'] = 'attempted';
             else $quiz['quiz_status'] = 'available';
-            $quiz['can_take'] = $quiz['attempts_remaining'] > 0;
+            $quiz['can_take'] = true; // unlimited attempts
         }
 
         echo json_encode(['success' => true, 'data' => $quizzes]);
@@ -235,7 +248,7 @@ function getQuizResult() {
     try {
         $attempt = db()->fetchOne(
             "SELECT sqa.*, q.quiz_title, q.passing_rate, q.show_answers, q.quiz_type,
-                s.subject_code, s.subject_name
+                q.subject_id, s.subject_code, s.subject_name
              FROM student_quiz_attempts sqa
              JOIN quiz q ON sqa.quiz_id = q.quiz_id
              JOIN subject s ON q.subject_id = s.subject_id
@@ -271,15 +284,34 @@ function getQuizResult() {
             }
         }
 
-        // Get linked lesson (via quiz_lessons) and open remedial (if failed)
+        // Get linked lesson — must belong to the same subject as the quiz
         $linkedLessonsId = null;
         $linkedLessonTitle = null;
         $remedialId = null;
+        $subjectId = (int)($attempt['subject_id'] ?? 0);
 
+        // 1. Try quiz_lessons but only if the lesson belongs to the same subject
         $linkedLesson = db()->fetchOne(
-            "SELECT ql.lessons_id, l.lesson_title FROM quiz_lessons ql JOIN lessons l ON ql.lessons_id = l.lessons_id WHERE ql.quiz_id = ? LIMIT 1",
-            [$attempt['quiz_id']]
+            "SELECT ql.lessons_id, l.lesson_title
+             FROM quiz_lessons ql
+             JOIN lessons l ON ql.lessons_id = l.lessons_id
+             WHERE ql.quiz_id = ? AND l.subject_id = ?
+             LIMIT 1",
+            [$attempt['quiz_id'], $subjectId]
         );
+
+        // 2. Fallback: first published lesson for the quiz's subject
+        if (!$linkedLesson && $subjectId) {
+            $linkedLesson = db()->fetchOne(
+                "SELECT lessons_id, lesson_title
+                 FROM lessons
+                 WHERE subject_id = ? AND status = 'published'
+                 ORDER BY lesson_order ASC
+                 LIMIT 1",
+                [$subjectId]
+            );
+        }
+
         if ($linkedLesson) {
             $linkedLessonsId = $linkedLesson['lessons_id'];
             $linkedLessonTitle = $linkedLesson['lesson_title'];

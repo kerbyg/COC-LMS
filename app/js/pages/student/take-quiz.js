@@ -114,6 +114,22 @@ export async function render(container) {
                 .tq-submit-btn:hover { box-shadow:0 4px 14px rgba(0,70,27,.3); transform:translateY(-1px); }
 
                 /* Confirm Modal */
+                /* Text-answer question types */
+                .tq-text-answer { display:flex; flex-direction:column; gap:8px; }
+                .tq-text-label { font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.6px; margin-bottom:2px; }
+                .tq-text-input { padding:12px 16px; border:2px solid #e5e7eb; border-radius:10px; font-size:15px; outline:none; transition:border-color .15s; width:100%; box-sizing:border-box; }
+                .tq-text-input:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
+                .tq-textarea { padding:12px 16px; border:2px solid #e5e7eb; border-radius:10px; font-size:14px; line-height:1.7; outline:none; resize:vertical; font-family:inherit; width:100%; box-sizing:border-box; transition:border-color .15s; }
+                .tq-textarea:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
+                .tq-essay { min-height:200px; }
+                .tq-char-count { font-size:11px; color:#9ca3af; text-align:right; margin-top:2px; }
+                .tq-type-hint { display:flex; align-items:flex-start; gap:8px; padding:10px 14px; border-radius:8px; font-size:12.5px; margin-bottom:16px; }
+                .tq-type-hint.fill  { background:#EFF6FF; color:#1E40AF; border:1px solid #BFDBFE; }
+                .tq-type-hint.short { background:#F0FDF4; color:#166534; border:1px solid #BBF7D0; }
+                .tq-type-hint.essay { background:#FEF9C3; color:#854D0E; border:1px solid #FDE68A; }
+                .tq-inline-blank { display:inline-block; border:none; border-bottom:2.5px solid #1B4D3E; outline:none; padding:2px 10px; font-size:16px; font-weight:700; color:#1B4D3E; min-width:130px; max-width:260px; background:rgba(27,77,62,.07); border-radius:4px 4px 0 0; text-align:center; transition:background .15s; vertical-align:middle; margin:0 4px; }
+                .tq-inline-blank:focus { background:rgba(27,77,62,.14); }
+
                 .tq-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
                 .tq-modal { background:#fff; border-radius:16px; padding:32px; max-width:400px; width:90%; text-align:center; }
                 .tq-modal h3 { font-size:18px; font-weight:700; color:#262626; margin-bottom:8px; }
@@ -176,8 +192,89 @@ export async function render(container) {
         const q = questions[idx];
         const panel = container.querySelector('#tq-question');
         const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-        const typeLabel = q.question_type === 'true_false' ? 'True / False' : q.question_type === 'multiple_choice' ? 'Multiple Choice' : q.question_type;
-        const cleanText = cleanQuestionText(q.question_text);
+
+        const typeLabelMap = {
+            multiple_choice:    'Multiple Choice',
+            true_false:         'True / False',
+            fill_blank:         'Fill in the Blank',
+            fill_in_the_blank:  'Fill in the Blank',
+            short_answer:       'Short Answer',
+            essay:              'Essay'
+        };
+        const typeLabel  = typeLabelMap[q.question_type] || q.question_type;
+        const cleanText  = cleanQuestionText(q.question_text);
+        const curAnswer  = answers[q.questions_id] ?? '';
+        const isTextType = ['fill_blank','fill_in_the_blank','short_answer','essay'].includes(q.question_type);
+
+        // Build answer area based on type
+        let answerHtml = '';
+        if (q.question_type === 'fill_blank' || q.question_type === 'fill_in_the_blank') {
+            // Blank pattern: _____ (3+ underscores) or [blank]
+            const hasBlank = /_{3,}|\[blank\]/i.test(cleanText);
+            if (hasBlank) {
+                // Replace blank placeholder with inline input — shown inline in question text
+                const inlineText = cleanText.replace(/_{3,}|\[blank\]/gi,
+                    `<input type="text" class="tq-inline-blank" id="tq-text-ans"
+                            placeholder="     ?" value="${esc(String(curAnswer))}"
+                            autocomplete="off" spellcheck="false">`
+                );
+                // Override the question text rendered later
+                q._inlineBlankHtml = inlineText;
+            }
+            answerHtml = hasBlank ? '' : `
+                <div class="tq-type-hint fill">
+                    ✏️ &nbsp;Type your answer to complete the blank. Spelling matters.
+                </div>
+                <div class="tq-text-answer">
+                    <label class="tq-text-label">Your Answer</label>
+                    <input type="text" class="tq-text-input" id="tq-text-ans"
+                           placeholder="Fill in the blank…"
+                           value="${esc(String(curAnswer))}"
+                           autocomplete="off" spellcheck="false">
+                </div>`;
+        } else if (q.question_type === 'short_answer') {
+            const charMax = 500;
+            answerHtml = `
+                <div class="tq-type-hint short">
+                    📝 &nbsp;Answer briefly and clearly — 1 to 3 sentences is ideal.
+                </div>
+                <div class="tq-text-answer">
+                    <label class="tq-text-label">Your Answer</label>
+                    <textarea class="tq-textarea" id="tq-text-ans"
+                              placeholder="Write your short answer here…"
+                              rows="5" maxlength="${charMax}">${esc(String(curAnswer))}</textarea>
+                    <div class="tq-char-count"><span id="tq-char-num">${String(curAnswer).length}</span>/${charMax} characters</div>
+                </div>`;
+        } else if (q.question_type === 'essay') {
+            const charMax = 5000;
+            const wordCount = String(curAnswer).trim() ? String(curAnswer).trim().split(/\s+/).length : 0;
+            answerHtml = `
+                <div class="tq-type-hint essay">
+                    📄 &nbsp;Write a complete, well-structured response. Use paragraphs and support your ideas.
+                </div>
+                <div class="tq-text-answer">
+                    <label class="tq-text-label">Your Essay Response</label>
+                    <textarea class="tq-textarea tq-essay" id="tq-text-ans"
+                              placeholder="Write your essay here…"
+                              rows="10" maxlength="${charMax}">${esc(String(curAnswer))}</textarea>
+                    <div class="tq-char-count">
+                        <span id="tq-word-num">${wordCount}</span> words &nbsp;·&nbsp;
+                        <span id="tq-char-num">${String(curAnswer).length}</span>/${charMax} characters
+                    </div>
+                </div>`;
+        } else {
+            // Multiple choice / True-False
+            answerHtml = `
+                <div class="tq-options">
+                    ${q.choices.map((c, ci) => `
+                        <div class="tq-opt ${answers[q.questions_id] == c.option_id ? 'selected' : ''}" data-oid="${c.option_id}">
+                            <div class="tq-opt-radio"></div>
+                            <div class="tq-opt-letter">${letters[ci] || ci + 1}</div>
+                            <div class="tq-opt-text">${esc(c.option_text)}</div>
+                        </div>
+                    `).join('')}
+                </div>`;
+        }
 
         panel.innerHTML = `
             <div class="tq-q-badge">
@@ -185,38 +282,45 @@ export async function render(container) {
                 <span class="tq-q-of">of ${questions.length}</span>
                 <span class="tq-q-type">${typeLabel}</span>
             </div>
-            <div class="tq-q-text">${esc(cleanText)}</div>
+            <div class="tq-q-text">${q._inlineBlankHtml || esc(cleanText)}</div>
             <div class="tq-q-points">${q.points} point${q.points > 1 ? 's' : ''}</div>
-            <div class="tq-options">
-                ${q.choices.map((c, ci) => `
-                    <div class="tq-opt ${answers[q.questions_id] == c.option_id ? 'selected' : ''}" data-oid="${c.option_id}">
-                        <div class="tq-opt-radio"></div>
-                        <div class="tq-opt-letter">${letters[ci] || ci + 1}</div>
-                        <div class="tq-opt-text">${esc(c.option_text)}</div>
-                    </div>
-                `).join('')}
-            </div>
+            ${answerHtml}
             <div class="tq-nav-btns">
                 <button class="tq-btn" id="tq-prev" ${idx === 0 ? 'disabled' : ''}>&#8592; Previous</button>
                 <button class="tq-btn primary" id="tq-next" ${idx === questions.length - 1 ? 'disabled' : ''}>Next &#8594;</button>
             </div>
         `;
 
-        panel.querySelectorAll('.tq-opt').forEach(opt => {
-            opt.addEventListener('click', () => {
-                panel.querySelectorAll('.tq-opt').forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                answers[q.questions_id] = parseInt(opt.dataset.oid);
+        if (isTextType) {
+            const inp = panel.querySelector('#tq-text-ans');
+            inp.addEventListener('input', () => {
+                answers[q.questions_id] = inp.value;
                 updateNavigator();
+                if (q.question_type === 'short_answer') {
+                    panel.querySelector('#tq-char-num').textContent = inp.value.length;
+                } else if (q.question_type === 'essay') {
+                    const wc = inp.value.trim() ? inp.value.trim().split(/\s+/).length : 0;
+                    panel.querySelector('#tq-word-num').textContent = wc;
+                    panel.querySelector('#tq-char-num').textContent = inp.value.length;
+                }
             });
-        });
+            // Auto-focus for fill in the blank
+            if (q.question_type === 'fill_blank' || q.question_type === 'fill_in_the_blank') {
+                setTimeout(() => inp?.focus(), 50);
+            }
+        } else {
+            panel.querySelectorAll('.tq-opt').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    panel.querySelectorAll('.tq-opt').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    answers[q.questions_id] = parseInt(opt.dataset.oid);
+                    updateNavigator();
+                });
+            });
+        }
 
-        panel.querySelector('#tq-prev').addEventListener('click', () => {
-            if (idx > 0) showQuestion(idx - 1);
-        });
-        panel.querySelector('#tq-next').addEventListener('click', () => {
-            if (idx < questions.length - 1) showQuestion(idx + 1);
-        });
+        panel.querySelector('#tq-prev').addEventListener('click', () => { if (idx > 0) showQuestion(idx - 1); });
+        panel.querySelector('#tq-next').addEventListener('click', () => { if (idx < questions.length - 1) showQuestion(idx + 1); });
 
         updateNavigator();
     }
@@ -231,10 +335,12 @@ export async function render(container) {
         container.querySelector('#tq-nav-progress-fill').style.width = pct + '%';
 
         container.querySelectorAll('.tq-nav-num').forEach(n => {
-            const i = parseInt(n.dataset.idx);
-            const q = questions[i];
-            n.classList.toggle('current', i === currentQ);
-            n.classList.toggle('answered', !!answers[q.questions_id]);
+            const i   = parseInt(n.dataset.idx);
+            const q   = questions[i];
+            const ans = answers[q.questions_id];
+            const isAnswered = ans !== undefined && ans !== null && ans !== '';
+            n.classList.toggle('current',  i === currentQ);
+            n.classList.toggle('answered', isAnswered);
         });
     }
 

@@ -40,7 +40,10 @@ function renderView(container, offerings, semesters, semFilter = '') {
             .badge-open { background:#E8F5E9; color:#1B4D3E; }
             .badge-closed { background:#FEE2E2; color:#b91c1c; }
             .badge-cancelled { background:#f3f4f6; color:#737373; }
+            .batch-badge { background:#DBEAFE; color:#1E40AF; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
             .empty-state-sm { text-align:center; padding:40px; color:#737373; }
+            .filters { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+            .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:220px; }
             @media(max-width:768px) { .stats-row { grid-template-columns:1fr 1fr; } }
         </style>
 
@@ -58,18 +61,25 @@ function renderView(container, offerings, semesters, semFilter = '') {
                 <option value="">All Semesters</option>
                 ${semesters.map(s => `<option value="${s.semester_id}" ${semFilter==s.semester_id?'selected':''}>${esc(s.semester_name)} - ${esc(s.academic_year)}</option>`).join('')}
             </select>
+            <select id="filter-batch">
+                <option value="">All Batches</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+            </select>
         </div>
 
         <table class="data-table">
-            <thead><tr><th>Subject</th><th>Semester</th><th>Units</th><th>Sections</th><th>Instructors</th><th>Students</th><th>Status</th></tr></thead>
+            <thead><tr><th>Subject</th><th>Semester</th><th>Batch</th><th>Units</th><th>Sections</th><th>Students</th><th>Status</th></tr></thead>
             <tbody>
                 ${offerings.length === 0 ? '<tr><td colspan="7"><div class="empty-state-sm">No offerings found</div></td></tr>' :
                   offerings.map(o => `<tr>
                     <td><span class="subj-code">${esc(o.subject_code)}</span>${esc(o.subject_name)}</td>
                     <td>${esc(o.semester_name||'—')} <span style="color:#737373;font-size:12px">${esc(o.academic_year||'')}</span></td>
+                    <td>${o.batch ? `<span class="batch-badge">${esc(o.batch)}</span>` : '<span style="color:#aaa;font-size:12px">—</span>'}</td>
                     <td><span class="meta-badge">${o.units}</span></td>
                     <td><span class="meta-badge">${o.section_count}</span></td>
-                    <td><span class="meta-badge">${o.instructor_count}</span></td>
                     <td><span class="meta-badge">${o.student_count}</span></td>
                     <td><span class="badge badge-${o.status}">${o.status}</span></td>
                   </tr>`).join('')}
@@ -77,13 +87,17 @@ function renderView(container, offerings, semesters, semFilter = '') {
         </table>
     `;
 
-    container.querySelector('#filter-sem').addEventListener('change', async (e) => {
-        const semId = e.target.value;
-        const params = semId ? '&semester_id=' + semId : '';
+    async function applyFilters() {
+        const semId = container.querySelector('#filter-sem').value;
+        const batch = container.querySelector('#filter-batch').value;
+        let params = semId ? '&semester_id=' + semId : '';
+        if (batch) params += '&batch=' + encodeURIComponent(batch);
         const res = await Api.get('/SubjectOfferingsAPI.php?action=list' + params);
         const filtered = res.success ? res.data : [];
         renderView(container, filtered, semesters, semId);
-    });
+    }
+    container.querySelector('#filter-sem').addEventListener('change', applyFilters);
+    container.querySelector('#filter-batch').addEventListener('change', applyFilters);
 }
 
 function esc(str) { const d = document.createElement('div'); d.textContent = str||''; return d.innerHTML; }

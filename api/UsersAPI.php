@@ -16,12 +16,19 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
-// Dean can read instructors in their department; everything else is admin-only
-$role = Auth::role();
-$readOnlyActions = ['list', 'get', 'departments', 'programs'];
-if ($role !== 'admin' && !($role === 'dean' && in_array($action, $readOnlyActions))) {
+// RBAC: enforce permission per action
+$_userPerms = [
+    'list'        => 'users.view',
+    'get'         => 'users.view',
+    'departments' => 'users.view',
+    'programs'    => 'users.view',
+    'create'      => 'users.create',
+    'update'      => 'users.edit',
+    'delete'      => 'users.delete',
+];
+if (isset($_userPerms[$action]) && !Auth::can($_userPerms[$action])) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_userPerms[$action]}"]);
     exit;
 }
 

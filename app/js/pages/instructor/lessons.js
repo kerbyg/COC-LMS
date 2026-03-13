@@ -9,7 +9,9 @@ let subjects = [];
 export async function render(container) {
     const subjRes = await Api.get('/LessonsAPI.php?action=subjects');
     subjects = subjRes.success ? subjRes.data : [];
-    renderList(container);
+    const params    = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    const subjectId = params.get('subject_id') || '';
+    renderList(container, subjectId);
 }
 
 async function renderList(container, filterSubject = '') {
@@ -27,26 +29,33 @@ async function renderList(container, filterSubject = '') {
 
     container.innerHTML = `
         <style>
-            .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
-            .page-header h2 { font-size:22px; font-weight:700; color:#262626; }
-            .page-header .count { background:#E8F5E9; color:#1B4D3E; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; margin-left:8px; }
-            .btn-primary { background:linear-gradient(135deg,#00461B,#006428); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; }
-            .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,70,27,.3); }
+            .ls-banner { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:28px 32px; margin-bottom:24px; position:relative; overflow:hidden; }
+            .ls-banner::before { content:''; position:absolute; top:-40px; right:-40px; width:180px; height:180px; border-radius:50%; background:rgba(255,255,255,.07); pointer-events:none; }
+            .ls-banner::after { content:''; position:absolute; bottom:-60px; left:60px; width:220px; height:220px; border-radius:50%; background:rgba(255,255,255,.05); pointer-events:none; }
+            .ls-banner-inner { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; position:relative; z-index:1; }
+            .ls-banner-title { font-size:26px; font-weight:800; color:#fff; margin:0 0 4px; }
+            .ls-banner-sub { font-size:14px; color:rgba(255,255,255,.75); margin:0; }
+            .ls-banner-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+            .ls-back-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:10px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
+            .ls-back-btn:hover { background:rgba(255,255,255,.25); }
+            .btn-primary { background:#fff; color:#1B4D3E; border:none; padding:10px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; transition:all .15s; }
+            .btn-primary:hover { background:#f0fdf4; transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.15); }
 
-            .filters { margin-bottom:20px; }
-            .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:240px; }
+            .ls-filter-bar { display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+            .ls-filter-bar select { padding:9px 14px; border:1px solid #e8ecef; border-radius:10px; font-size:13px; min-width:240px; background:#fff; color:#374151; cursor:pointer; outline:none; transition:border-color .15s; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+            .ls-filter-bar select:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
 
-            .subject-group { margin-bottom:32px; }
-            .subject-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+            .subject-group { margin-bottom:28px; }
+            .subject-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding-bottom:10px; border-bottom:2px solid #f1f5f9; }
             .subj-code { background:#E8F5E9; color:#1B4D3E; padding:4px 10px; border-radius:6px; font-family:monospace; font-weight:700; font-size:13px; }
-            .subj-name { font-size:16px; font-weight:600; color:#262626; }
+            .subj-name { font-size:16px; font-weight:700; color:#111827; }
 
             /* Fixed: Removed overflow:hidden so dropdowns aren't clipped */
-            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; border:1px solid #e8e8e8; position:relative; }
-            .data-table th { text-align:left; padding:12px 16px; font-size:12px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
-            .data-table td { padding:12px 16px; border-bottom:1px solid #f5f5f5; font-size:14px; }
-            .data-table tr:hover td { background:#fafafa; }
-            
+            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,.07); position:relative; }
+            .data-table th { text-align:left; padding:12px 16px; font-size:12px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; background:#fafbfc; border-bottom:1px solid #f1f5f9; }
+            .data-table td { padding:13px 16px; border-bottom:1px solid #f8fafc; font-size:14px; }
+            .data-table tr:hover td { background:#f9fffe; }
+
             /* Round top corners of the table manually since overflow is visible */
             .data-table tr:first-child th:first-child { border-top-left-radius: 12px; }
             .data-table tr:first-child th:last-child { border-top-right-radius: 12px; }
@@ -72,6 +81,7 @@ async function renderList(container, filterSubject = '') {
             .actions-dropdown a { display:block; padding:10px 16px; font-size:13px; color:#404040; cursor:pointer; text-decoration:none; }
             .actions-dropdown a:hover { background:#f5f5f5; }
             .actions-dropdown a.danger { color:#b91c1c; }
+            .actions-dropdown a.archive { color:#1B4D3E; font-weight:600; }
 
             .modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
             .modal { background:#fff; border-radius:16px; width:90%; max-width:680px; max-height:90vh; overflow-y:auto; }
@@ -121,6 +131,7 @@ async function renderList(container, filterSubject = '') {
             .mat-item-icon.document { background:#DBEAFE; color:#1E40AF; }
             .mat-item-icon.image { background:#D1FAE5; color:#059669; }
             .mat-item-icon.link { background:#EDE9FE; color:#5B21B6; }
+            .mat-item-icon.audio { background:#FEF3C7; color:#B45309; }
             .mat-item-icon.other { background:#F3F4F6; color:#6B7280; }
             .mat-item-info { flex:1; min-width:0; }
             .mat-item-name { font-weight:600; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -132,12 +143,23 @@ async function renderList(container, filterSubject = '') {
             .mat-save-hint { background:#FEF3C7; color:#92400E; padding:12px 16px; border-radius:10px; font-size:13px; text-align:center; }
         </style>
 
-        <div class="page-header">
-            <h2>Lessons <span class="count">${lessons.length}</span></h2>
-            <button class="btn-primary" id="btn-add">+ Create Lesson</button>
+        <div class="ls-banner">
+            <div class="ls-banner-inner">
+                <div>
+                    <h2 class="ls-banner-title">Lessons <span style="font-size:16px;font-weight:600;opacity:.8;">(${lessons.length})</span></h2>
+                    <p class="ls-banner-sub">Manage and publish lessons for your classes</p>
+                </div>
+                <div class="ls-banner-actions">
+                    <a href="#instructor/my-classes" class="ls-back-btn">
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                        My Classes
+                    </a>
+                    <button class="btn-primary" id="btn-add">+ Create Lesson</button>
+                </div>
+            </div>
         </div>
 
-        <div class="filters">
+        <div class="ls-filter-bar">
             <select id="filter-subject">
                 <option value="">All Subjects</option>
                 ${subjects.map(s => `<option value="${s.subject_id}" ${filterSubject==s.subject_id?'selected':''}>${esc(s.subject_code)} - ${esc(s.subject_name)}</option>`).join('')}
@@ -168,6 +190,7 @@ async function renderList(container, filterSubject = '') {
                                     <button class="btn-actions" data-id="${l.lessons_id}">&#8942;</button>
                                     <div class="actions-dropdown ${isLast ? 'drop-up' : ''}" data-dropdown="${l.lessons_id}">
                                         <a href="#" data-edit="${l.lessons_id}" data-subj="${l.subject_id}" data-title="${esc(l.lesson_title)}" data-desc="${esc(l.lesson_description||'')}" data-content="${esc(l.lesson_content||'')}" data-status="${l.status}">Edit Lesson</a>
+                                        <a href="#" class="archive" data-archive="${l.lessons_id}" data-subj="${l.subject_id}" data-subj-code="${esc(group.code)}" data-title="${esc(l.lesson_title)}" data-desc="${esc(l.lesson_description||'')}" data-content="${esc(l.lesson_content||'')}">📦 Archive to Bank</a>
                                         <a href="#" class="danger" data-delete="${l.lessons_id}" data-name="${esc(l.lesson_title)}">Delete</a>
                                     </div>
                                 </td>
@@ -212,6 +235,20 @@ async function renderList(container, filterSubject = '') {
                 lesson_description: a.dataset.desc,
                 lesson_content: a.dataset.content,
                 status: a.dataset.status,
+            });
+        });
+    });
+
+    container.querySelectorAll('[data-archive]').forEach(a => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            openArchiveModal({
+                lessons_id:         a.dataset.archive,
+                subject_id:         a.dataset.subj,
+                subject_code:       a.dataset.subjCode,
+                lesson_title:       a.dataset.title,
+                lesson_description: a.dataset.desc,
+                lesson_content:     a.dataset.content,
             });
         });
     });
@@ -278,7 +315,7 @@ function openModal(container, filterSubject, lesson = null) {
                             <label class="mat-btn green" id="mat-upload-btn">
                                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                                 Upload File
-                                <input type="file" id="mat-file-input" style="display:none" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.jpg,.jpeg,.png,.gif,.webp">
+                                <input type="file" id="mat-file-input" style="display:none" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.jpg,.jpeg,.png,.gif,.webp,.mp3,.wav,.ogg,.m4a,.aac,.flac">
                             </label>
                         </div>
                     </div>
@@ -379,17 +416,22 @@ function openModal(container, filterSubject, lesson = null) {
         overlay.querySelector('#mat-link-title').value = '';
     });
     overlay.querySelector('#mat-link-save').addEventListener('click', async () => {
-        const url = overlay.querySelector('#mat-link-url').value.trim();
+        const url   = overlay.querySelector('#mat-link-url').value.trim();
         const title = overlay.querySelector('#mat-link-title').value.trim();
-        if (!url) { alert('Please enter a URL'); return; }
+
+        const urlErr = validateUrl(url);
+        if (urlErr) { showLinkError(overlay, urlErr); return; }
+        clearLinkError(overlay);
+
         const r = await Api.post('/LessonsAPI.php?action=add-link', { lessons_id: currentLessonId, url, title });
         if (r.success) {
             matLinkForm.classList.remove('show');
-            overlay.querySelector('#mat-link-url').value = '';
+            overlay.querySelector('#mat-link-url').value  = '';
             overlay.querySelector('#mat-link-title').value = '';
+            clearLinkError(overlay);
             loadMaterials();
         } else {
-            alert(r.message);
+            showLinkError(overlay, r.message);
         }
     });
 
@@ -398,14 +440,17 @@ function openModal(container, filterSubject, lesson = null) {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (file.size > 10 * 1024 * 1024) {
-            alert('File too large. Maximum size is 10MB.');
+        const fileErr = validateFile(file);
+        if (fileErr) {
+            matUploadStatus.style.display = 'block';
+            matUploadStatus.innerHTML = `<div class="alert alert-error">${esc(fileErr)}</div>`;
             e.target.value = '';
+            setTimeout(() => { matUploadStatus.style.display = 'none'; }, 5000);
             return;
         }
 
         matUploadStatus.style.display = 'block';
-        matUploadStatus.innerHTML = '<div class="alert alert-success" style="margin-bottom:8px">Uploading ' + esc(file.name) + '...</div>';
+        matUploadStatus.innerHTML = `<div class="alert alert-success">Uploading <strong>${esc(file.name)}</strong> (${formatSize(file.size)})…</div>`;
 
         const formData = new FormData();
         formData.append('file', file);
@@ -422,11 +467,14 @@ function openModal(container, filterSubject, lesson = null) {
             if (r.success) {
                 loadMaterials();
             } else {
-                alert(r.message || 'Upload failed');
+                matUploadStatus.style.display = 'block';
+                matUploadStatus.innerHTML = `<div class="alert alert-error">${esc(r.message || 'Upload failed')}</div>`;
+                setTimeout(() => { matUploadStatus.style.display = 'none'; }, 5000);
             }
         } catch (err) {
-            matUploadStatus.style.display = 'none';
-            alert('Upload failed. Please try again.');
+            matUploadStatus.style.display = 'block';
+            matUploadStatus.innerHTML = '<div class="alert alert-error">Upload failed. Please check your connection and try again.</div>';
+            setTimeout(() => { matUploadStatus.style.display = 'none'; }, 5000);
         }
         e.target.value = '';
     });
@@ -473,6 +521,84 @@ function openModal(container, filterSubject, lesson = null) {
     });
 }
 
+// ─── Archive to Content Bank ────────────────────────────────
+
+function openArchiveModal(lesson) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" style="max-width:560px;">
+            <div class="modal-header">
+                <h3>📦 Archive to Content Bank</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="arch-alert"></div>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;font-size:13px;color:#1B4D3E;margin-bottom:16px;">
+                    Creates a shareable copy in the Content Bank. Your original lesson stays unchanged.
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Subject</label>
+                    <div style="background:#E8F5E9;color:#1B4D3E;padding:7px 12px;border-radius:8px;font-size:13px;font-weight:700;display:inline-block;font-family:monospace;">${esc(lesson.subject_code)}</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Lesson Title *</label>
+                    <input class="form-input" id="arch-title" value="${esc(lesson.lesson_title)}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Short Description</label>
+                    <textarea class="form-textarea" id="arch-desc" rows="2">${esc(lesson.lesson_description)}</textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Visibility</label>
+                    <select class="form-select" id="arch-vis">
+                        <option value="public">Public — visible to all instructors</option>
+                        <option value="private">Private — only me</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary modal-cancel">Cancel</button>
+                <button class="btn-primary" id="arch-save">Archive to Bank</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    overlay.querySelector('#arch-save').addEventListener('click', async () => {
+        const title   = overlay.querySelector('#arch-title').value.trim();
+        const alertEl = overlay.querySelector('#arch-alert');
+        if (!title) { alertEl.innerHTML = '<div class="alert alert-error">Title is required.</div>'; return; }
+
+        const btn = overlay.querySelector('#arch-save');
+        btn.disabled = true; btn.textContent = 'Archiving…';
+
+        const res = await Api.post('/LessonBankAPI.php?action=publish', {
+            lesson_title:       title,
+            lesson_description: overlay.querySelector('#arch-desc').value.trim(),
+            lesson_content:     lesson.lesson_content,
+            subject_id:         lesson.subject_id || null,
+            visibility:         overlay.querySelector('#arch-vis').value,
+            attachment_type:    'none',
+        });
+
+        if (res.success) {
+            overlay.remove();
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1B4D3E;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);';
+            toast.textContent = '✓ Lesson archived to Content Bank!';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        } else {
+            btn.disabled = false; btn.textContent = 'Archive to Bank';
+            alertEl.innerHTML = `<div class="alert alert-error">${esc(res.message || 'Failed to archive.')}</div>`;
+        }
+    });
+}
+
 // ─── Helpers ────────────────────────────────────────────────
 
 function getMatIcon(m) {
@@ -488,6 +614,9 @@ function getMatIcon(m) {
     if (m.material_type === 'document') {
         return { cls: 'document', svg: '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>' };
     }
+    if (m.material_type === 'audio') {
+        return { cls: 'audio', svg: '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"/></svg>' };
+    }
     return { cls: 'other', svg: '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32"/></svg>' };
 }
 
@@ -502,5 +631,63 @@ function truncateUrl(url) {
     if (!url) return '';
     try { return new URL(url).hostname + (url.length > 60 ? '...' : ''); } catch { return url.substring(0, 50); }
 }
+
+// ─── Material Validation ────────────────────────────────────────────────────
+
+const ALLOWED_EXTENSIONS = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','zip','jpg','jpeg','png','gif','webp','mp3','wav','ogg','m4a','aac','flac'];
+const MAX_FILE_MB = 10;
+
+/**
+ * Returns an error string if the file is invalid, or null if it's OK.
+ */
+function validateFile(file) {
+    if (!file || file.size === 0) return 'The selected file appears to be empty.';
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return `".${ext}" files are not allowed. Accepted types: ${ALLOWED_EXTENSIONS.join(', ')}.`;
+    }
+
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+        return `File is too large (${formatSize(file.size)}). Maximum allowed size is ${MAX_FILE_MB}MB.`;
+    }
+
+    return null;
+}
+
+/**
+ * Returns an error string if the URL is invalid, or null if it's OK.
+ */
+function validateUrl(url) {
+    if (!url) return 'Please enter a URL.';
+    try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return 'URL must start with http:// or https://';
+        }
+        return null;
+    } catch {
+        return 'Please enter a valid URL (e.g. https://youtube.com/watch?v=...).';
+    }
+}
+
+/** Show an inline error inside the link form. */
+function showLinkError(overlay, msg) {
+    let el = overlay.querySelector('#mat-link-error');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'mat-link-error';
+        el.style.cssText = 'background:#FEE2E2;color:#b91c1c;padding:8px 12px;border-radius:8px;font-size:12px;margin-top:8px;';
+        overlay.querySelector('#mat-link-form').appendChild(el);
+    }
+    el.textContent = msg;
+}
+
+/** Remove the inline link-error element. */
+function clearLinkError(overlay) {
+    overlay.querySelector('#mat-link-error')?.remove();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 function esc(str) { const d = document.createElement('div'); d.textContent = str||''; return d.innerHTML; }

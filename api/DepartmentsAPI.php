@@ -16,6 +16,21 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_deptPerms = [
+    'list'     => 'departments.view',
+    'get'      => 'departments.view',
+    'campuses' => 'departments.view',
+    'create'   => 'departments.create',
+    'update'   => 'departments.edit',
+    'delete'   => 'departments.delete',
+];
+if (isset($_deptPerms[$action]) && !Auth::can($_deptPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_deptPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'list': handleList(); break;
     case 'get': handleGet(); break;

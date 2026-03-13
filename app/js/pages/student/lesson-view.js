@@ -217,6 +217,23 @@ function renderMaterial(f) {
         </div>`;
     }
 
+    if (f.material_type === 'audio') {
+        return `<div class="resource-item" style="flex-direction:column;align-items:flex-start;gap:8px;">
+            <div style="display:flex;align-items:center;gap:10px;width:100%;">
+                <div style="width:36px;height:36px;border-radius:8px;background:#FEF3C7;color:#B45309;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"/></svg>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div class="resource-name">${esc(f.original_name || f.file_name)}</div>
+                    <div class="resource-meta">${ext.toUpperCase()} &middot; ${f.file_size > 1048576 ? (f.file_size/1048576).toFixed(1)+' MB' : (f.file_size/1024).toFixed(1)+' KB'}</div>
+                </div>
+            </div>
+            <audio controls style="width:100%;border-radius:6px;height:36px;">
+                <source src="${BASE_URL}/${esc(f.file_path)}">
+            </audio>
+        </div>`;
+    }
+
     if (isLink) {
         const host = (() => { try { return new URL(f.file_path).hostname; } catch { return f.file_path; } })();
         return `<a href="${esc(f.file_path)}" class="resource-item" target="_blank" rel="noopener">
@@ -229,15 +246,32 @@ function renderMaterial(f) {
         </a>`;
     }
 
-    // File download
+    // File — PDFs open inline, others download
     const iconClass = ext === 'pdf' ? 'pdf-icon' : (ext === 'zip' ? 'zip-icon' : 'doc-icon');
     const fileSize = f.file_size > 1048576 ? (f.file_size / 1048576).toFixed(1) + ' MB' : (f.file_size / 1024).toFixed(1) + ' KB';
-    return `<a href="${BASE_URL}/${esc(f.file_path)}" class="resource-item" target="_blank" download>
+    const fileUrl = `${BASE_URL}/${esc(f.file_path)}`;
+    const fileName = esc(f.original_name || f.file_name);
+
+    if (ext === 'pdf') {
+        return `<div class="resource-item pdf-view-btn" style="cursor:pointer;"
+                     data-pdf-url="${fileUrl}" data-pdf-name="${fileName}">
+            <div class="res-icon pdf-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </div>
+            <div style="flex:1;min-width:0">
+                <div class="resource-name">${fileName}</div>
+                <div class="resource-meta">PDF &middot; ${fileSize} &middot; <span style="color:#1B4D3E;font-weight:600;">Click to view</span></div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>`;
+    }
+
+    return `<a href="${fileUrl}" class="resource-item" target="_blank" download>
         <div class="res-icon ${iconClass}">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>${ext === 'pdf' ? '<line x1="9" y1="15" x2="15" y2="15"/>' : ''}</svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
         <div style="flex:1;min-width:0">
-            <div class="resource-name">${esc(f.original_name || f.file_name)}</div>
+            <div class="resource-name">${fileName}</div>
             <div class="resource-meta">${ext.toUpperCase()} &middot; ${fileSize}</div>
         </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -267,7 +301,33 @@ function getEmbedUrl(v) {
     return null;
 }
 
+function openPdfViewer(url, name) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;flex-direction:column;';
+    overlay.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#1B4D3E;color:#fff;flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                <span style="font-size:14px;font-weight:700;">${name}</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+                <a href="${url}" download style="font-size:12px;color:rgba(255,255,255,.8);text-decoration:none;padding:5px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;">⬇ Download</a>
+                <button id="pdf-modal-close" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;line-height:1;padding:0 4px;">&times;</button>
+            </div>
+        </div>
+        <iframe src="${url}" style="flex:1;border:none;width:100%;background:#525659;"></iframe>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#pdf-modal-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
+}
+
 function bindEvents(container, lessonId, d) {
+    // PDF inline viewer
+    container.querySelectorAll('.pdf-view-btn').forEach(el => {
+        el.addEventListener('click', () => openPdfViewer(el.dataset.pdfUrl, el.dataset.pdfName));
+    });
+
     const btn = container.querySelector('#markCompleteBtn');
     if (btn) {
         btn.addEventListener('click', async function () {

@@ -50,7 +50,7 @@ function handleAdminDashboard() {
 
     $totalSections         = db()->fetchOne("SELECT COUNT(*) as count FROM section")['count'] ?? 0;
     $totalEnrolled         = db()->fetchOne("SELECT COUNT(*) as count FROM student_subject WHERE status = 'enrolled'")['count'] ?? 0;
-    $totalFacultyAssigned  = db()->fetchOne("SELECT COUNT(DISTINCT user_teacher_id) as count FROM faculty_subject WHERE status = 'active'")['count'] ?? 0;
+    $totalFacultyAssigned  = db()->fetchOne("SELECT COUNT(DISTINCT user_teacher_id) as count FROM subject_offered WHERE user_teacher_id IS NOT NULL AND status = 'open'")['count'] ?? 0;
 
     $recentUsers = db()->fetchAll(
         "SELECT users_id, first_name, last_name, email, role, status, created_at
@@ -97,7 +97,9 @@ function handleInstructorDashboard() {
     $classes = db()->fetchAll(
         "SELECT so.subject_offered_id, s.subject_id, s.subject_code, s.subject_name, s.units,
             GROUP_CONCAT(DISTINCT sec.section_name ORDER BY sec.section_name SEPARATOR ', ') AS section_name,
-            (SELECT COUNT(*) FROM student_subject ss WHERE ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled') as student_count,
+            GROUP_CONCAT(DISTINCT ss2.schedule ORDER BY sec.section_name SEPARATOR ', ') AS schedule,
+            GROUP_CONCAT(DISTINCT ss2.room     ORDER BY sec.section_name SEPARATOR ', ') AS room,
+            (SELECT COUNT(DISTINCT ss.user_student_id) FROM student_subject ss WHERE ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled') as student_count,
             (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id AND l.status = 'published') as published_lessons,
             (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id) as total_lessons,
             (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id AND q.status = 'published') as published_quizzes,
@@ -308,6 +310,26 @@ function handleStudentDashboard() {
         [$userId]
     )['avg'] ?? 0;
 
+    // Pending quizzes: published, not yet completed by this student
+    $subjectIds = array_map(fn($s) => $s['subject_id'], $subjects);
+    $pendingQuizzes = [];
+    if ($subjectIds) {
+        $placeholders = implode(',', array_fill(0, count($subjectIds), '?'));
+        $pendingQuizzes = db()->fetchAll(
+            "SELECT q.quiz_id, q.quiz_title, s.subject_code, s.subject_name, q.time_limit
+             FROM quiz q
+             JOIN subject s ON q.subject_id = s.subject_id
+             WHERE q.subject_id IN ($placeholders)
+               AND q.status = 'published'
+               AND q.quiz_id NOT IN (
+                   SELECT DISTINCT quiz_id FROM student_quiz_attempts
+                   WHERE user_student_id = ? AND status = 'completed'
+               )
+             ORDER BY s.subject_code, q.quiz_title",
+            array_merge($subjectIds, [$userId])
+        );
+    }
+
     echo json_encode([
         'success' => true,
         'data' => [
@@ -318,7 +340,8 @@ function handleStudentDashboard() {
                 'total_quizzes' => $totalQuizzes,
                 'avg_score' => round((float)$avgScore, 1),
             ],
-            'subjects' => $subjects
+            'subjects' => $subjects,
+            'pending_quizzes' => $pendingQuizzes
         ]
     ]);
 }
@@ -381,9 +404,9 @@ function handleDeanDashboard() {
     // Faculty workload (ALL instructors in dept)
     $faculty = db()->fetchAll(
         "SELECT u.users_id, u.first_name, u.last_name, u.employee_id,
-            (SELECT COUNT(DISTINCT fs.subject_offered_id) FROM faculty_subject fs WHERE fs.user_teacher_id = u.users_id AND fs.status = 'active') as subject_count,
-            (SELECT COUNT(DISTINCT fs.section_id) FROM faculty_subject fs WHERE fs.user_teacher_id = u.users_id AND fs.status = 'active') as section_count,
-            (SELECT COUNT(DISTINCT ss.user_student_id) FROM student_subject ss JOIN faculty_subject fs2 ON ss.section_id = fs2.section_id WHERE fs2.user_teacher_id = u.users_id AND ss.status = 'enrolled') as student_count,
+            (SELECT COUNT(DISTINCT so2.subject_offered_id) FROM subject_offered so2 WHERE so2.user_teacher_id = u.users_id AND so2.status = 'open') as subject_count,
+            (SELECT COUNT(DISTINCT ss2.section_id) FROM section_subject ss2 JOIN subject_offered so2 ON so2.subject_offered_id = ss2.subject_offered_id WHERE so2.user_teacher_id = u.users_id AND ss2.status = 'active') as section_count,
+            (SELECT COUNT(DISTINCT stud.user_student_id) FROM student_subject stud WHERE stud.subject_offered_id IN (SELECT so3.subject_offered_id FROM subject_offered so3 WHERE so3.user_teacher_id = u.users_id AND so3.status = 'open') AND stud.status = 'enrolled') as student_count,
             (SELECT COUNT(*) FROM quiz q WHERE q.user_teacher_id = u.users_id) as quiz_count,
             (SELECT COUNT(*) FROM lessons l WHERE l.user_teacher_id = u.users_id) as lesson_count
          FROM users u

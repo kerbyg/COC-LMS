@@ -16,6 +16,21 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? '';
 
+// RBAC: enforce permission per action
+$_progApiPerms = [
+    'list'        => 'programs.view',
+    'get'         => 'programs.view',
+    'departments' => 'programs.view',
+    'create'      => 'programs.create',
+    'update'      => 'programs.edit',
+    'delete'      => 'programs.delete',
+];
+if (isset($_progApiPerms[$action]) && !Auth::can($_progApiPerms[$action])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => "Permission denied: {$_progApiPerms[$action]}"]);
+    exit;
+}
+
 switch ($action) {
     case 'list': handleList(); break;
     case 'get': handleGet(); break;
@@ -28,13 +43,19 @@ switch ($action) {
 }
 
 function handleList() {
+    $deptId = (int)($_GET['department_id'] ?? 0);
+    $where  = $deptId ? 'WHERE dp.department_id = ?' : '';
+    $params = $deptId ? [$deptId] : [];
+
     $programs = db()->fetchAll(
-        "SELECT p.*, d.department_name,
+        "SELECT p.*, d.department_name, dp.department_id,
             (SELECT COUNT(*) FROM users u WHERE u.program_id = p.program_id) as student_count
          FROM program p
          LEFT JOIN department_program dp ON p.program_id = dp.program_id
          LEFT JOIN department d ON dp.department_id = d.department_id
-         ORDER BY p.program_code"
+         $where
+         ORDER BY p.program_code",
+        $params
     );
     echo json_encode(['success' => true, 'data' => $programs]);
 }

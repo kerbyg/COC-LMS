@@ -12,48 +12,63 @@ export async function render(container) {
 
     container.innerHTML = `
         <style>
-            .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
-            .page-header h2 { font-size:22px; font-weight:700; color:#262626; }
-            .page-header .count { background:#E8F5E9; color:#1B4D3E; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; margin-left:8px; }
+            .st-banner { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:28px 32px; margin-bottom:24px; position:relative; overflow:hidden; }
+            .st-banner::before { content:''; position:absolute; top:-40px; right:-40px; width:180px; height:180px; border-radius:50%; background:rgba(255,255,255,.07); pointer-events:none; }
+            .st-banner::after { content:''; position:absolute; bottom:-60px; left:60px; width:220px; height:220px; border-radius:50%; background:rgba(255,255,255,.05); pointer-events:none; }
+            .st-banner-inner { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; position:relative; z-index:1; }
+            .st-banner-title { font-size:26px; font-weight:800; color:#fff; margin:0 0 4px; }
+            .st-banner-sub { font-size:14px; color:rgba(255,255,255,.75); margin:0; }
+            .st-back-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:10px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
+            .st-back-btn:hover { background:rgba(255,255,255,.25); }
 
-            .filters { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
-            .filters input { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:240px; }
-            .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; }
+            .st-filter-bar { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+            .st-filter-bar input, .st-filter-bar select { padding:9px 14px; border:1px solid #e8ecef; border-radius:10px; font-size:13px; background:#fff; color:#374151; outline:none; transition:border-color .15s; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+            .st-filter-bar input { min-width:240px; flex:1; }
+            .st-filter-bar input:focus, .st-filter-bar select:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
 
-            .subject-group { margin-bottom:24px; }
-            .subject-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+            .subject-group { margin-bottom:28px; }
+            .subject-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding-bottom:10px; border-bottom:2px solid #f1f5f9; }
             .subj-code { background:#E8F5E9; color:#1B4D3E; padding:4px 10px; border-radius:6px; font-family:monospace; font-weight:700; font-size:13px; }
-            .subj-name { font-size:16px; font-weight:600; color:#262626; }
-            .subj-count { font-size:13px; color:#737373; }
+            .subj-name { font-size:16px; font-weight:700; color:#111827; }
+            .subj-count { font-size:13px; color:#9ca3af; }
 
-            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #e8e8e8; }
-            .data-table th { text-align:left; padding:12px 16px; font-size:12px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
-            .data-table td { padding:12px 16px; border-bottom:1px solid #f5f5f5; font-size:14px; }
+            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,.07); }
+            .data-table th { text-align:left; padding:12px 16px; font-size:12px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; background:#fafbfc; border-bottom:1px solid #f1f5f9; }
+            .data-table td { padding:13px 16px; border-bottom:1px solid #f8fafc; font-size:14px; }
             .data-table tr:last-child td { border-bottom:none; }
-            .data-table tr:hover td { background:#fafafa; }
+            .data-table tr:hover td { background:#f9fffe; }
 
             .user-cell { display:flex; align-items:center; gap:10px; }
-            .user-av { width:34px; height:34px; border-radius:50%; background:#EDE9FE; color:#5B21B6; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; }
-            .user-name { font-weight:600; color:#262626; }
+            .user-av { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#1B4D3E,#2D6A4F); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; }
+            .user-name { font-weight:600; color:#111827; }
 
-            .progress-bar { background:#f0f0f0; height:6px; border-radius:3px; overflow:hidden; width:80px; display:inline-block; vertical-align:middle; margin-right:6px; }
-            .progress-fill { height:100%; border-radius:3px; background:#1B4D3E; }
-            .progress-text { font-size:12px; color:#737373; }
+            .progress-bar { background:#e2e8f0; height:6px; border-radius:3px; overflow:hidden; width:80px; display:inline-block; vertical-align:middle; margin-right:6px; }
+            .progress-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,#1B4D3E,#2D6A4F); }
+            .progress-text { font-size:12px; color:#9ca3af; }
 
             .score-badge { padding:3px 8px; border-radius:12px; font-size:12px; font-weight:600; }
-            .score-pass { background:#E8F5E9; color:#1B4D3E; }
+            .score-pass { background:#dcfce7; color:#16a34a; }
             .score-fail { background:#FEE2E2; color:#b91c1c; }
-            .score-na { background:#f3f4f6; color:#737373; }
+            .score-na { background:#f1f5f9; color:#9ca3af; }
 
-            .empty-state-sm { text-align:center; padding:40px; color:#737373; }
-            @media(max-width:768px) { .filters { flex-direction:column; } }
+            .empty-state-sm { text-align:center; padding:40px; color:#9ca3af; }
+            @media(max-width:768px) { .st-filter-bar { flex-direction:column; } }
         </style>
 
-        <div class="page-header">
-            <h2>Students</h2>
+        <div class="st-banner">
+            <div class="st-banner-inner">
+                <div>
+                    <h2 class="st-banner-title">Students</h2>
+                    <p class="st-banner-sub">View enrolled students across your assigned classes</p>
+                </div>
+                <a href="#instructor/my-classes" class="st-back-btn">
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                    My Classes
+                </a>
+            </div>
         </div>
 
-        <div class="filters">
+        <div class="st-filter-bar">
             <input type="text" id="search" placeholder="Search student name, ID, or email...">
             <select id="filter-subject">
                 <option value="">All Subjects</option>

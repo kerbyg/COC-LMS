@@ -20,29 +20,39 @@ async function renderList(container, filterSubject = '') {
 
     container.innerHTML = `
         <style>
-            .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
-            .page-header h2 { font-size:22px; font-weight:700; color:#262626; }
-            .page-header .count { background:#E8F5E9; color:#1B4D3E; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; margin-left:8px; }
-            .btn-primary { background:linear-gradient(135deg,#00461B,#006428); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; }
-            .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,70,27,.3); }
-            .filters { margin-bottom:20px; }
-            .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:240px; }
+            .qz-banner { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:28px 32px; margin-bottom:24px; position:relative; overflow:hidden; }
+            .qz-banner::before { content:''; position:absolute; top:-40px; right:-40px; width:180px; height:180px; border-radius:50%; background:rgba(255,255,255,.07); pointer-events:none; }
+            .qz-banner::after { content:''; position:absolute; bottom:-60px; left:60px; width:220px; height:220px; border-radius:50%; background:rgba(255,255,255,.05); pointer-events:none; }
+            .qz-banner-inner { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; position:relative; z-index:1; }
+            .qz-banner-title { font-size:26px; font-weight:800; color:#fff; margin:0 0 4px; }
+            .qz-banner-sub { font-size:14px; color:rgba(255,255,255,.75); margin:0; }
+            .qz-banner-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+            .qz-back-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:10px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
+            .qz-back-btn:hover { background:rgba(255,255,255,.25); }
+            .btn-primary { background:#fff; color:#1B4D3E; border:none; padding:10px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; transition:all .15s; }
+            .btn-primary:hover { background:#f0fdf4; transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.15); }
+            .btn-ai { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.3); padding:9px 18px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
+            .btn-ai:hover { background:rgba(255,255,255,.25); }
+
+            .qz-filter-bar { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+            .qz-filter-bar select { padding:9px 14px; border:1px solid #e8ecef; border-radius:10px; font-size:13px; min-width:240px; background:#fff; color:#374151; cursor:pointer; outline:none; transition:border-color .15s; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+            .qz-filter-bar select:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
 
             .quizzes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
-            .quiz-card { background:#fff; border:1px solid #e8e8e8; border-radius:14px; overflow:hidden; transition:all .2s; }
-            .quiz-card:hover { border-color:#1B4D3E; }
-            .quiz-top { padding:16px 20px; display:flex; justify-content:space-between; align-items:flex-start; }
-            .quiz-title { font-size:16px; font-weight:700; color:#262626; margin-bottom:4px; }
-            .quiz-subject { font-size:12px; color:#737373; }
+            .quiz-card { background:#fff; border:1px solid #f1f5f9; border-radius:14px; overflow:hidden; transition:all .2s; box-shadow:0 1px 3px rgba(0,0,0,.07); }
+            .quiz-card:hover { border-color:#d1fae5; box-shadow:0 8px 24px rgba(0,0,0,.1); transform:translateY(-2px); }
+            .quiz-top { padding:18px 20px; display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #f8fafc; }
+            .quiz-title { font-size:16px; font-weight:700; color:#111827; margin-bottom:4px; }
+            .quiz-subject { font-size:12px; color:#9ca3af; }
             .quiz-subject .code { background:#E8F5E9; color:#1B4D3E; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:11px; margin-right:4px; }
             .badge { padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; text-transform:capitalize; }
-            .badge-published { background:#E8F5E9; color:#1B4D3E; }
+            .badge-published { background:#dcfce7; color:#16a34a; }
             .badge-draft { background:#FEF3C7; color:#B45309; }
 
-            .quiz-stats { display:grid; grid-template-columns:repeat(4,1fr); padding:0 20px 16px; gap:8px; }
-            .qs-item { text-align:center; background:#fafafa; padding:10px 4px; border-radius:8px; }
-            .qs-num { font-size:16px; font-weight:700; color:#262626; display:block; }
-            .qs-label { font-size:10px; color:#737373; text-transform:uppercase; }
+            .quiz-stats { display:grid; grid-template-columns:repeat(4,1fr); padding:14px 20px; gap:8px; }
+            .qs-item { text-align:center; background:#f8fafc; padding:10px 4px; border-radius:10px; border:1px solid #f1f5f9; }
+            .qs-num { font-size:16px; font-weight:800; color:#111827; display:block; }
+            .qs-label { font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.3px; }
 
             /* Kebab */
             .quiz-kebab-wrap { position:relative; flex-shrink:0; }
@@ -75,11 +85,23 @@ async function renderList(container, filterSubject = '') {
             @media(max-width:768px) { .quizzes-grid { grid-template-columns:1fr; } .form-grid { grid-template-columns:1fr; } .quiz-stats { grid-template-columns:1fr 1fr; } }
         </style>
 
-        <div class="page-header">
-            <h2>Quizzes <span class="count">${quizzes.length}</span></h2>
-            <button class="btn-primary" id="btn-add">+ Create Quiz</button>
+        <div class="qz-banner">
+            <div class="qz-banner-inner">
+                <div>
+                    <h2 class="qz-banner-title">Quizzes <span style="font-size:16px;font-weight:600;opacity:.8;">(${quizzes.length})</span></h2>
+                    <p class="qz-banner-sub">Create and manage assessments for your students</p>
+                </div>
+                <div class="qz-banner-actions">
+                    <a href="#instructor/my-classes" class="qz-back-btn">
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                        My Classes
+                    </a>
+                    <button class="btn-ai" id="btn-ai-gen">🤖 AI Generate</button>
+                    <button class="btn-primary" id="btn-add">+ Create Quiz</button>
+                </div>
+            </div>
         </div>
-        <div class="filters">
+        <div class="qz-filter-bar">
             <select id="filter-subject">
                 <option value="">All Subjects</option>
                 ${subjects.map(s => `<option value="${s.subject_id}" ${filterSubject==s.subject_id?'selected':''}>${esc(s.subject_code)} - ${esc(s.subject_name)}</option>`).join('')}
@@ -118,6 +140,7 @@ async function renderList(container, filterSubject = '') {
           </div>`}
     `;
 
+    container.querySelector('#btn-ai-gen').addEventListener('click', () => { window.location.hash = '#instructor/quiz-ai-generate'; });
     container.querySelector('#btn-add').addEventListener('click', () => openModal(container, filterSubject));
     container.querySelector('#filter-subject').addEventListener('change', (e) => renderList(container, e.target.value));
 
