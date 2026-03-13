@@ -21,8 +21,6 @@ const menus = {
             { icon: '👨‍🏫', text: 'Faculty Assignments', page: 'faculty-assignments' }
         ]},
         { section: 'System', items: [
-            { icon: '👥', text: 'Users', page: 'users' },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac' },
             { icon: '⚙️', text: 'Settings', page: 'settings' }
         ]}
     ],

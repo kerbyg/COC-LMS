@@ -7,7 +7,7 @@ import { Api } from '../../api.js';
 export async function render(container) {
     container.innerHTML = `
         <style>
-            .set-wrap { max-width: 1100px; }
+            .set-wrap { max-width: 100%; }
 
             /* ── Banner ── */
             .set-banner {
@@ -238,6 +238,14 @@ export async function render(container) {
                     <div class="set-nav-label">Advanced</div>
                     <div class="set-nav-item" data-section="maintenance">
                         <span class="nav-icon">🔧</span> Maintenance
+                    </div>
+                    <div class="set-nav-divider"></div>
+                    <div class="set-nav-label">Administration</div>
+                    <div class="set-nav-item" data-section="users">
+                        <span class="nav-icon">👥</span> Users
+                    </div>
+                    <div class="set-nav-item" data-section="rbac">
+                        <span class="nav-icon">🔐</span> Roles & Permissions
                     </div>
                 </aside>
 
@@ -483,20 +491,42 @@ export async function render(container) {
                             </div>
                         </div>
                     </div>
+
+                    <!-- ── Users ── -->
+                    <div class="set-panel" data-panel="users">
+                        <div id="set-users-mount"></div>
+                    </div>
+
+                    <!-- ── RBAC ── -->
+                    <div class="set-panel" data-panel="rbac">
+                        <div id="set-rbac-mount"></div>
+                    </div>
                 </main>
             </div>
         </div>
     `;
 
     // ── Nav switching ──
+    const _loaded = { users: false, rbac: false };
+
     container.querySelectorAll('.set-nav-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', async () => {
             const sec = item.dataset.section;
             container.querySelectorAll('.set-nav-item').forEach(i => i.classList.remove('active'));
             container.querySelectorAll('.set-panel').forEach(p => p.classList.remove('active'));
             item.classList.add('active');
             container.querySelector(`.set-panel[data-panel="${sec}"]`).classList.add('active');
             if (sec === 'school-year') loadSchoolYear();
+            if (sec === 'users' && !_loaded.users) {
+                _loaded.users = true;
+                const { render: renderUsers } = await import('./users.js');
+                await renderUsers(container.querySelector('#set-users-mount'));
+            }
+            if (sec === 'rbac' && !_loaded.rbac) {
+                _loaded.rbac = true;
+                const { render: renderRbac } = await import('./rbac.js');
+                await renderRbac(container.querySelector('#set-rbac-mount'));
+            }
         });
     });
 

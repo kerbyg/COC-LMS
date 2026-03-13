@@ -23,152 +23,221 @@ export async function render(container) {
 
     container.innerHTML = `
         <style>
-            .dash-wrap { max-width: 1400px; }
+            .dash-wrap { max-width: 100%; }
+
+            /* ── Banner ── */
             .dash-banner {
-                background: linear-gradient(135deg, #00461B 0%, #006428 50%, #004d1f 100%);
-                border-radius: 24px; padding: 32px 40px; margin-bottom: 28px;
+                background: linear-gradient(135deg, #1B4D3E 0%, #2D6A4F 60%, #40916C 100%);
+                border-radius: 20px; padding: 30px 36px; margin-bottom: 24px;
                 display: flex; justify-content: space-between; align-items: center;
-                position: relative; overflow: hidden; box-shadow: 0 8px 24px -4px rgba(0, 70, 27, 0.25);
+                position: relative; overflow: hidden;
+                box-shadow: 0 4px 24px rgba(27,77,62,.18);
             }
             .dash-banner::before {
-                content: ''; position: absolute; top: -50%; right: -10%;
-                width: 400px; height: 400px;
-                background: rgba(255,255,255,0.05); border-radius: 50%;
+                content:''; position:absolute; top:-50px; right:-50px;
+                width:220px; height:220px; border-radius:50%;
+                background:rgba(255,255,255,.07); pointer-events:none;
             }
-            .banner-text { position: relative; z-index: 1; }
-            .banner-text h1 { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 8px; }
-            .banner-text p { color: rgba(255,255,255,0.85); font-size: 15px; }
-            .banner-date { color: rgba(255,255,255,0.7); font-size: 14px; position: relative; z-index: 1; }
+            .dash-banner::after {
+                content:''; position:absolute; bottom:-70px; right:160px;
+                width:260px; height:260px; border-radius:50%;
+                background:rgba(255,255,255,.04); pointer-events:none;
+            }
+            .banner-left { position:relative; z-index:1; }
+            .banner-left h1 { font-size:26px; font-weight:800; color:#fff; margin:0 0 6px; }
+            .banner-left p { color:rgba(255,255,255,.78); font-size:14px; margin:0; }
+            .banner-right { position:relative; z-index:1; text-align:right; }
+            .banner-date {
+                color:rgba(255,255,255,.85); font-size:13px; font-weight:500;
+                background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);
+                padding:6px 14px; border-radius:20px; display:inline-block;
+            }
 
+            /* ── Stat Cards ── */
             .stat-row {
-                display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-                gap: 20px; margin-bottom: 28px;
+                display: grid; grid-template-columns: repeat(4,1fr);
+                gap: 16px; margin-bottom: 24px;
             }
-            .stat-card-new {
-                background: #fff; border-radius: 16px; padding: 24px;
-                border: 1px solid #e8e8e8; transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
-                position: relative; overflow: hidden;
+            .stat-card {
+                background: #fff; border-radius: 16px; padding: 22px 24px;
+                border: 1px solid #edf0f4;
+                box-shadow: 0 1px 4px rgba(0,0,0,.05);
+                transition: all .2s; position:relative; overflow:hidden;
             }
-            .stat-card-new::before {
-                content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
-                background: linear-gradient(135deg, #00461B, #006428); opacity: 0; transition: all 0.3s;
+            .stat-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.09); }
+            .stat-card-accent {
+                position:absolute; top:0; left:0; right:0; height:3px; border-radius:16px 16px 0 0;
             }
-            .stat-card-new:hover { transform: translateY(-4px); box-shadow: 0 6px 16px -4px rgba(0,0,0,0.12); border-color: #00461B; }
-            .stat-card-new:hover::before { opacity: 1; }
-            .stat-card-new .sc-icon {
-                width: 56px; height: 56px; border-radius: 12px;
-                display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 16px;
+            .stat-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+            .stat-card-label { font-size:12px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.06em; }
+            .stat-card-badge {
+                width:34px; height:34px; border-radius:10px;
+                display:flex; align-items:center; justify-content:center; flex-shrink:0;
             }
-            .sc-icon.green { background: linear-gradient(135deg, #D1FAE5, #A7F3D0); }
-            .sc-icon.blue { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
-            .sc-icon.yellow { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
-            .sc-icon.purple { background: linear-gradient(135deg, #EDE9FE, #DDD6FE); }
-            .sc-num { display: block; font-size: 32px; font-weight: 800; color: #262626; line-height: 1.2; }
-            .sc-label { display: block; font-size: 13px; color: #737373; font-weight: 500; margin-top: 4px; }
-            .sc-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-            .pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-            .pill-green { background: #E8F5E9; color: #1B4D3E; }
-            .pill-amber { background: #FEF3C7; color: #B45309; }
-            .pill-blue { background: #DBEAFE; color: #1E40AF; }
-            .pill-muted { background: #F5F5F5; color: #737373; }
+            .stat-card-badge svg { width:17px; height:17px; }
+            .stat-card-num { font-size:34px; font-weight:800; color:#111827; line-height:1; margin-bottom:14px; }
+            .stat-card-divider { height:1px; background:#f3f4f6; margin-bottom:12px; }
+            .sc-pills { display:flex; flex-wrap:wrap; gap:5px; }
+            .pill { padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+            .pill-green  { background:#E8F5E9; color:#1B4D3E; }
+            .pill-amber  { background:#FEF3C7; color:#B45309; }
+            .pill-blue   { background:#DBEAFE; color:#1E40AF; }
+            .pill-purple { background:#EDE9FE; color:#5B21B6; }
+            .pill-muted  { background:#F5F5F5; color:#6b7280; }
 
-            .dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+            /* ── Bottom Grid ── */
+            .dash-grid { display:grid; grid-template-columns:1fr 320px; gap:20px; }
             .dash-card {
-                background: #fff; border-radius: 16px; border: 1px solid #e8e8e8; overflow: hidden;
+                background:#fff; border-radius:16px;
+                border:1px solid #edf0f4; overflow:hidden;
+                box-shadow:0 1px 4px rgba(0,0,0,.05);
             }
             .dash-card-head {
-                padding: 20px 24px; border-bottom: 1px solid #f5f5f5;
-                display: flex; justify-content: space-between; align-items: center;
+                padding:18px 24px; border-bottom:1px solid #f3f4f6;
+                display:flex; justify-content:space-between; align-items:center;
             }
-            .dash-card-head h3 { font-size: 16px; font-weight: 700; color: #262626; }
+            .dash-card-head h3 { font-size:15px; font-weight:700; color:#111827; margin:0; }
+            .dash-card-head a { font-size:13px; color:#1B4D3E; font-weight:600; text-decoration:none; }
+            .dash-card-head a:hover { text-decoration:underline; }
 
-            .user-row {
-                display: flex; align-items: center; gap: 12px;
-                padding: 14px 24px; border-bottom: 1px solid #f5f5f5; transition: all 0.15s;
+            /* ── User table ── */
+            .user-table { width:100%; border-collapse:collapse; }
+            .user-table th {
+                padding:10px 16px; font-size:11px; font-weight:700; color:#9ca3af;
+                text-transform:uppercase; letter-spacing:.06em;
+                background:#fafbfc; border-bottom:1px solid #f3f4f6; text-align:left;
             }
-            .user-row:last-child { border-bottom: none; }
-            .user-row:hover { background: #fafafa; }
+            .user-table td { padding:12px 16px; border-bottom:1px solid #f9fafb; vertical-align:middle; }
+            .user-table tr:last-child td { border-bottom:none; }
+            .user-table tr:hover td { background:#fafbfc; }
             .user-av {
-                width: 40px; height: 40px; border-radius: 50%; font-weight: 700; font-size: 13px;
-                display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+                width:36px; height:36px; border-radius:10px; font-weight:700; font-size:12px;
+                display:flex; align-items:center; justify-content:center; flex-shrink:0;
             }
-            .user-av.admin { background: #DBEAFE; color: #1E40AF; }
-            .user-av.instructor { background: #D1FAE5; color: #065F46; }
-            .user-av.student { background: #FEF3C7; color: #92400E; }
-            .user-av.dean { background: #EDE9FE; color: #5B21B6; }
-            .user-meta { flex: 1; min-width: 0; }
-            .user-meta-name { font-weight: 600; font-size: 14px; color: #262626; display: block; }
-            .user-meta-email { font-size: 12px; color: #737373; display: block; }
+            .user-av.admin      { background:#DBEAFE; color:#1E40AF; }
+            .user-av.instructor { background:#D1FAE5; color:#065F46; }
+            .user-av.student    { background:#FEF3C7; color:#92400E; }
+            .user-av.dean       { background:#EDE9FE; color:#5B21B6; }
+            .user-meta-name  { font-weight:600; font-size:13.5px; color:#111827; }
+            .user-meta-email { font-size:12px; color:#9ca3af; }
             .role-badge {
-                padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: capitalize;
+                padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600;
+                text-transform:capitalize; display:inline-block;
             }
-            .role-badge.admin { background: #DBEAFE; color: #1E40AF; }
-            .role-badge.instructor { background: #D1FAE5; color: #065F46; }
-            .role-badge.student { background: #FEF3C7; color: #92400E; }
-            .role-badge.dean { background: #EDE9FE; color: #5B21B6; }
-            .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-            .status-dot.active { background: #10B981; }
-            .status-dot.inactive { background: #EF4444; }
-            .user-date { font-size: 13px; color: #737373; white-space: nowrap; }
-
-            .quick-links { padding: 16px 20px; }
-            .quick-link {
-                display: flex; align-items: center; gap: 12px;
-                padding: 14px 16px; border-radius: 12px; margin-bottom: 8px;
-                color: #404040; font-weight: 500; font-size: 14px;
-                transition: all 0.2s; text-decoration: none; cursor: pointer;
+            .role-badge.admin      { background:#DBEAFE; color:#1E40AF; }
+            .role-badge.instructor { background:#D1FAE5; color:#065F46; }
+            .role-badge.student    { background:#FEF3C7; color:#92400E; }
+            .role-badge.dean       { background:#EDE9FE; color:#5B21B6; }
+            .status-pip {
+                display:inline-flex; align-items:center; gap:5px;
+                font-size:12px; font-weight:500; color:#6b7280;
             }
-            .quick-link:hover { background: #F7F5E8; color: #00461B; }
-            .quick-link span:first-child { font-size: 18px; }
+            .status-pip::before {
+                content:''; width:7px; height:7px; border-radius:50%;
+                background:#d1d5db; flex-shrink:0;
+            }
+            .status-pip.active::before  { background:#22c55e; }
+            .status-pip.inactive::before { background:#ef4444; }
+            .user-date { font-size:12px; color:#9ca3af; white-space:nowrap; }
 
-            @media (max-width: 1024px) { .dash-grid { grid-template-columns: 1fr; } }
-            @media (max-width: 768px) { .stat-row { grid-template-columns: 1fr; } }
+            /* ── Quick Actions ── */
+            .qa-list { padding:12px 16px; }
+            .qa-item {
+                display:flex; align-items:center; gap:12px;
+                padding:12px 14px; border-radius:12px; margin-bottom:4px;
+                text-decoration:none; cursor:pointer; transition:all .15s;
+                border:1px solid transparent;
+            }
+            .qa-item:hover { background:#f0fdf4; border-color:#d1fae5; }
+            .qa-icon {
+                width:36px; height:36px; border-radius:10px; flex-shrink:0;
+                display:flex; align-items:center; justify-content:center;
+                background:#f3f4f6;
+            }
+            .qa-icon svg { width:16px; height:16px; }
+            .qa-text { flex:1; font-size:13.5px; font-weight:600; color:#374151; }
+            .qa-arrow { color:#9ca3af; font-size:16px; }
+            .qa-item:hover .qa-text { color:#1B4D3E; }
+            .qa-item:hover .qa-arrow { color:#1B4D3E; }
+
+            @media(max-width:1100px) { .stat-row { grid-template-columns:repeat(2,1fr); } }
+            @media(max-width:900px)  { .dash-grid { grid-template-columns:1fr; } }
+            @media(max-width:600px)  { .stat-row { grid-template-columns:1fr; } }
         </style>
 
         <div class="dash-wrap">
-            <!-- Welcome Banner -->
+            <!-- Banner -->
             <div class="dash-banner">
-                <div class="banner-text">
+                <div class="banner-left">
                     <h1>Welcome back, ${escapeHtml(Auth.user().name)}</h1>
                     <p>Here's what's happening across the system today.</p>
                 </div>
-                <div class="banner-date">${today}</div>
+                <div class="banner-right">
+                    <span class="banner-date">${today}</span>
+                </div>
             </div>
 
-            <!-- Stats -->
+            <!-- Stat Cards -->
             <div class="stat-row">
-                <div class="stat-card-new">
-                    <div class="sc-icon green">👥</div>
-                    <span class="sc-num">${s.total_users}</span>
-                    <span class="sc-label">Total Users</span>
+                <div class="stat-card">
+                    <div class="stat-card-accent" style="background:linear-gradient(90deg,#1B4D3E,#40916C)"></div>
+                    <div class="stat-card-top">
+                        <span class="stat-card-label">Total Users</span>
+                        <div class="stat-card-badge" style="background:#E8F5E9">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#1B4D3E" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-card-num">${s.total_users}</div>
+                    <div class="stat-card-divider"></div>
                     <div class="sc-pills">
                         <span class="pill pill-green">${s.total_students} Students</span>
                         <span class="pill pill-amber">${s.total_instructors} Instructors</span>
                         <span class="pill pill-blue">${s.total_deans} Deans</span>
                     </div>
                 </div>
-                <div class="stat-card-new">
-                    <div class="sc-icon blue">🎓</div>
-                    <span class="sc-num">${s.total_programs}</span>
-                    <span class="sc-label">Programs</span>
+
+                <div class="stat-card">
+                    <div class="stat-card-accent" style="background:linear-gradient(90deg,#1E40AF,#3b82f6)"></div>
+                    <div class="stat-card-top">
+                        <span class="stat-card-label">Programs</span>
+                        <div class="stat-card-badge" style="background:#DBEAFE">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#1E40AF" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-card-num">${s.total_programs}</div>
+                    <div class="stat-card-divider"></div>
                     <div class="sc-pills">
                         <span class="pill pill-muted">${s.total_departments} Departments</span>
                         <span class="pill pill-muted">${s.total_subjects} Subjects</span>
                     </div>
                 </div>
-                <div class="stat-card-new">
-                    <div class="sc-icon yellow">📖</div>
-                    <span class="sc-num">${s.total_lessons}</span>
-                    <span class="sc-label">Lessons</span>
+
+                <div class="stat-card">
+                    <div class="stat-card-accent" style="background:linear-gradient(90deg,#B45309,#f59e0b)"></div>
+                    <div class="stat-card-top">
+                        <span class="stat-card-label">Lessons</span>
+                        <div class="stat-card-badge" style="background:#FEF3C7">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-card-num">${s.total_lessons}</div>
+                    <div class="stat-card-divider"></div>
                     <div class="sc-pills">
                         <span class="pill pill-muted">${s.total_quizzes} Quizzes</span>
                         <span class="pill pill-muted">${s.total_offerings} Offerings</span>
                     </div>
                 </div>
-                <div class="stat-card-new">
-                    <div class="sc-icon purple">🏫</div>
-                    <span class="sc-num">${s.total_sections}</span>
-                    <span class="sc-label">Active Sections</span>
+
+                <div class="stat-card">
+                    <div class="stat-card-accent" style="background:linear-gradient(90deg,#5B21B6,#8b5cf6)"></div>
+                    <div class="stat-card-top">
+                        <span class="stat-card-label">Active Sections</span>
+                        <div class="stat-card-badge" style="background:#EDE9FE">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#5B21B6" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-card-num">${s.total_sections}</div>
+                    <div class="stat-card-divider"></div>
                     <div class="sc-pills">
                         <span class="pill pill-green">${s.total_enrolled} Enrolled</span>
                         <span class="pill pill-blue">${s.total_faculty_assigned} Faculty Assigned</span>
@@ -181,38 +250,81 @@ export async function render(container) {
                 <div class="dash-card">
                     <div class="dash-card-head">
                         <h3>Recent Users</h3>
-                        <a href="#admin/users" class="view-all">View All →</a>
+                        <a href="#admin/settings">View All →</a>
                     </div>
-                    <div>
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Joined</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                         ${users.map(u => {
-                            const initials = ((u.first_name || '?')[0] + (u.last_name || '?')[0]).toUpperCase();
-                            const date = new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                            const initials = ((u.first_name||'?')[0]+(u.last_name||'?')[0]).toUpperCase();
+                            const date = new Date(u.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
                             return `
-                                <div class="user-row">
-                                    <div class="user-av ${u.role}">${initials}</div>
-                                    <div class="user-meta">
-                                        <span class="user-meta-name">${escapeHtml(u.first_name + ' ' + u.last_name)}</span>
-                                        <span class="user-meta-email">${escapeHtml(u.email)}</span>
+                            <tr>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:10px;">
+                                        <div class="user-av ${u.role}">${initials}</div>
+                                        <div>
+                                            <div class="user-meta-name">${escapeHtml(u.first_name+' '+u.last_name)}</div>
+                                            <div class="user-meta-email">${escapeHtml(u.email)}</div>
+                                        </div>
                                     </div>
-                                    <span class="role-badge ${u.role}">${u.role}</span>
-                                    <span style="font-size:13px;color:#737373"><span class="status-dot ${u.status}"></span>${u.status}</span>
-                                    <span class="user-date">${date}</span>
-                                </div>
-                            `;
+                                </td>
+                                <td><span class="role-badge ${u.role}">${u.role}</span></td>
+                                <td><span class="status-pip ${u.status}">${u.status}</span></td>
+                                <td class="user-date">${date}</td>
+                            </tr>`;
                         }).join('')}
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="dash-card">
                     <div class="dash-card-head">
                         <h3>Quick Actions</h3>
                     </div>
-                    <div class="quick-links">
-                        <a href="#admin/users" class="quick-link"><span>👤</span><span>Add New User</span></a>
-                        <a href="#admin/programs" class="quick-link"><span>🎓</span><span>Add Program</span></a>
-                        <a href="#admin/subjects" class="quick-link"><span>📚</span><span>Manage Subjects</span></a>
-                        <a href="#admin/subject-offerings" class="quick-link"><span>📅</span><span>Subject Offerings</span></a>
-                        <a href="#admin/sections" class="quick-link"><span>🏫</span><span>Manage Sections</span></a>
+                    <div class="qa-list">
+                        <a href="#admin/settings" class="qa-item">
+                            <div class="qa-icon" style="background:#E8F5E9">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#1B4D3E" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </div>
+                            <span class="qa-text">Add New User</span>
+                            <span class="qa-arrow">›</span>
+                        </a>
+                        <a href="#admin/programs" class="qa-item">
+                            <div class="qa-icon" style="background:#DBEAFE">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#1E40AF" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                            </div>
+                            <span class="qa-text">Add Program</span>
+                            <span class="qa-arrow">›</span>
+                        </a>
+                        <a href="#admin/subjects" class="qa-item">
+                            <div class="qa-icon" style="background:#FEF3C7">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                            </div>
+                            <span class="qa-text">Manage Subjects</span>
+                            <span class="qa-arrow">›</span>
+                        </a>
+                        <a href="#admin/subject-offerings" class="qa-item">
+                            <div class="qa-icon" style="background:#EDE9FE">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#5B21B6" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            </div>
+                            <span class="qa-text">Subject Offerings</span>
+                            <span class="qa-arrow">›</span>
+                        </a>
+                        <a href="#admin/sections" class="qa-item">
+                            <div class="qa-icon" style="background:#FEE2E2">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#b91c1c" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            </div>
+                            <span class="qa-text">Manage Sections</span>
+                            <span class="qa-arrow">›</span>
+                        </a>
                     </div>
                 </div>
             </div>

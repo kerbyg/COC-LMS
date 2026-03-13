@@ -22,136 +22,198 @@ const MODULE_ICONS = {
 export async function render(container) {
     container.innerHTML = `
     <style>
-        .rp-wrap { max-width: 960px; }
+        .rp-wrap { max-width: 100%; }
 
-        /* Banner */
+        /* ── Banner ── */
         .rp-banner {
-            background: linear-gradient(135deg,#00461B 0%,#006428 100%);
-            border-radius: 16px; padding: 24px 28px; margin-bottom: 24px;
-            display: flex; align-items: center; gap: 16px;
-            box-shadow: 0 4px 20px rgba(0,70,27,.2);
+            background: linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%);
+            border-radius: 16px; padding: 28px 32px; margin-bottom: 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 4px 24px rgba(27,77,62,.18); position: relative; overflow: hidden;
         }
+        .rp-banner::before {
+            content:''; position:absolute; top:-40px; right:-40px;
+            width:180px; height:180px; border-radius:50%;
+            background:rgba(255,255,255,.07); pointer-events:none;
+        }
+        .rp-banner::after {
+            content:''; position:absolute; bottom:-60px; right:120px;
+            width:220px; height:220px; border-radius:50%;
+            background:rgba(255,255,255,.05); pointer-events:none;
+        }
+        .rp-banner-left { display:flex; align-items:center; gap:16px; }
         .rp-banner-icon {
-            width: 48px; height: 48px; border-radius: 12px;
-            background: rgba(255,255,255,.15);
-            display: flex; align-items: center; justify-content: center; font-size: 22px;
+            width:52px; height:52px; border-radius:14px;
+            background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.2);
+            display:flex; align-items:center; justify-content:center; font-size:24px;
+            flex-shrink:0;
         }
-        .rp-banner h1 { font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 3px; }
-        .rp-banner p  { color: rgba(255,255,255,.75); font-size: 13px; margin: 0; }
+        .rp-banner h1 { font-size:22px; font-weight:800; color:#fff; margin:0 0 4px; }
+        .rp-banner p  { color:rgba(255,255,255,.72); font-size:13px; margin:0; }
+        .rp-banner-stat {
+            background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);
+            border-radius:12px; padding:10px 20px; text-align:center; flex-shrink:0;
+        }
+        .rp-banner-stat-num { font-size:22px; font-weight:800; color:#fff; }
+        .rp-banner-stat-lbl { font-size:11px; color:rgba(255,255,255,.7); margin-top:1px; }
 
-        /* Role cards */
-        .rp-roles { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        /* ── Role cards ── */
+        .rp-roles { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
         .rp-role-card {
-            flex: 1; min-width: 130px; padding: 14px 16px; border-radius: 12px;
-            border: 2px solid #e5e7eb; background: #fff; cursor: pointer;
-            transition: all .18s; text-align: center;
+            padding:16px; border-radius:14px; border:2px solid #e5e7eb;
+            background:#fff; cursor:pointer; transition:all .18s;
+            box-shadow:0 1px 3px rgba(0,0,0,.06);
         }
-        .rp-role-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.1); }
-        .rp-role-card.active { border-width: 2px; }
-        .rp-role-icon { font-size: 22px; margin-bottom: 6px; }
-        .rp-role-name { font-size: 13px; font-weight: 700; }
-        .rp-role-count { font-size: 11px; color: #6b7280; margin-top: 3px; }
+        .rp-role-card:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.1); }
+        .rp-role-card.active { border-width:2px; box-shadow:0 6px 20px rgba(0,0,0,.12); }
+        .rp-role-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+        .rp-role-icon {
+            width:38px; height:38px; border-radius:10px;
+            display:flex; align-items:center; justify-content:center; font-size:18px;
+        }
+        .rp-role-dot {
+            width:8px; height:8px; border-radius:50%;
+        }
+        .rp-role-name { font-size:14px; font-weight:700; margin-bottom:2px; }
+        .rp-role-count { font-size:12px; color:#6b7280; }
+        .rp-role-bar-wrap {
+            height:4px; background:#f1f5f9; border-radius:4px; margin-top:10px; overflow:hidden;
+        }
+        .rp-role-bar { height:100%; border-radius:4px; transition:width .4s ease; }
 
-        /* Toolbar */
+        /* ── Toolbar ── */
         .rp-toolbar {
-            display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+            display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap;
+            background:#fff; border:1px solid #e8ecef; border-radius:12px;
+            padding:10px 14px; box-shadow:0 1px 3px rgba(0,0,0,.04);
         }
+        .rp-search-wrap { flex:1; min-width:180px; display:flex; align-items:center; gap:8px; }
+        .rp-search-icon { color:#9ca3af; font-size:15px; flex-shrink:0; }
         .rp-search {
-            flex: 1; min-width: 180px; padding: 8px 12px;
-            border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; outline: none;
+            flex:1; border:none; outline:none; font-size:13px; color:#1e293b;
+            background:transparent;
         }
-        .rp-search:focus { border-color: #00461B; }
+        .rp-search::placeholder { color:#adb5bd; }
+        .rp-divider { width:1px; height:24px; background:#e5e7eb; flex-shrink:0; }
         .rp-btn {
-            padding: 8px 16px; border-radius: 8px; font-size: 13px;
-            font-weight: 600; cursor: pointer; border: 1px solid #e5e7eb;
-            background: #fff; color: #374151; transition: background .15s;
+            padding:7px 14px; border-radius:8px; font-size:12.5px;
+            font-weight:600; cursor:pointer; border:1px solid #e5e7eb;
+            background:#fff; color:#374151; transition:all .15s; white-space:nowrap;
         }
-        .rp-btn:hover { background: #f3f4f6; }
+        .rp-btn:hover { background:#f3f4f6; border-color:#d1d5db; }
         .rp-btn-save {
-            background: #00461B; color: #fff; border-color: #00461B;
+            background:#1B4D3E; color:#fff; border-color:#1B4D3E; padding:7px 18px;
         }
-        .rp-btn-save:hover { background: #003315; }
-        .rp-btn-save:disabled { opacity: .5; cursor: not-allowed; }
+        .rp-btn-save:hover { background:#163d31; }
+        .rp-btn-save:disabled { opacity:.55; cursor:not-allowed; }
 
-        /* Module group */
-        .rp-module { margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
-        .rp-module-head {
-            display: flex; align-items: center; gap: 10px;
-            padding: 11px 16px; background: #f9fafb; cursor: pointer;
-            user-select: none; border-bottom: 1px solid #e5e7eb;
+        /* ── Module group ── */
+        .rp-module {
+            margin-bottom:10px; border:1px solid #e8ecef; border-radius:14px;
+            overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05);
+            transition:box-shadow .2s;
         }
-        .rp-module-head:hover { background: #f3f4f6; }
-        .rp-mod-icon { font-size: 15px; }
+        .rp-module:hover { box-shadow:0 3px 10px rgba(0,0,0,.08); }
+        .rp-module-head {
+            display:flex; align-items:center; gap:10px;
+            padding:13px 18px; background:#f8fafc; cursor:pointer;
+            user-select:none; border-bottom:1px solid #e8ecef; transition:background .12s;
+        }
+        .rp-module-head:hover { background:#f1f5f9; }
+        .rp-mod-icon-wrap {
+            width:30px; height:30px; border-radius:8px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center; font-size:14px;
+            background:#e8f5e9;
+        }
         .rp-mod-title {
-            flex: 1; font-size: 13px; font-weight: 700; color: #374151;
-            text-transform: capitalize;
+            flex:1; font-size:13px; font-weight:700; color:#1e293b;
+            text-transform:capitalize; letter-spacing:.01em;
         }
         .rp-mod-badge {
-            font-size: 11px; padding: 2px 8px; border-radius: 20px;
-            font-weight: 600; transition: all .2s;
+            font-size:11px; padding:3px 9px; border-radius:20px;
+            font-weight:700; transition:all .2s;
         }
         .rp-mod-check-all {
-            font-size: 11px; padding: 3px 10px; border-radius: 6px;
-            border: 1px solid #d1d5db; background: #fff; cursor: pointer;
-            color: #6b7280; transition: all .15s;
+            font-size:11px; padding:4px 10px; border-radius:7px;
+            border:1px solid #d1d5db; background:#fff; cursor:pointer;
+            color:#6b7280; transition:all .15s; font-weight:500;
         }
-        .rp-mod-check-all:hover { background: #f3f4f6; }
-        .rp-chevron { color: #9ca3af; font-size: 10px; transition: transform .2s; }
-        .rp-chevron.open { transform: rotate(90deg); }
+        .rp-mod-check-all:hover { background:#f3f4f6; color:#374151; }
+        .rp-chevron { color:#9ca3af; font-size:11px; transition:transform .2s; margin-right:2px; }
+        .rp-chevron.open { transform:rotate(90deg); }
 
-        /* Permission row */
-        .rp-perm-list { padding: 4px 0; }
-        .rp-perm-list.collapsed { display: none; }
+        /* ── Permission rows ── */
+        .rp-perm-list { padding:4px 0; }
+        .rp-perm-list.collapsed { display:none; }
         .rp-perm-row {
-            display: flex; align-items: center; gap: 12px;
-            padding: 9px 16px; transition: background .12s; cursor: pointer;
+            display:flex; align-items:center; gap:14px;
+            padding:10px 18px; transition:background .12s; cursor:pointer;
+            border-bottom:1px solid #f8fafc;
         }
-        .rp-perm-row:hover { background: #f9fafb; }
-        .rp-perm-row.hidden { display: none; }
+        .rp-perm-row:last-child { border-bottom:none; }
+        .rp-perm-row:hover { background:#f8fafc; }
+        .rp-perm-row.hidden { display:none; }
 
-        /* Checkbox */
+        /* Custom checkbox */
+        .rp-cb-wrap {
+            width:18px; height:18px; flex-shrink:0; position:relative;
+        }
         .rp-cb {
-            width: 17px; height: 17px; flex-shrink: 0;
-            accent-color: #00461B; cursor: pointer;
+            width:18px; height:18px; flex-shrink:0;
+            accent-color:#1B4D3E; cursor:pointer; border-radius:5px;
         }
+        .rp-perm-info { flex:1; min-width:0; }
         .rp-perm-name {
-            font-size: 12.5px; font-weight: 600; color: #1e293b;
-            font-family: 'Courier New', monospace;
+            font-size:12px; font-weight:600; color:#1e293b;
+            font-family:'Courier New',monospace;
+            background:#f1f5f9; display:inline-block;
+            padding:1px 7px; border-radius:5px; margin-bottom:2px;
+            border:1px solid #e2e8f0;
         }
-        .rp-perm-desc { font-size: 12px; color: #6b7280; }
+        .rp-perm-desc { font-size:12px; color:#6b7280; }
 
-        /* Toast */
+        /* ── Toast ── */
         .rp-toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: #1e293b; color: #fff; border-radius: 10px;
-            padding: 10px 20px; font-size: 13px; font-weight: 500;
-            box-shadow: 0 8px 24px rgba(0,0,0,.2); z-index: 9999;
-            opacity: 0; transition: opacity .25s; pointer-events: none;
+            position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(8px);
+            background:#1e293b; color:#fff; border-radius:12px;
+            padding:11px 22px; font-size:13px; font-weight:500;
+            box-shadow:0 8px 32px rgba(0,0,0,.22); z-index:9999;
+            opacity:0; transition:all .25s; pointer-events:none;
         }
-        .rp-toast.show { opacity: 1; pointer-events: auto; }
-        .rp-toast.error { background: #7f1d1d; }
+        .rp-toast.show { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
+        .rp-toast.error { background:#7f1d1d; }
     </style>
 
     <div class="rp-wrap">
         <div class="rp-banner">
-            <div class="rp-banner-icon">🔐</div>
-            <div>
-                <h1>Roles & Permissions</h1>
-                <p>Pick a role, then check or uncheck what it can do — click Save when done.</p>
+            <div class="rp-banner-left">
+                <div class="rp-banner-icon">🔐</div>
+                <div>
+                    <h1>Roles & Permissions</h1>
+                    <p>Select a role, then toggle permissions — click Save when done.</p>
+                </div>
+            </div>
+            <div class="rp-banner-stat">
+                <div class="rp-banner-stat-num" id="rpTotalPerms">—</div>
+                <div class="rp-banner-stat-lbl">Total Permissions</div>
             </div>
         </div>
 
         <div class="rp-roles" id="rpRoles"></div>
 
         <div class="rp-toolbar">
-            <input class="rp-search" id="rpSearch" type="text" placeholder="Search permissions…">
+            <div class="rp-search-wrap">
+                <span class="rp-search-icon">🔍</span>
+                <input class="rp-search" id="rpSearch" type="text" placeholder="Search permissions…">
+            </div>
+            <div class="rp-divider"></div>
             <button class="rp-btn" id="rpCheckAll">Check All</button>
             <button class="rp-btn" id="rpUncheckAll">Uncheck All</button>
             <button class="rp-btn rp-btn-save" id="rpSave">Save Changes</button>
         </div>
 
         <div id="rpMatrix">
-            <div style="padding:40px;text-align:center;color:#9ca3af">Loading…</div>
+            <div style="padding:48px;text-align:center;color:#9ca3af;font-size:13px;">Loading permissions…</div>
         </div>
     </div>
 
@@ -184,6 +246,9 @@ export async function render(container) {
         );
     });
 
+    const totalPerms = res.data.permissions.length;
+    container.querySelector('#rpTotalPerms').textContent = totalPerms;
+
     renderRoles();
     renderMatrix();
 
@@ -193,12 +258,20 @@ export async function render(container) {
         el.innerHTML = ROLES.map(r => {
             const m = ROLE_META[r];
             const isActive = r === active;
+            const count = dirty[r].size;
+            const pct = totalPerms > 0 ? Math.round((count / totalPerms) * 100) : 0;
             return `
             <div class="rp-role-card ${isActive ? 'active' : ''}" data-role="${r}"
-                 style="${isActive ? `border-color:${m.color};background:${m.bg}` : ''}">
-                <div class="rp-role-icon">${m.icon}</div>
-                <div class="rp-role-name" style="color:${m.color}">${m.label}</div>
-                <div class="rp-role-count" id="rc-${r}">${dirty[r].size} permissions</div>
+                 style="${isActive ? `border-color:${m.color};` : ''}">
+                <div class="rp-role-top">
+                    <div class="rp-role-icon" style="background:${m.bg}">${m.icon}</div>
+                    <div class="rp-role-dot" style="background:${isActive ? m.color : '#e5e7eb'}"></div>
+                </div>
+                <div class="rp-role-name" style="color:${isActive ? m.color : '#1e293b'}">${m.label}</div>
+                <div class="rp-role-count" id="rc-${r}">${count} of ${totalPerms} permissions</div>
+                <div class="rp-role-bar-wrap">
+                    <div class="rp-role-bar" id="rb-${r}" style="width:${pct}%;background:${m.color}"></div>
+                </div>
             </div>`;
         }).join('');
 
@@ -213,7 +286,11 @@ export async function render(container) {
 
     function updateRoleCount(role) {
         const el = container.querySelector(`#rc-${role}`);
-        if (el) el.textContent = `${dirty[role].size} permissions`;
+        const bar = container.querySelector(`#rb-${role}`);
+        const count = dirty[role].size;
+        const pct = totalPerms > 0 ? Math.round((count / totalPerms) * 100) : 0;
+        if (el) el.textContent = `${count} of ${totalPerms} permissions`;
+        if (bar) bar.style.width = `${pct}%`;
     }
 
     // ── Render permission matrix ───────────────────────────────────
@@ -231,7 +308,7 @@ export async function render(container) {
             <div class="rp-module">
                 <div class="rp-module-head" data-mod="${mod}">
                     <span class="rp-chevron open">&#9654;</span>
-                    <span class="rp-mod-icon">${MODULE_ICONS[mod] || '📌'}</span>
+                    <div class="rp-mod-icon-wrap">${MODULE_ICONS[mod] || '📌'}</div>
                     <span class="rp-mod-title">${mod.replace(/_/g,' ')}</span>
                     <span class="rp-mod-badge" style="background:${badgeBg};color:${badgeColor}"
                           id="badge-${mod}">${grantedCount}/${perms.length}</span>
@@ -245,7 +322,7 @@ export async function render(container) {
                     <label class="rp-perm-row" data-perm="${p.name}">
                         <input class="rp-cb" type="checkbox" data-id="${p.id}"
                             ${dirty[active].has(p.id) ? 'checked' : ''}>
-                        <div>
+                        <div class="rp-perm-info">
                             <div class="rp-perm-name">${p.name}</div>
                             <div class="rp-perm-desc">${p.description}</div>
                         </div>
