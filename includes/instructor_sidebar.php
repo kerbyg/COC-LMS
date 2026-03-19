@@ -54,10 +54,6 @@ $currentPage = $currentPage ?? '';
                 <span class="nav-icon">📈</span>
                 <span class="nav-text">Analytics</span>
             </a>
-            <a href="remedials.php" class="nav-item <?= $currentPage === 'remedials' ? 'active' : '' ?>">
-                <span class="nav-icon">📌</span>
-                <span class="nav-text">Remedials</span>
-            </a>
             <a href="essay-grading.php" class="nav-item <?= $currentPage === 'essay-grading' ? 'active' : '' ?>">
                 <span class="nav-icon">✏️</span>
                 <span class="nav-text">Essay Grading</span>

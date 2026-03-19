@@ -658,7 +658,7 @@ export async function render(container) {
                 .sy-ay-block { margin-bottom:16px; }
                 .sy-ay-label { font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.7px;padding:6px 0 8px;border-bottom:2px solid #f0f0f0;margin-bottom:0; }
                 .sy-row {
-                    display:grid; grid-template-columns:1fr 180px 110px auto;
+                    display:grid; grid-template-columns:1fr 180px 110px 36px;
                     align-items:center; gap:12px;
                     padding:11px 4px; border-bottom:1px solid #f5f5f5;
                     font-size:13.5px;
@@ -668,14 +668,18 @@ export async function render(container) {
                 .sy-row-name { font-weight:600; color:#262626; }
                 .sy-row-name.active-row { color:#15803d; }
                 .sy-row-date { font-size:12px; color:#737373; }
-                .sy-row-actions { display:flex; gap:6px; justify-content:flex-end; }
-                .sy-btn { padding:5px 12px; border-radius:7px; border:1px solid #e0e0e0; background:#fff; font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
-                .sy-btn:hover { background:#f5f5f5; }
-                .sy-btn.activate { border-color:#1B4D3E;color:#1B4D3E;background:#f0fdf4; }
-                .sy-btn.activate:hover { background:#dcfce7; }
-                .sy-btn.del { color:#b91c1c; background:none; border:none; font-size:16px; padding:4px 8px; }
-                .sy-btn.del:hover { background:#fef2f2; border-radius:6px; }
-                .sy-btn.del:disabled { color:#d1d5db; cursor:not-allowed; }
+                .sy-row-actions { display:flex; gap:6px; justify-content:flex-end; position:relative; }
+                .sy-kebab { width:30px;height:30px;border-radius:7px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:18px;color:#6b7280;line-height:1; }
+                .sy-kebab:hover { background:#f3f4f6;border-color:#d1d5db;color:#374151; }
+                .sy-kebab.open { background:#f3f4f6;border-color:#d1d5db; }
+                .sy-dropdown { position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:155px;z-index:100;overflow:hidden;animation:syDdIn .1s ease; }
+                @keyframes syDdIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+                .sy-dd-item { display:flex;align-items:center;gap:9px;padding:9px 14px;font-size:13px;font-weight:500;color:#374151;cursor:pointer;transition:background .1s; }
+                .sy-dd-item:hover { background:#f9fafb; }
+                .sy-dd-item.danger { color:#dc2626; }
+                .sy-dd-item.danger:hover { background:#fef2f2; }
+                .sy-dd-item.disabled { color:#d1d5db;cursor:not-allowed;pointer-events:none; }
+                .sy-dd-sep { height:1px;background:#f0f0f0;margin:3px 0; }
             </style>
 
             ${active
@@ -698,51 +702,83 @@ export async function render(container) {
                         <span class="sy-row-date">${dateRange(s)}</span>
                         <span>${statusBadge(s)}</span>
                         <div class="sy-row-actions">
-                            <button class="sy-btn" data-edit="${s.semester_id}">✏️ Edit</button>
-                            ${s.status !== 'active'
-                                ? `<button class="sy-btn activate" data-activate="${s.semester_id}">Set Active</button>`
-                                : ''}
-                            <button class="sy-btn del" data-del="${s.semester_id}" ${s.status === 'active' ? 'disabled title="Cannot delete active semester"' : ''}>🗑</button>
+                            <button class="sy-kebab" data-sem-id="${s.semester_id}" aria-label="Actions">⋮</button>
                         </div>
                     </div>`).join('')}
                 </div>
             `).join('')}
         `;
 
-        // Edit
-        body.querySelectorAll('[data-edit]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const s = semesters.find(x => x.semester_id == btn.dataset.edit);
-                if (s) openSemModal(s);
-            });
-        });
+        // Kebab menu
+        let openDropdown = null;
+        const closeDropdown = () => {
+            if (openDropdown) {
+                openDropdown.dropdown.remove();
+                openDropdown.btn.classList.remove('open');
+                openDropdown = null;
+            }
+        };
+        document.addEventListener('click', closeDropdown, { capture: true, once: false });
 
-        // Set Active — one click, no extra confirm needed (modal already warned)
-        body.querySelectorAll('[data-activate]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const s = semesters.find(x => x.semester_id == btn.dataset.activate);
-                btn.disabled = true; btn.textContent = '...';
-                const r = await Api.post('/SemesterAPI.php?action=update', {
-                    semester_id: parseInt(btn.dataset.activate),
-                    semester_name: s.semester_name,
-                    academic_year: s.academic_year,
-                    start_date: s.start_date,
-                    end_date: s.end_date,
-                    status: 'active'
+        body.querySelectorAll('.sy-kebab').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                if (openDropdown && openDropdown.btn === btn) { closeDropdown(); return; }
+                closeDropdown();
+
+                const semId = btn.dataset.semId;
+                const s = semesters.find(x => x.semester_id == semId);
+                if (!s) return;
+
+                const dd = document.createElement('div');
+                dd.className = 'sy-dropdown';
+                dd.innerHTML = `
+                    <div class="sy-dd-item" data-action="edit">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Edit
+                    </div>
+                    ${s.status !== 'active' ? `
+                    <div class="sy-dd-item" data-action="activate">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                        Set Active
+                    </div>` : ''}
+                    <div class="sy-dd-sep"></div>
+                    <div class="sy-dd-item danger ${s.status === 'active' ? 'disabled' : ''}" data-action="delete" title="${s.status === 'active' ? 'Cannot delete active semester' : ''}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        Delete
+                    </div>
+                `;
+
+                btn.classList.add('open');
+                btn.parentElement.appendChild(dd);
+                openDropdown = { btn, dropdown: dd };
+
+                dd.addEventListener('click', async e2 => {
+                    e2.stopPropagation();
+                    const item = e2.target.closest('[data-action]');
+                    if (!item || item.classList.contains('disabled')) return;
+                    closeDropdown();
+
+                    if (item.dataset.action === 'edit') {
+                        openSemModal(s);
+                    } else if (item.dataset.action === 'activate') {
+                        const r = await Api.post('/SemesterAPI.php?action=update', {
+                            semester_id: parseInt(semId),
+                            semester_name: s.semester_name,
+                            academic_year: s.academic_year,
+                            start_date: s.start_date,
+                            end_date: s.end_date,
+                            status: 'active'
+                        });
+                        if (r.success) { showToast(`${s.semester_name} (${s.academic_year}) is now active`, 'success'); loadSchoolYear(); }
+                        else showToast(r.message || 'Failed', 'error');
+                    } else if (item.dataset.action === 'delete') {
+                        if (!confirm(`Delete "${s.semester_name} ${s.academic_year}"?\nThis cannot be undone.`)) return;
+                        const r = await Api.post('/SemesterAPI.php?action=delete', { semester_id: parseInt(semId) });
+                        if (r.success) { showToast('Semester deleted', 'success'); loadSchoolYear(); }
+                        else showToast(r.message || 'Failed', 'error');
+                    }
                 });
-                if (r.success) { showToast(`${s.semester_name} (${s.academic_year}) is now active`, 'success'); loadSchoolYear(); }
-                else { showToast(r.message || 'Failed', 'error'); btn.disabled = false; btn.textContent = 'Set Active'; }
-            });
-        });
-
-        // Delete
-        body.querySelectorAll('[data-del]:not([disabled])').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const s = semesters.find(x => x.semester_id == btn.dataset.del);
-                if (!confirm(`Delete "${s.semester_name} ${s.academic_year}"?\nThis cannot be undone.`)) return;
-                const r = await Api.post('/SemesterAPI.php?action=delete', { semester_id: parseInt(btn.dataset.del) });
-                if (r.success) { showToast('Semester deleted', 'success'); loadSchoolYear(); }
-                else showToast(r.message || 'Failed', 'error');
             });
         });
     }

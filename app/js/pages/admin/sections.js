@@ -577,7 +577,7 @@ async function openBulkSubjectModal(container, sectionId, currentFilters = {}) {
 
         return `<div class="bm-row" data-code="${esc(s.subject_code)}" data-name="${esc(s.subject_name)}"
                      style="display:flex;align-items:center;gap:10px;padding:11px 20px;border-bottom:1px solid #f5f5f5;transition:background .1s;">
-                    <input type="checkbox" class="bm-chk" value="${s.offerings[0].id}"
+                    <input type="checkbox" class="bm-chk" value="${s.subject_id}"
                            style="width:16px;height:16px;cursor:pointer;accent-color:#1B4D3E;flex-shrink:0;">
                     <span style="background:#E8F5E9;color:#1B4D3E;padding:2px 7px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:700;flex-shrink:0;">${esc(s.subject_code)}</span>
                     <span style="flex:1;font-size:13px;font-weight:500;color:#262626;min-width:0;">${esc(s.subject_name)}</span>
@@ -597,7 +597,7 @@ async function openBulkSubjectModal(container, sectionId, currentFilters = {}) {
                 ${grouped.length === 0
                     ? `<div style="padding:40px;text-align:center;color:#737373;font-size:13px;line-height:2">
                            No available subjects for this section.<br>
-                           <strong>Assign instructors in Faculty Assignments first.</strong>
+                           <strong>Make sure the section has a Program, Year Level, and Semester set.</strong>
                        </div>`
                     : `<div style="padding:12px 20px;border-bottom:1px solid #f0f0f0;display:flex;gap:10px;align-items:center;">
                            <input id="bm-search" placeholder="Search subjects..." style="flex:1;padding:8px 12px;border:1px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;">
@@ -678,7 +678,7 @@ async function openBulkSubjectModal(container, sectionId, currentFilters = {}) {
         saveBtn.textContent = 'Adding...';
         const r = await Api.post('/SectionsAPI.php?action=bulk-add-subjects', {
             section_id: sectionId,
-            subject_offered_ids: ids
+            subject_ids: ids
         });
         overlay.remove();
         if (r.success) {

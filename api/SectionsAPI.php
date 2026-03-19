@@ -380,7 +380,9 @@ function handleRemoveSubject() {
     }
 }
 
-// ─── Get subject offerings not yet in this section ─────────────────────────
+// ─── Get curriculum subjects not yet in this section ───────────────────────
+// Queries the subject table directly so that ALL subjects for a program/year/semester
+// appear regardless of whether a subject_offered entry exists yet.
 
 function handleAvailableSubjects() {
     $sectionId = (int)($_GET['section_id'] ?? 0);
@@ -389,62 +391,120 @@ function handleAvailableSubjects() {
         return;
     }
 
-    // Load section context so we can pre-filter relevant offerings
+    // Load section context + sem_level (matches subject.semester column)
     $sec = db()->fetchOne(
-        "SELECT program_id, year_level, semester_id FROM section WHERE section_id = ?",
+        "SELECT sec.program_id, sec.year_level, sec.semester_id, st.sem_level
+         FROM section sec
+         LEFT JOIN semester sem ON sem.semester_id = sec.semester_id
+         LEFT JOIN sem_type st  ON st.sem_type_id  = sem.sem_type_id
+         WHERE sec.section_id = ?",
         [$sectionId]
     );
 
-    $conditions = [
-        "so.status = 'open'",
-        "so.subject_offered_id NOT IN (SELECT subject_offered_id FROM section_subject WHERE section_id = ?)"
-    ];
-    $params = [$sectionId];
-
-    if ($sec && $sec['semester_id']) {
-        $conditions[] = "so.semester_id = ?";
-        $params[]     = (int)$sec['semester_id'];
-    }
-    if ($sec && $sec['program_id']) {
-        $conditions[] = "s.program_id = ?";
-        $params[]     = (int)$sec['program_id'];
-    }
-    if ($sec && $sec['year_level']) {
-        $conditions[] = "s.year_level = ?";
-        $params[]     = (int)$sec['year_level'];
+    if (!$sec || !$sec['program_id'] || !$sec['year_level'] || !$sec['sem_level']) {
+        echo json_encode([
+            'success' => true,
+            'data'    => [],
+            '_note'   => 'Section is missing program, year level, or semester context',
+        ]);
+        return;
     }
 
-    $where = implode(' AND ', $conditions);
+    $programId  = (int)$sec['program_id'];
+    $yearLevel  = (int)$sec['year_level'];
+    $semLevel   = (int)$sec['sem_level'];
+    $semesterId = (int)$sec['semester_id'];
 
+    // Return all active curriculum subjects for this program/year/semester
+    // that are NOT already assigned to this section.
+    // Correlated subqueries grab the best offering (prefer instructor-assigned) and
+    // the instructor name — both are nullable (subject may not have an offering yet).
     $subjects = db()->fetchAll(
-        "SELECT so.subject_offered_id,
-                s.subject_id, s.subject_code, s.subject_name, s.units,
-                CONCAT(u.first_name, ' ', u.last_name) AS instructor_name
-         FROM subject_offered so
-         JOIN subject s ON s.subject_id = so.subject_id
-         LEFT JOIN users u ON u.users_id = so.user_teacher_id
-         WHERE $where
-         ORDER BY s.subject_code, so.user_teacher_id IS NULL",
-        $params
+        "SELECT s.subject_id, s.subject_code, s.subject_name, s.units,
+                (SELECT so.subject_offered_id
+                 FROM subject_offered so
+                 WHERE so.subject_id   = s.subject_id
+                   AND so.semester_id  = {$semesterId}
+                 ORDER BY (so.user_teacher_id IS NOT NULL) DESC
+                 LIMIT 1) AS subject_offered_id,
+                (SELECT CONCAT(u.first_name,' ',u.last_name)
+                 FROM subject_offered so
+                 JOIN users u ON u.users_id = so.user_teacher_id
+                 WHERE so.subject_id   = s.subject_id
+                   AND so.semester_id  = {$semesterId}
+                   AND so.user_teacher_id IS NOT NULL
+                 LIMIT 1) AS instructor_name
+         FROM subject s
+         WHERE s.program_id  = ?
+           AND s.year_level  = ?
+           AND s.semester    = ?
+           AND s.status      = 'active'
+           AND s.subject_id NOT IN (
+               SELECT so2.subject_id
+               FROM section_subject ss2
+               JOIN subject_offered so2 ON so2.subject_offered_id = ss2.subject_offered_id
+               WHERE ss2.section_id = ?
+           )
+         ORDER BY s.subject_code",
+        [$programId, $yearLevel, $semLevel, $sectionId]
     );
 
     echo json_encode(['success' => true, 'data' => $subjects]);
 }
 
-// ─── Bulk-add multiple subject offerings to a section ──────────────────────
+// ─── Bulk-add multiple subjects to a section ───────────────────────────────
+// Accepts subject_ids (curriculum flow — finds or creates offering as needed).
+// Falls back to legacy subject_offered_ids if provided directly.
 
 function handleBulkAddSubjects() {
-    $data      = json_decode(file_get_contents('php://input'), true);
-    $sectionId = (int)($data['section_id'] ?? 0);
-    $ids       = array_map('intval', $data['subject_offered_ids'] ?? []);
+    $data       = json_decode(file_get_contents('php://input'), true);
+    $sectionId  = (int)($data['section_id'] ?? 0);
+    $subjectIds = array_map('intval', $data['subject_ids']        ?? []);
+    $offeredIds = array_map('intval', $data['subject_offered_ids'] ?? []);
 
-    if (!$sectionId || empty($ids)) {
+    if (!$sectionId || (empty($subjectIds) && empty($offeredIds))) {
         echo json_encode(['success' => false, 'message' => 'Invalid data']);
         return;
     }
 
+    // Get section's semester_id so we can find/create offerings
+    $sec   = db()->fetchOne("SELECT semester_id FROM section WHERE section_id = ?", [$sectionId]);
+    $semId = $sec ? (int)$sec['semester_id'] : null;
+
     $added = 0;
-    foreach ($ids as $offeredId) {
+
+    // ── curriculum subject_ids flow ─────────────────────────────────────────
+    foreach ($subjectIds as $subjectId) {
+        if (!$subjectId) continue;
+
+        // Find the best offering for this subject+semester
+        // (prefer one with an instructor assigned)
+        $offering = $semId ? db()->fetchOne(
+            "SELECT subject_offered_id FROM subject_offered
+             WHERE subject_id = ? AND semester_id = ?
+             ORDER BY (user_teacher_id IS NOT NULL) DESC
+             LIMIT 1",
+            [$subjectId, $semId]
+        ) : null;
+
+        if ($offering) {
+            $offeredId = (int)$offering['subject_offered_id'];
+        } else {
+            // No offering yet — create an unassigned one
+            if (!$semId) continue;
+            try {
+                $pdo = pdo();
+                $pdo->prepare(
+                    "INSERT INTO subject_offered (subject_id, semester_id, user_teacher_id, status, created_at, updated_at)
+                     VALUES (?, ?, NULL, 'open', NOW(), NOW())"
+                )->execute([$subjectId, $semId]);
+                $offeredId = (int)$pdo->lastInsertId();
+            } catch (Exception $e) {
+                error_log('Bulk-add create offering: ' . $e->getMessage());
+                continue;
+            }
+        }
+
         $exists = db()->fetchOne(
             "SELECT 1 FROM section_subject WHERE section_id = ? AND subject_offered_id = ?",
             [$sectionId, $offeredId]
@@ -458,6 +518,24 @@ function handleBulkAddSubjects() {
             $added++;
         }
     }
+
+    // ── legacy subject_offered_ids flow ────────────────────────────────────
+    foreach ($offeredIds as $offeredId) {
+        if (!$offeredId) continue;
+        $exists = db()->fetchOne(
+            "SELECT 1 FROM section_subject WHERE section_id = ? AND subject_offered_id = ?",
+            [$sectionId, $offeredId]
+        );
+        if (!$exists) {
+            db()->execute(
+                "INSERT INTO section_subject (section_id, subject_offered_id, status, created_at)
+                 VALUES (?, ?, 'active', NOW())",
+                [$sectionId, $offeredId]
+            );
+            $added++;
+        }
+    }
+
     echo json_encode(['success' => true, 'added' => $added]);
 }
 

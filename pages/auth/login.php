@@ -82,20 +82,20 @@
                             <div class="demo-credentials-list">
                                 <div class="demo-row">
                                     <span class="demo-role">Admin</span>
-                                    <a href="#" data-demo-email="admin@cit-lms.edu.ph" data-demo-password="password123">
-                                        <code>admin@cit-lms.edu.ph</code>
+                                    <a href="#" data-demo-id="ADMIN-001" data-demo-password="password123">
+                                        <code>ADMIN-001</code>
                                     </a>
                                 </div>
                                 <div class="demo-row">
                                     <span class="demo-role">Instructor</span>
-                                    <a href="#" data-demo-email="juan.delacruz@cit-lms.edu.ph" data-demo-password="password123">
-                                        <code>juan.delacruz@cit-lms.edu.ph</code>
+                                    <a href="#" data-demo-id="EMP-2024-001" data-demo-password="password123">
+                                        <code>EMP-2024-001</code>
                                     </a>
                                 </div>
                                 <div class="demo-row">
                                     <span class="demo-role">Student</span>
-                                    <a href="#" data-demo-email="maria.santos@student.cit-lms.edu.ph" data-demo-password="password123">
-                                        <code>maria.santos@student.cit-lms.edu.ph</code>
+                                    <a href="#" data-demo-id="2024-00001" data-demo-password="password123">
+                                        <code>2024-00001</code>
                                     </a>
                                 </div>
                                 <div class="demo-password">
@@ -107,20 +107,20 @@
                         <!-- Login Form -->
                         <form id="login-form" class="auth-form" method="POST" autocomplete="on">
 
-                            <!-- Email -->
+                            <!-- User ID -->
                             <div class="form-group">
-                                <label for="email" class="form-label required">Email Address</label>
+                                <label for="user_id" class="form-label required">User ID</label>
                                 <div class="form-input-icon">
                                     <span class="input-icon">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                     </span>
                                     <input
-                                        type="email"
-                                        id="email"
-                                        name="email"
+                                        type="text"
+                                        id="user_id"
+                                        name="user_id"
                                         class="form-input"
-                                        placeholder="Enter your email"
-                                        autocomplete="email"
+                                        placeholder="Enter your Student ID or Employee ID"
+                                        autocomplete="username"
                                         required
                                     >
                                 </div>

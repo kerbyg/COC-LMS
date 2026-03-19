@@ -16,7 +16,7 @@ const MODULE_ICONS = {
     curriculum:'📋', sections:'🏫', subject_offerings:'📅',
     faculty_assignments:'👨‍🏫', quizzes:'📝', lessons:'📖',
     question_bank:'🏦', grades:'📊', reports:'📈',
-    analytics:'📉', remedials:'🔄', settings:'⚙️', rbac:'🔐'
+    analytics:'📉', settings:'⚙️', rbac:'🔐'
 };
 
 export async function render(container) {

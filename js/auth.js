@@ -9,7 +9,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Get form elements
     const loginForm = document.getElementById('login-form');
-    const emailInput = document.getElementById('email');
+    const userIdInput = document.getElementById('user_id');
     const passwordInput = document.getElementById('password');
     const submitBtn = document.getElementById('submit-btn');
     const errorContainer = document.getElementById('error-container');
@@ -36,20 +36,17 @@ document.addEventListener('DOMContentLoaded', function() {
             clearValidation();
             
             // Get values
-            const email = emailInput.value.trim();
+            const userId = userIdInput.value.trim();
             const password = passwordInput.value;
-            
+
             // Client-side validation
             let hasError = false;
-            
-            if (!email) {
-                showFieldError(emailInput, 'Email is required');
-                hasError = true;
-            } else if (!isValidEmail(email)) {
-                showFieldError(emailInput, 'Please enter a valid email');
+
+            if (!userId) {
+                showFieldError(userIdInput, 'User ID is required');
                 hasError = true;
             }
-            
+
             if (!password) {
                 showFieldError(passwordInput, 'Password is required');
                 hasError = true;
@@ -57,12 +54,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 showFieldError(passwordInput, 'Password must be at least 6 characters');
                 hasError = true;
             }
-            
+
             if (hasError) return;
-            
+
             // Show loading state
             setLoading(true);
-            
+
             try {
                 // Make API request
                 const response = await fetch(APP_CONFIG.apiUrl + '/AuthAPI.php?action=login', {
@@ -71,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        email: email,
+                        user_id: userId,
                         password: password
                     })
                 });
@@ -98,12 +95,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 setLoading(false);
             }
         });
-    }
-    
-    // Email validation helper
-    function isValidEmail(email) {
-        const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return pattern.test(email);
     }
     
     // Show error message
@@ -183,7 +174,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Disable inputs
-        if (emailInput) emailInput.disabled = isLoading;
+        if (userIdInput) userIdInput.disabled = isLoading;
         if (passwordInput) passwordInput.disabled = isLoading;
     }
     
@@ -195,29 +186,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Auto-fill demo credentials on click
-    const demoLinks = document.querySelectorAll('[data-demo-email]');
+    const demoLinks = document.querySelectorAll('[data-demo-id]');
     demoLinks.forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
-            const email = this.dataset.demoEmail;
+            const id = this.dataset.demoId;
             const password = this.dataset.demoPassword || 'password123';
-            
-            if (emailInput) emailInput.value = email;
+
+            if (userIdInput) userIdInput.value = id;
             if (passwordInput) passwordInput.value = password;
             
             // Visual feedback
-            emailInput.style.backgroundColor = '#d1fae5';
+            userIdInput.style.backgroundColor = '#d1fae5';
             passwordInput.style.backgroundColor = '#d1fae5';
             
             setTimeout(() => {
-                emailInput.style.backgroundColor = '';
+                userIdInput.style.backgroundColor = '';
                 passwordInput.style.backgroundColor = '';
             }, 500);
         });
     });
     
     // Clear error on input
-    [emailInput, passwordInput].forEach(input => {
+    [userIdInput, passwordInput].forEach(input => {
         if (input) {
             input.addEventListener('input', function() {
                 this.classList.remove('is-invalid');

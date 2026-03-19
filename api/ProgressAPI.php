@@ -287,7 +287,6 @@ function getQuizResult() {
         // Get linked lesson — must belong to the same subject as the quiz
         $linkedLessonsId = null;
         $linkedLessonTitle = null;
-        $remedialId = null;
         $subjectId = (int)($attempt['subject_id'] ?? 0);
 
         // 1. Try quiz_lessons but only if the lesson belongs to the same subject
@@ -317,16 +316,6 @@ function getQuizResult() {
             $linkedLessonTitle = $linkedLesson['lesson_title'];
         }
 
-        if (!$attempt['passed']) {
-            $remedial = db()->fetchOne(
-                "SELECT remedial_id FROM remedial_assignment WHERE user_student_id = ? AND quiz_id = ? AND status IN ('pending','in_progress') LIMIT 1",
-                [$userId, $attempt['quiz_id']]
-            );
-            if ($remedial) {
-                $remedialId = $remedial['remedial_id'];
-            }
-        }
-
         echo json_encode([
             'success' => true,
             'data' => [
@@ -334,7 +323,6 @@ function getQuizResult() {
                 'answers'       => $answers,
                 'lessons_id'    => $linkedLessonsId,
                 'lesson_title'  => $linkedLessonTitle,
-                'remedial_id'   => $remedialId
             ]
         ]);
     } catch (Exception $e) {

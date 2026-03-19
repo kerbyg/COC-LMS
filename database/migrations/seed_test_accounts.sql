@@ -9,11 +9,11 @@
 -- ============================================================
 
 -- ── Admin ──────────────────────────────────────────────────
-INSERT INTO users (users_id, first_name, last_name, email, password, role, status, created_at)
+INSERT INTO users (users_id, first_name, last_name, email, password, role, employee_id, status, created_at)
 VALUES (1, 'System', 'Administrator', 'admin@cit-lms.edu.ph',
         '$2y$10$WA71CcQreDR5DH4mwavFnuQefCWE07ot5xG1e34MaZhpyfWk8jZiW',
-        'admin', 'active', NOW())
-ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), role = 'admin', status = 'active';
+        'admin', 'ADMIN-001', 'active', NOW())
+ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), role = 'admin', employee_id = 'ADMIN-001', status = 'active';
 
 -- ── Dean ───────────────────────────────────────────────────
 INSERT INTO users (first_name, last_name, email, password, role, employee_id, department_id, status, created_at)

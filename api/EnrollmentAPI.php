@@ -29,8 +29,9 @@ switch ($action) {
 // ─── Preview: return section + subjects before confirming enrollment ────────
 
 function previewCode() {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $code  = strtoupper(trim($input['enrollment_code'] ?? ''));
+    $input  = json_decode(file_get_contents('php://input'), true);
+    $code   = strtoupper(trim($input['enrollment_code'] ?? ''));
+    $userId = Auth::id();
 
     if (!$code) {
         echo json_encode(['success' => false, 'message' => 'Enrollment code is required']);
@@ -50,28 +51,53 @@ function previewCode() {
         return;
     }
 
-    $subjects = db()->fetchAll(
+    $rawSubjects = db()->fetchAll(
         "SELECT ss.subject_offered_id, ss.schedule, ss.room,
-                s.subject_code, s.subject_name, s.units,
+                s.subject_id, s.subject_code, s.subject_name, s.units,
                 CONCAT(u.first_name, ' ', u.last_name) AS instructor_name
          FROM section_subject ss
          JOIN subject_offered so ON so.subject_offered_id = ss.subject_offered_id
          JOIN subject s ON s.subject_id = so.subject_id
          LEFT JOIN users u ON u.users_id = so.user_teacher_id
          WHERE ss.section_id = ? AND ss.status = 'active'
-         ORDER BY s.subject_code",
+         ORDER BY s.subject_code, (so.user_teacher_id IS NOT NULL) DESC",
         [$section['section_id']]
     );
+
+    // Deduplicate by subject_id — keep the first row (instructor-assigned preferred)
+    $seen     = [];
+    $subjects = [];
+    foreach ($rawSubjects as $row) {
+        if (!isset($seen[$row['subject_id']])) {
+            $seen[$row['subject_id']] = true;
+            $subjects[] = $row;
+        }
+    }
+
+    // Mark already enrolled by subject_id (catches same subject in another section/offering)
+    $newCount = 0;
+    foreach ($subjects as &$subj) {
+        $alreadyIn = db()->fetchOne(
+            "SELECT 1 FROM student_subject ss2
+             JOIN subject_offered so2 ON so2.subject_offered_id = ss2.subject_offered_id
+             WHERE ss2.user_student_id = ? AND so2.subject_id = ? AND ss2.status = 'enrolled'",
+            [$userId, $subj['subject_id']]
+        );
+        $subj['already_enrolled'] = $alreadyIn ? true : false;
+        if (!$alreadyIn) $newCount++;
+    }
+    unset($subj);
 
     echo json_encode([
         'success' => true,
         'data' => [
-            'section_id'   => $section['section_id'],
-            'section_name' => $section['section_name'],
-            'enrollment_code' => $code,
-            'max_students' => $section['max_students'],
+            'section_id'         => $section['section_id'],
+            'section_name'       => $section['section_name'],
+            'enrollment_code'    => $code,
+            'max_students'       => $section['max_students'],
             'current_enrollment' => $section['current_enrollment'],
-            'subjects'     => $subjects
+            'subjects'           => $subjects,
+            'new_count'          => $newCount,
         ]
     ]);
 }
@@ -103,33 +129,31 @@ function enrollByCode() {
             return;
         }
 
-        // Check already enrolled in this section
-        $alreadyInSection = db()->fetchOne(
-            "SELECT student_subject_id FROM student_subject
-             WHERE user_student_id = ? AND section_id = ? AND status = 'enrolled'
-             LIMIT 1",
-            [$userId, $section['section_id']]
-        );
-        if ($alreadyInSection) {
-            echo json_encode(['success' => false, 'message' => 'Already enrolled in this section']);
-            return;
-        }
-
         // Check capacity
         if ($section['current_enrollment'] >= $section['max_students']) {
             echo json_encode(['success' => false, 'message' => 'Section is full']);
             return;
         }
 
-        // Get all subjects in section
-        $subjects = db()->fetchAll(
+        // Get all subjects in section — deduplicate by subject_id (instructor-assigned preferred)
+        $rawSubjects = db()->fetchAll(
             "SELECT ss.subject_offered_id, so.subject_id, s.subject_code
              FROM section_subject ss
              JOIN subject_offered so ON so.subject_offered_id = ss.subject_offered_id
              JOIN subject s ON s.subject_id = so.subject_id
-             WHERE ss.section_id = ? AND ss.status = 'active'",
+             WHERE ss.section_id = ? AND ss.status = 'active'
+             ORDER BY (so.user_teacher_id IS NOT NULL) DESC",
             [$section['section_id']]
         );
+
+        $seen     = [];
+        $subjects = [];
+        foreach ($rawSubjects as $row) {
+            if (!isset($seen[$row['subject_id']])) {
+                $seen[$row['subject_id']] = true;
+                $subjects[] = $row;
+            }
+        }
 
         if (empty($subjects)) {
             echo json_encode(['success' => false, 'message' => 'This section has no subjects yet. Contact your administrator.']);
@@ -141,11 +165,12 @@ function enrollByCode() {
         $skipped  = 0;
 
         foreach ($subjects as $subj) {
-            // Skip if already enrolled in this subject_offered
+            // Skip if already enrolled in this subject (any offering, any section)
             $exists = db()->fetchOne(
-                "SELECT student_subject_id FROM student_subject
-                 WHERE user_student_id = ? AND subject_offered_id = ? AND status = 'enrolled'",
-                [$userId, $subj['subject_offered_id']]
+                "SELECT ss2.student_subject_id FROM student_subject ss2
+                 JOIN subject_offered so2 ON so2.subject_offered_id = ss2.subject_offered_id
+                 WHERE ss2.user_student_id = ? AND so2.subject_id = ? AND ss2.status = 'enrolled'",
+                [$userId, $subj['subject_id']]
             );
             if ($exists) { $skipped++; continue; }
 
@@ -156,8 +181,14 @@ function enrollByCode() {
             $enrolled++;
         }
 
-        $msg = "Enrolled in {$section['section_name']} — {$enrolled} subject" . ($enrolled !== 1 ? 's' : '');
-        if ($skipped > 0) $msg .= " ({$skipped} already enrolled)";
+        if ($enrolled === 0) {
+            echo json_encode(['success' => false, 'message' => 'You are already enrolled in all subjects of this section.']);
+            return;
+        }
+
+        $msg = $skipped > 0
+            ? "Added {$enrolled} new subject" . ($enrolled !== 1 ? 's' : '') . " to your enrollment."
+            : "Enrolled in {$section['section_name']} — {$enrolled} subject" . ($enrolled !== 1 ? 's' : '') . ".";
 
         echo json_encode(['success' => true, 'message' => $msg, 'enrolled' => $enrolled]);
 
@@ -179,7 +210,11 @@ function getMySubjects() {
                 CONCAT(u2.first_name, ' ', u2.last_name) AS instructor_name,
                 (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id AND l.status = 'published') as total_lessons,
                 (SELECT COUNT(*) FROM student_progress sp JOIN lessons l2 ON sp.lessons_id = l2.lessons_id
-                 WHERE sp.user_student_id = ? AND l2.subject_id = s.subject_id AND sp.status = 'completed') as completed_lessons
+                 WHERE sp.user_student_id = ? AND l2.subject_id = s.subject_id AND sp.status = 'completed') as completed_lessons,
+                (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id AND q.status = 'published') as total_quizzes,
+                (SELECT COUNT(DISTINCT sqa.quiz_id) FROM student_quiz_attempts sqa
+                 JOIN quiz q2 ON sqa.quiz_id = q2.quiz_id
+                 WHERE sqa.user_student_id = ? AND q2.subject_id = s.subject_id AND sqa.passed = 1 AND sqa.status = 'completed') as completed_quizzes
              FROM student_subject ss
              JOIN subject_offered so ON ss.subject_offered_id = so.subject_offered_id
              JOIN subject s ON so.subject_id = s.subject_id
@@ -189,7 +224,7 @@ function getMySubjects() {
                                               AND secsubj.subject_offered_id = ss.subject_offered_id
              WHERE ss.user_student_id = ? AND ss.status = 'enrolled'
              ORDER BY s.subject_code",
-            [$userId, $userId]
+            [$userId, $userId, $userId]
         );
 
         foreach ($subjects as &$s) {

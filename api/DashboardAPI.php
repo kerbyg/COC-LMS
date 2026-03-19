@@ -129,8 +129,6 @@ function handleInstructorDashboard() {
     $recentActivity = [];
     $quizPerformance = [];
     $atRiskStudents = [];
-    $pendingRemedials = 0;
-
     if ($sIds) {
         $avgRow = db()->fetchOne(
             "SELECT ROUND(AVG(sqa.percentage), 1) as avg_score
@@ -233,13 +231,6 @@ function handleInstructorDashboard() {
             $sIds
         );
 
-        // Pending remedials
-        $remRow = db()->fetchOne(
-            "SELECT COUNT(*) as c FROM remedial_assignment ra
-             WHERE ra.assigned_by = ? AND ra.status IN ('pending', 'in_progress')",
-            [$userId]
-        );
-        $pendingRemedials = (int)($remRow['c'] ?? 0);
     }
 
     echo json_encode([
@@ -252,7 +243,6 @@ function handleInstructorDashboard() {
                 'quizzes' => $totalQuizzes,
                 'avg_score' => $avgScore,
                 'completion_rate' => $completionRate,
-                'pending_remedials' => $pendingRemedials,
             ],
             'classes' => $classes,
             'recent_activity' => $recentActivity,

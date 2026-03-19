@@ -23,7 +23,6 @@ export async function render(container) {
     const answers = res.data.answers || [];
     const lessonsId = res.data.lessons_id || null;
     const lessonTitle = res.data.lesson_title || null;
-    const remedialId = res.data.remedial_id || null;
     const pct = parseFloat(attempt.percentage || 0);
     const passed = attempt.passed == 1;
     const timeTaken = parseInt(attempt.time_spent || 0);
@@ -93,12 +92,12 @@ export async function render(container) {
                     <a class="btn" href="#student/grades">View Grades</a>
                 ` : `
                     ${lessonsId ? `<a class="btn" style="background:#fff3cd;border-color:#f59e0b;color:#92400E" href="#student/lesson-view?id=${lessonsId}">📖 Re-study: ${esc(lessonTitle || 'Lesson')} <span style="font-size:10px;opacity:.7;">(${esc(attempt.subject_code)})</span></a>` : `<a class="btn" style="background:#fff3cd;border-color:#f59e0b;color:#92400E" href="#student/lessons">📖 Back to Lessons</a>`}
-                    <a class="btn primary" style="background:#b91c1c;border-color:#b91c1c" href="#student/remedials">📌 Go to Remedials</a>
+                    <a class="btn" href="#student/grades">View Grades</a>
                 `}
             </div>
             ${!passed ? `<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#92400E;text-align:center;">
                 <strong>You did not meet the passing rate of ${attempt.passing_rate}%.</strong><br>
-                Please re-study the lesson, then retake the quiz from your Remedials page.
+                Please re-study the lesson and retake the quiz.
             </div>` : `<div style="background:#E8F5E9;border:1px solid #A7F3D0;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#065F46;text-align:center;">
                 <strong>Congratulations! You passed.</strong>${lessonsId ? ' The next lesson is now unlocked.' : ''}
             </div>`}

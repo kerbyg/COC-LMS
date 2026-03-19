@@ -77,33 +77,29 @@ function handleLogin() {
     $input = json_decode(file_get_contents('php://input'), true);
     
     // Validate required fields
-    $email = trim($input['email'] ?? '');
+    $userId = trim($input['user_id'] ?? $input['email'] ?? '');
     $password = $input['password'] ?? '';
-    
+
     // Validation
-    if (empty($email)) {
-        jsonResponse(false, 'Email is required');
+    if (empty($userId)) {
+        jsonResponse(false, 'User ID is required');
     }
-    
+
     if (empty($password)) {
         jsonResponse(false, 'Password is required');
     }
-    
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        jsonResponse(false, 'Invalid email format');
-    }
-    
+
     try {
-        // Find user by email
+        // Find user by student_id or employee_id
         $user = db()->fetchOne(
-            "SELECT * FROM users WHERE email = ? LIMIT 1",
-            [$email]
+            "SELECT * FROM users WHERE student_id = ? OR employee_id = ? LIMIT 1",
+            [$userId, $userId]
         );
-        
+
         // Check if user exists
         if (!$user) {
-            logActivity(null, 'login_failed', "Failed login attempt for email: $email");
-            jsonResponse(false, 'Invalid email or password');
+            logActivity(null, 'login_failed', "Failed login attempt for user ID: $userId");
+            jsonResponse(false, 'Invalid ID or password');
         }
         
         // Check if user is active
@@ -111,11 +107,11 @@ function handleLogin() {
             logActivity($user['users_id'], 'login_blocked', 'Login blocked - account not active');
             jsonResponse(false, 'Your account is not active. Please contact administrator.');
         }
-        
+
         // Verify password
         if (!Auth::verifyPassword($password, $user['password'])) {
             logActivity($user['users_id'], 'login_failed', 'Failed login - incorrect password');
-            jsonResponse(false, 'Invalid email or password');
+            jsonResponse(false, 'Invalid ID or password');
         }
         
         // Login successful - create session

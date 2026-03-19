@@ -264,15 +264,14 @@ function submitQuiz() {
         // Record in student_scores
         try {
             $pdo->prepare(
-                "INSERT INTO student_scores (subject_offered_id, quiz_id, raw_score, user_id, status, remedial_required, remarks)
-                 VALUES (?, ?, ?, ?, 'graded', ?, ?)"
+                "INSERT INTO student_scores (subject_offered_id, quiz_id, raw_score, user_id, status, remarks)
+                 VALUES (?, ?, ?, ?, 'graded', ?)"
             )->execute([
                 $enrollment['subject_offered_id'],
                 $quizId,
                 $earnedPoints,
                 $userId,
-                $passed ? 0 : 1,
-                $passed ? 'Passed' : 'Failed - Remedial required'
+                $passed ? 'Passed' : 'Failed'
             ]);
         } catch (PDOException $e) {
             error_log("student_scores insert: " . $e->getMessage());
@@ -287,8 +286,6 @@ function submitQuiz() {
         if ($linkedLesson) {
             $linkedLessonsId = $linkedLesson['lessons_id'];
         }
-
-        $remedialId = null;
 
         if ($passed) {
             // Auto-complete the linked lesson
@@ -307,52 +304,6 @@ function submitQuiz() {
                     }
                 } catch (PDOException $e) {
                     error_log("Auto-complete lesson failed: " . $e->getMessage());
-                }
-            }
-            // Close any open remedials for this quiz
-            try {
-                $pdo->prepare(
-                    "UPDATE remedial_assignment SET status='completed', new_score=?, completed_at=NOW(),
-                     remarks=CONCAT(IFNULL(remarks,''), ' | Passed on retake with ', ?, '%')
-                     WHERE user_student_id=? AND quiz_id=? AND status IN ('pending','in_progress')"
-                )->execute([$earnedPoints, round($percentage, 1), $userId, $quizId]);
-            } catch (PDOException $e) {
-                error_log("Auto-remedial completion failed: " . $e->getMessage());
-            }
-        }
-
-        // On fail: auto-create remedial (always — even if essay grades still pending)
-        if (!$passed || $hasPendingGrades) {
-            // Check if student truly failed based on objective points alone when pending grades exist
-            $likelyFailed = $hasPendingGrades
-                ? ($earnedPoints / max($totalPoints, 1) * 100 < $quiz['passing_rate'])  // failed on obj questions alone
-                : !$passed;
-
-            if ($likelyFailed) {
-                $existingRemedial = db()->fetchOne(
-                    "SELECT remedial_id FROM remedial_assignment
-                     WHERE user_student_id = ? AND quiz_id = ? AND status IN ('pending', 'in_progress')",
-                    [$userId, $quizId]
-                );
-                if (!$existingRemedial) {
-                    try {
-                        $reason = $hasPendingGrades
-                            ? 'Scored ' . round($percentage, 1) . '% on objective questions (passing: ' . $quiz['passing_rate'] . '%) — essay answers pending review'
-                            : 'Failed quiz with ' . round($percentage, 1) . '% (passing: ' . $quiz['passing_rate'] . '%)';
-                        $pdo->prepare(
-                            "INSERT INTO remedial_assignment (user_student_id, quiz_id, attempt_id, assigned_by, reason, due_date, status)
-                             VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY), 'pending')"
-                        )->execute([
-                            $userId, $quizId, $attemptId,
-                            $quiz['user_teacher_id'] ?? 0,
-                            $reason
-                        ]);
-                        $remedialId = $pdo->lastInsertId();
-                    } catch (PDOException $e) {
-                        error_log("Auto-remedial creation failed: " . $e->getMessage());
-                    }
-                } else {
-                    $remedialId = $existingRemedial['remedial_id'];
                 }
             }
         }
@@ -384,8 +335,7 @@ function submitQuiz() {
                 'passed'       => $passed,
                 'earned_points'=> $earnedPoints,
                 'total_points' => $totalPoints,
-                'lessons_id'   => $linkedLessonsId,
-                'remedial_id'  => $remedialId
+                'lessons_id'   => $linkedLessonsId
             ]
         ]);
 
@@ -651,42 +601,6 @@ function finalizeGrading() {
              SET earned_points = ?, percentage = ?, passed = ?, has_pending_grades = 0
              WHERE attempt_id = ?"
         )->execute([$earnedPoints, round($percentage, 2), $passed ? 1 : 0, $attemptId]);
-
-        // Auto-close remedial if student now passes after manual/AI grading
-        if ($passed) {
-            try {
-                pdo()->prepare(
-                    "UPDATE remedial_assignment SET status='completed', new_score=?, completed_at=NOW(),
-                     remarks=CONCAT(IFNULL(remarks,''), ' | Passed after grading with ', ?, '%')
-                     WHERE user_student_id=? AND quiz_id=? AND status IN ('pending','in_progress')"
-                )->execute([$earnedPoints, round($percentage, 1), $attempt['user_student_id'], $attempt['quiz_id']]);
-            } catch (PDOException $e) {
-                error_log("Auto-remedial close on finalize: " . $e->getMessage());
-            }
-        }
-
-        // Handle remedial logic now
-        if (!$passed) {
-            $existingRemedial = db()->fetchOne(
-                "SELECT remedial_id FROM remedial_assignment
-                 WHERE user_student_id = ? AND quiz_id = ? AND status IN ('pending', 'in_progress')",
-                [$attempt['user_student_id'], $attempt['quiz_id']]
-            );
-            if (!$existingRemedial) {
-                try {
-                    pdo()->prepare(
-                        "INSERT INTO remedial_assignment (user_student_id, quiz_id, attempt_id, assigned_by, reason, due_date, status)
-                         VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY), 'pending')"
-                    )->execute([
-                        $attempt['user_student_id'], $attempt['quiz_id'], $attemptId,
-                        $attempt['user_teacher_id'] ?? Auth::id(),
-                        'Failed quiz with ' . round($percentage, 1) . '% (passing: ' . $attempt['passing_rate'] . '%)'
-                    ]);
-                } catch (PDOException $e) {
-                    error_log("Remedial after grading: " . $e->getMessage());
-                }
-            }
-        }
 
         echo json_encode([
             'success' => true,

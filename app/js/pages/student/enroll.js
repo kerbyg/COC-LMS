@@ -149,8 +149,48 @@ async function renderPage(container) {
 
 // Step 2: Show preview card with subjects list, Cancel / Confirm buttons
 function showPreview(container, data) {
-    const { section_name, enrollment_code, max_students, current_enrollment, subjects } = data;
-    const spots = max_students - current_enrollment;
+    const { section_name, enrollment_code, max_students, current_enrollment, subjects, new_count } = data;
+    const spots    = max_students - current_enrollment;
+    const allDone  = new_count === 0;
+    const isUpdate = new_count > 0 && new_count < subjects.length; // some already enrolled
+
+    const subjectRows = subjects.map(s => {
+        if (s.already_enrolled) {
+            return `
+            <div class="preview-subject-row" style="opacity:.55">
+                <span class="psrow-check" style="color:#9aaa9a">✓</span>
+                <div class="psrow-info">
+                    <span class="psrow-code" style="background:#f3f4f6;color:#6b7280">${esc(s.subject_code)}</span>
+                    <div class="psrow-name" style="color:#6b7280">${esc(s.subject_name)}</div>
+                    <div class="psrow-meta">Already enrolled</div>
+                </div>
+            </div>`;
+        }
+        return `
+        <div class="preview-subject-row" style="background:#F2F8F2;border:1px solid #d4edda">
+            <span class="psrow-check" style="color:#1B4D3E;font-weight:700">+</span>
+            <div class="psrow-info">
+                <span class="psrow-code">${esc(s.subject_code)}</span>
+                <div class="psrow-name">${esc(s.subject_name)}</div>
+                <div class="psrow-meta">
+                    ${s.instructor_name ? esc(s.instructor_name) : 'TBA'}
+                    ${s.schedule ? ' · ' + esc(s.schedule) : ''}
+                    ${s.room ? ' · ' + esc(s.room) : ''}
+                    &nbsp;·&nbsp; ${s.units||0} units
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    const labelText = allDone
+        ? `All ${subjects.length} subject${subjects.length !== 1 ? 's' : ''} already enrolled`
+        : isUpdate
+            ? `${new_count} new subject${new_count !== 1 ? 's' : ''} will be added`
+            : `You will be enrolled in ${subjects.length} subject${subjects.length !== 1 ? 's' : ''}`;
+
+    const btnLabel = allDone ? 'All Enrolled' : isUpdate
+        ? `Add ${new_count} New Subject${new_count !== 1 ? 's' : ''}`
+        : 'Confirm Enrollment';
 
     const efcBody = container.querySelector('.efc-body');
     efcBody.innerHTML = `
@@ -158,36 +198,23 @@ function showPreview(container, data) {
         <div class="preview-code-badge">${esc(enrollment_code)}</div>
         <div class="preview-capacity">${current_enrollment} / ${max_students} enrolled &nbsp;·&nbsp; ${spots} spot${spots !== 1 ? 's' : ''} left</div>
         <hr class="preview-divider">
-        <div class="preview-subjects-label">You will be enrolled in ${subjects.length} subject${subjects.length !== 1 ? 's' : ''}</div>
-        <div class="preview-subject-list">
-            ${subjects.map(s => `
-                <div class="preview-subject-row">
-                    <span class="psrow-check">✓</span>
-                    <div class="psrow-info">
-                        <span class="psrow-code">${esc(s.subject_code)}</span>
-                        <div class="psrow-name">${esc(s.subject_name)}</div>
-                        <div class="psrow-meta">
-                            ${s.instructor_name ? esc(s.instructor_name) : 'TBA'}
-                            ${s.schedule ? ' · ' + esc(s.schedule) : ''}
-                            ${s.room ? ' · ' + esc(s.room) : ''}
-                            &nbsp;·&nbsp; ${s.units||0} units
-                        </div>
-                    </div>
-                </div>
-            `).join('')}
-        </div>
+        <div class="preview-subjects-label">${labelText}</div>
+        <div class="preview-subject-list">${subjectRows}</div>
         <div id="enroll-alert"></div>
-        <button class="btn-primary" id="btn-confirm-enroll">Confirm Enrollment</button>
+        ${allDone
+            ? `<div class="alert alert-success" style="margin-bottom:12px">You are already enrolled in all subjects of this section.</div>`
+            : ''}
+        <button class="btn-primary" id="btn-confirm-enroll" ${allDone ? 'disabled' : ''}>${btnLabel}</button>
         <button class="btn-secondary" id="btn-cancel-preview" style="margin-top:8px">← Back</button>
     `;
 
     // Confirm enrollment
     efcBody.querySelector('#btn-confirm-enroll').addEventListener('click', async () => {
-        const alertEl = efcBody.querySelector('#enroll-alert');
+        const alertEl   = efcBody.querySelector('#enroll-alert');
         const confirmBtn = efcBody.querySelector('#btn-confirm-enroll');
-        const cancelBtn = efcBody.querySelector('#btn-cancel-preview');
+        const cancelBtn  = efcBody.querySelector('#btn-cancel-preview');
         confirmBtn.disabled = true; confirmBtn.textContent = 'Enrolling...';
-        cancelBtn.disabled = true;
+        cancelBtn.disabled  = true;
 
         const res = await Api.post('/EnrollmentAPI.php?action=enroll', { enrollment_code: enrollment_code });
 
@@ -195,8 +222,8 @@ function showPreview(container, data) {
             alertEl.innerHTML = `<div class="alert alert-success">${res.message}</div>`;
             setTimeout(() => renderPage(container), 1200);
         } else {
-            confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm Enrollment';
-            cancelBtn.disabled = false;
+            confirmBtn.disabled = false; confirmBtn.textContent = btnLabel;
+            cancelBtn.disabled  = false;
             alertEl.innerHTML = `<div class="alert alert-error">${res.message}</div>`;
         }
     });
