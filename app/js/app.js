@@ -8,6 +8,42 @@ import { BASE_URL } from './api.js';
 import { renderSidebar } from './components/sidebar.js';
 import { renderTopbar } from './components/topbar.js';
 
+// ── Permission map: page → required permission slug ───────────
+// null = no permission required (always accessible)
+const PAGE_PERMISSIONS = {
+    // Admin
+    'admin/users':               'users.view',
+    'admin/rbac':                'rbac.view',
+    'admin/settings':            'settings.view',
+    'admin/departments':         'departments.view',
+    'admin/programs':            'programs.view',
+    'admin/subjects':            'subjects.view',
+    'admin/curriculum':          'curriculum.view',
+    'admin/sections':            'sections.view',
+    'admin/subject-offerings':   'subject_offerings.view',
+    'admin/faculty-assignments': 'faculty_assignments.view',
+    // Dean
+    'dean/instructors':          'faculty_assignments.view',
+    'dean/subjects':             'subjects.view',
+    'dean/sections':             'sections.view',
+    'dean/subject-offerings':    'subject_offerings.view',
+    'dean/faculty-assignments':  'faculty_assignments.view',
+    'dean/reports':              'reports.view',
+    // Instructor
+    'instructor/sections':       'sections.view',
+    'instructor/my-classes':     'subjects.view',
+    'instructor/lesson-bank':    'lessons.view',
+    'instructor/content-bank':   'lessons.view',
+    'instructor/quizzes':        'quizzes.view',
+    'instructor/gradebook':      'grades.view',
+    'instructor/analytics':      'analytics.view',
+    // Student
+    'student/my-subjects':       'subjects.view',
+    'student/lessons':           'lessons.view',
+    'student/quizzes':           'quizzes.view',
+    'student/grades':            'grades.view',
+};
+
 // Page registry - maps route names to page modules
 const pages = {};
 
@@ -79,9 +115,26 @@ async function loadCurrentPage() {
     const topbarTitle = document.querySelector('.page-title');
     if (topbarTitle) topbarTitle.textContent = pageTitle;
 
-    // Load the page
-    const pageKey = `${route.role}/${route.page}`;
-    const content = document.getElementById('page-content');
+    // Check permission before loading
+    const pageKey  = `${route.role}/${route.page}`;
+    const required = PAGE_PERMISSIONS[pageKey];
+    const content  = document.getElementById('page-content');
+
+    if (required && !Auth.can(required)) {
+        content.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;text-align:center;">
+                <div style="font-size:56px;margin-bottom:16px;">🚫</div>
+                <h2 style="font-size:22px;font-weight:700;color:#1B4D3E;margin:0 0 8px;">Access Denied</h2>
+                <p style="color:#6b7280;font-size:14px;max-width:360px;margin:0 0 24px;">
+                    You don't have permission to view this page.<br>
+                    Contact your administrator to request access.
+                </p>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 18px;font-size:13px;color:#166534;">
+                    Required permission: <strong>${required}</strong>
+                </div>
+            </div>`;
+        return;
+    }
 
     if (pages[pageKey]) {
         content.innerHTML = '<div style="display:flex;justify-content:center;padding:60px"><div class="spinner-lg" style="width:36px;height:36px;border:3px solid var(--gray-200);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite"></div></div>';
