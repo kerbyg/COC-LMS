@@ -3,6 +3,8 @@
  * Simple: pick a role → check/uncheck permissions → Save.
  */
 import { Api } from '../../api.js';
+import { Auth } from '../../auth.js';
+import { renderSidebar } from '../../components/sidebar.js';
 
 const ROLES = ['admin', 'dean', 'instructor', 'student'];
 const ROLE_META = {
@@ -414,7 +416,21 @@ export async function render(container) {
                 role: active,
                 permission_ids: [...dirty[active]]
             });
-            toast(r.success ? `✓ ${ROLE_META[active].label} permissions saved` : `Error: ${r.message}`, !r.success);
+
+            if (r.success) {
+                toast(`✓ ${ROLE_META[active].label} permissions saved`);
+
+                // If the saved role matches the current logged-in user's role,
+                // refresh their permissions and re-render the sidebar instantly
+                const currentUser = Auth.user();
+                if (currentUser && currentUser.role === active) {
+                    await Auth.fetchPermissions();
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar) renderSidebar(sidebar);
+                }
+            } else {
+                toast(`Error: ${r.message}`, true);
+            }
         } catch (_) {
             toast('Save failed', true);
         } finally {
