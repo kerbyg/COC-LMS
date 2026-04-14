@@ -76,9 +76,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const result = await response.json();
                 
                 if (result.success) {
+                    // Store JWT token in localStorage
+                    if (result.data.token) {
+                        localStorage.setItem('jwt_token', result.data.token);
+                    }
+
                     // Show success message
                     showSuccess('Login successful! Redirecting...');
-                    
+
                     // Redirect after short delay
                     setTimeout(() => {
                         window.location.href = result.data.redirect;

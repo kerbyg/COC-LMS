@@ -9,13 +9,30 @@ const API_URL = BASE_URL + '/api';
 export const Api = {
 
     /**
+     * Get JWT token from localStorage
+     */
+    _getToken() {
+        return localStorage.getItem('jwt_token') || null;
+    },
+
+    /**
+     * Build auth headers — always include JWT if available
+     */
+    _authHeaders(extra = {}) {
+        const headers = { 'Accept': 'application/json', ...extra };
+        const token = this._getToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return headers;
+    },
+
+    /**
      * GET request
      */
     async get(endpoint) {
         const response = await fetch(API_URL + endpoint, {
             method: 'GET',
             credentials: 'include',
-            headers: { 'Accept': 'application/json' }
+            headers: this._authHeaders()
         });
         return this._handleResponse(response);
     },
@@ -27,10 +44,7 @@ export const Api = {
         const response = await fetch(API_URL + endpoint, {
             method: 'POST',
             credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
+            headers: this._authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(data)
         });
         return this._handleResponse(response);
@@ -43,6 +57,7 @@ export const Api = {
         const response = await fetch(API_URL + endpoint, {
             method: 'POST',
             credentials: 'include',
+            headers: this._authHeaders(),
             body: formData
         });
         return this._handleResponse(response);
@@ -54,8 +69,9 @@ export const Api = {
     async _handleResponse(response) {
         const data = await response.json();
 
-        // If unauthorized, redirect to login
+        // If unauthorized, clear token and redirect to login
         if (response.status === 401) {
+            localStorage.removeItem('jwt_token');
             window.location.href = BASE_URL + '/app/login.html';
             return data;
         }

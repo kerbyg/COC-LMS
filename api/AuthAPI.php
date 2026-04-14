@@ -28,6 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Load config files
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/jwt.php';
+
+// Allow JWT via Authorization header for API actions
+header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
 // Get the action from query string
 $action = $_GET['action'] ?? '';
@@ -44,6 +48,10 @@ switch ($action) {
     
     case 'check':
         handleCheck();
+        break;
+
+    case 'verify-token':
+        handleVerifyToken();
         break;
     
     case 'me':
@@ -125,18 +133,22 @@ function handleLogin() {
         
         // Log successful login
         logActivity($user['users_id'], 'login_success', 'User logged in successfully');
-        
+
+        // Generate JWT token
+        $token = JWT::generate($user);
+
         // Get redirect URL based on role
         $redirectUrl = Auth::dashboardUrl();
-        
-        // Return success response
+
+        // Return success response with JWT token
         jsonResponse(true, 'Login successful', [
             'user' => [
-                'id' => $user['users_id'],
-                'name' => trim($user['first_name'] . ' ' . $user['last_name']),
+                'id'    => $user['users_id'],
+                'name'  => trim($user['first_name'] . ' ' . $user['last_name']),
                 'email' => $user['email'],
-                'role' => $user['role']
+                'role'  => $user['role']
             ],
+            'token'    => $token,
             'redirect' => $redirectUrl
         ]);
         
@@ -167,21 +179,49 @@ function handleLogout() {
 
 /**
  * ─────────────────────────────────────────────────────────────
- * HANDLE CHECK (Check if logged in)
+ * HANDLE CHECK (Check if logged in via Session or JWT)
  * ─────────────────────────────────────────────────────────────
  */
 function handleCheck() {
+    // Check JWT first
+    $jwtUser = JWT::authenticate();
+    if ($jwtUser) {
+        jsonResponse(true, 'User is authenticated', [
+            'authenticated' => true,
+            'auth_method'   => 'jwt',
+            'user'          => $jwtUser
+        ]);
+    }
+
+    // Fall back to session
     if (Auth::check()) {
         jsonResponse(true, 'User is authenticated', [
             'authenticated' => true,
-            'user' => Auth::user()
-        ]);
-    } else {
-        jsonResponse(true, 'User is not authenticated', [
-            'authenticated' => false,
-            'user' => null
+            'auth_method'   => 'session',
+            'user'          => Auth::user()
         ]);
     }
+
+    jsonResponse(true, 'User is not authenticated', [
+        'authenticated' => false,
+        'user'          => null
+    ]);
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────
+ * HANDLE VERIFY TOKEN (Validate JWT)
+ * ─────────────────────────────────────────────────────────────
+ */
+function handleVerifyToken() {
+    $payload = JWT::authenticate();
+    if (!$payload) {
+        jsonResponse(false, 'Invalid or expired token', null, 401);
+    }
+    jsonResponse(true, 'Token is valid', [
+        'user'       => $payload,
+        'expires_at' => date('Y-m-d H:i:s', $payload['exp'])
+    ]);
 }
 
 /**
