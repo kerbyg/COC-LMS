@@ -13,58 +13,34 @@ import { Api }  from '../api.js';
 // permission: 'x.view' → hidden if user lacks that slug
 const menus = {
 
-    // ── Admin ─────────────────────────────────────────────────
-    // Original items + RBAC extras (Users, Programs, Sections, Offerings)
+    // ── Admin (ORIGINAL — unchanged) ──────────────────────────
     admin: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
         ]},
         { section: 'Academic', items: [
-            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
-            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: 'programs.view' },
-            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: 'subjects.view' },
-            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: 'curriculum.view' },
+            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: null },
+            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: null },
+            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: null },
         ]},
         { section: 'Scheduling', items: [
-            { icon: '🏫', text: 'Sections',            page: 'sections',            permission: 'sections.view' },
-            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
-            { icon: '👨‍🏫', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
-        ]},
-        { section: 'Reports', items: [
-            { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
-            { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
+            { icon: '👨‍🏫', text: 'Faculty Assignments', page: 'faculty-assignments', permission: null },
         ]},
         { section: 'System', items: [
-            { icon: '👥', text: 'Users',               page: 'users',               permission: 'users.view' },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
-            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
+            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: null },
         ]},
     ],
 
-    // ── Dean ──────────────────────────────────────────────────
-    // Original: Instructors, Subjects, Faculty Assignments, Reports
-    // RBAC extras: Departments, Programs, Curriculum, Sections, Offerings, Users, RBAC, Settings
+    // ── Dean (ORIGINAL — unchanged) ───────────────────────────
     dean: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
         ]},
         { section: 'Academic', items: [
-            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: 'faculty_assignments.view' },
-            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: 'subjects.view' },
-            { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
-            { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
-            // RBAC-unlockable extras
-            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
-            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: 'programs.view' },
-            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: 'curriculum.view' },
-            { icon: '🏫', text: 'Sections',            page: 'sections',            permission: 'sections.view' },
-            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
-            { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
-        ]},
-        { section: 'System', items: [
-            { icon: '👥', text: 'Users',               page: 'users',               permission: 'users.view' },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
-            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
+            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: null },
+            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: null },
+            { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: null },
+            { icon: '📈', text: 'Reports',             page: 'reports',             permission: null },
         ]},
     ],
 
