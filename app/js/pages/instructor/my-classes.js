@@ -66,11 +66,14 @@ export async function render(container) {
 
     container.innerHTML = `
         <style>
-            .mc-header { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:28px 32px; margin-bottom:20px; position:relative; overflow:hidden; }
+            .mc-header { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:28px 32px; margin-bottom:20px; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:space-between; }
             .mc-header::before { content:''; position:absolute; top:-40px; right:-40px; width:180px; height:180px; border-radius:50%; background:rgba(255,255,255,.07); pointer-events:none; }
             .mc-header::after { content:''; position:absolute; bottom:-60px; left:60px; width:220px; height:220px; border-radius:50%; background:rgba(255,255,255,.05); pointer-events:none; }
             .mc-header h2 { font-size:26px; font-weight:800; color:#fff; margin:0 0 4px; position:relative; z-index:1; }
             .mc-header-sub { font-size:14px; color:rgba(255,255,255,.75); margin:0; position:relative; z-index:1; }
+            .mc-header-left { position:relative; z-index:1; }
+            .mc-btn-announce { position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; padding:10px 18px; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; text-decoration:none; transition:all .2s; }
+            .mc-btn-announce:hover { background:rgba(255,255,255,.25); }
             .mc-count { background:rgba(255,255,255,.2); color:#fff; padding:2px 10px; border-radius:20px; font-size:13px; font-weight:600; }
 
             .mc-filters { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center; }
@@ -115,8 +118,14 @@ export async function render(container) {
         </style>
 
         <div class="mc-header">
-            <h2>My Classes <span class="mc-count">${classes.length}</span></h2>
-            <p class="mc-header-sub">Manage your assigned subjects and sections</p>
+            <div class="mc-header-left">
+                <h2>My Classes <span class="mc-count">${classes.length}</span></h2>
+                <p class="mc-header-sub">Manage your assigned subjects and sections</p>
+            </div>
+            <a class="mc-btn-announce" href="#instructor/announcements">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46"/></svg>
+                Announcements
+            </a>
         </div>
 
         ${classes.length === 0 ? `<div class="mc-empty">No classes assigned yet.</div>` : `
