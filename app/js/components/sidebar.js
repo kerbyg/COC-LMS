@@ -59,22 +59,17 @@ const menus = {
         { section: 'Assessment', items: [
             { icon: '📋', text: 'Gradebook',   page: 'gradebook',    permission: 'grades.view' },
         ]},
-        { section: 'Communication', items: [
-            { icon: '📢', text: 'Announcements', page: 'announcements', permission: null },
-            { icon: '💬', text: 'Messages',      page: 'messages',      permission: null, badge: true },
-        ]},
         // RBAC-unlockable extras (not granted to instructor by default)
         { section: 'Administration', items: [
-            { icon: '🏢', text: 'Departments',         page: 'departments',       permission: 'departments.view' },
-            { icon: '🎓', text: 'Programs',            page: 'programs',          permission: 'programs.view' },
-            { icon: '📋', text: 'Curriculum',          page: 'curriculum',        permission: 'curriculum.view' },
-            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings', permission: 'subject_offerings.view' },
+            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
+            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: 'programs.view' },
+            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: 'curriculum.view' },
+            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
             { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
-            { icon: '📈', text: 'Reports',             page: 'reports',           permission: 'reports.view' },
-            { icon: '📉', text: 'Analytics',           page: 'analytics',         permission: 'analytics.view' },
-            { icon: '👤', text: 'Users',               page: 'users',             permission: 'users.view' },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',              permission: 'rbac.view' },
-            { icon: '⚙️', text: 'Settings',            page: 'settings',          permission: 'settings.view' },
+            { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
+            { icon: '👤', text: 'Users',               page: 'users',               permission: 'users.view' },
+            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
+            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
         ]},
     ],
 
@@ -90,10 +85,6 @@ const menus = {
         ]},
         { section: 'Progress', items: [
             { icon: '📋', text: 'My Grades',   page: 'grades',      permission: 'grades.view' },
-        ]},
-        { section: 'Communication', items: [
-            { icon: '📢', text: 'Announcements', page: 'announcements', permission: null },
-            { icon: '💬', text: 'Messages',      page: 'messages',      permission: null, badge: true },
         ]},
     ],
 };
