@@ -12,14 +12,12 @@ import { Api }  from '../api.js';
 // permission: null  → always visible (dashboard, profile)
 // permission: 'x.view' → hidden if user lacks that slug
 const menus = {
+
+    // ── Admin ─────────────────────────────────────────────────
+    // Original items + RBAC extras (Users, Programs, Sections, Offerings)
     admin: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
-        ]},
-        { section: 'System', items: [
-            { icon: '👥', text: 'Users',               page: 'users',               permission: 'users.view' },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
-            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
         ]},
         { section: 'Academic', items: [
             { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
@@ -36,80 +34,92 @@ const menus = {
             { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
             { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
         ]},
+        { section: 'System', items: [
+            { icon: '👥', text: 'Users',               page: 'users',               permission: 'users.view' },
+            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
+            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
+        ]},
     ],
+
+    // ── Dean ──────────────────────────────────────────────────
+    // Original: Instructors, Subjects, Faculty Assignments, Reports
+    // RBAC extras: Departments, Programs, Curriculum, Sections, Offerings, Users, RBAC, Settings
     dean: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
+        ]},
+        { section: 'Academic', items: [
+            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: 'faculty_assignments.view' },
+            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: 'subjects.view' },
+            { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
+            { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
+            // RBAC-unlockable extras
+            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
+            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: 'programs.view' },
+            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: 'curriculum.view' },
+            { icon: '🏫', text: 'Sections',            page: 'sections',            permission: 'sections.view' },
+            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
+            { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
         ]},
         { section: 'System', items: [
             { icon: '👥', text: 'Users',               page: 'users',               permission: 'users.view' },
             { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
             { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
         ]},
-        { section: 'Academic', items: [
-            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
-            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: 'programs.view' },
-            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: 'subjects.view' },
-            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: 'curriculum.view' },
-            { icon: '🏫', text: 'Sections',            page: 'sections',            permission: 'sections.view' },
-            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
-            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: 'faculty_assignments.view' },
-            { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
-        ]},
-        { section: 'Reports', items: [
-            { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
-            { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
-        ]},
     ],
+
+    // ── Instructor ────────────────────────────────────────────
+    // Original: Sections, My Classes, Content Bank, Gradebook, Announcements
+    // RBAC extras: anything that requires a non-default instructor permission
     instructor: [
         { section: 'Main', items: [
-            { icon: '📊', text: 'Dashboard',         page: 'dashboard',         permission: null },
+            { icon: '📊', text: 'Dashboard',   page: 'dashboard',    permission: null },
         ]},
         { section: 'Teaching', items: [
-            { icon: '🏫', text: 'Sections',          page: 'sections',          permission: 'sections.view' },
-            { icon: '📚', text: 'My Classes',        page: 'my-classes',        permission: 'subjects.view' },
-            { icon: '📖', text: 'Lesson Bank',       page: 'lesson-bank',       permission: 'lessons.view' },
-            { icon: '🏦', text: 'Content Bank',      page: 'content-bank',      permission: 'lessons.view' },
+            { icon: '🏫', text: 'Sections',    page: 'sections',     permission: 'sections.view' },
+            { icon: '📚', text: 'My Classes',  page: 'my-classes',   permission: 'subjects.view' },
+            { icon: '🏦', text: 'Content Bank',page: 'content-bank', permission: 'lessons.view' },
         ]},
         { section: 'Assessment', items: [
-            { icon: '📝', text: 'Quizzes',           page: 'quizzes',           permission: 'quizzes.view' },
-            { icon: '📋', text: 'Gradebook',         page: 'gradebook',         permission: 'grades.view' },
-        ]},
-        { section: 'Administration', items: [
-            { icon: '🏢', text: 'Departments',       page: 'departments',       permission: 'departments.view' },
-            { icon: '🎓', text: 'Programs',          page: 'programs',          permission: 'programs.view' },
-            { icon: '📋', text: 'Curriculum',        page: 'curriculum',        permission: 'curriculum.view' },
-            { icon: '📅', text: 'Subject Offerings', page: 'subject-offerings', permission: 'subject_offerings.view' },
-            { icon: '👥', text: 'Users',             page: 'users',             permission: 'users.view' },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',            permission: 'rbac.view' },
-        ]},
-        { section: 'Reports', items: [
-            { icon: '📈', text: 'Reports',           page: 'reports',           permission: 'reports.view' },
-            { icon: '📉', text: 'Analytics',         page: 'analytics',         permission: 'analytics.view' },
+            { icon: '📋', text: 'Gradebook',   page: 'gradebook',    permission: 'grades.view' },
         ]},
         { section: 'Communication', items: [
-            { icon: '📢', text: 'Announcements',     page: 'announcements',     permission: null },
-            { icon: '💬', text: 'Messages',          page: 'messages',          permission: null, badge: true },
+            { icon: '📢', text: 'Announcements', page: 'announcements', permission: null },
+            { icon: '💬', text: 'Messages',      page: 'messages',      permission: null, badge: true },
+        ]},
+        // RBAC-unlockable extras (not granted to instructor by default)
+        { section: 'Administration', items: [
+            { icon: '🏢', text: 'Departments',         page: 'departments',       permission: 'departments.view' },
+            { icon: '🎓', text: 'Programs',            page: 'programs',          permission: 'programs.view' },
+            { icon: '📋', text: 'Curriculum',          page: 'curriculum',        permission: 'curriculum.view' },
+            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings', permission: 'subject_offerings.view' },
+            { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
+            { icon: '📈', text: 'Reports',             page: 'reports',           permission: 'reports.view' },
+            { icon: '📉', text: 'Analytics',           page: 'analytics',         permission: 'analytics.view' },
+            { icon: '👤', text: 'Users',               page: 'users',             permission: 'users.view' },
+            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',              permission: 'rbac.view' },
+            { icon: '⚙️', text: 'Settings',            page: 'settings',          permission: 'settings.view' },
         ]},
     ],
+
+    // ── Student ───────────────────────────────────────────────
+    // Original: My Subjects, My Grades
+    // RBAC extras: anything admin explicitly grants
     student: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',   page: 'dashboard',   permission: null },
         ]},
         { section: 'Learning', items: [
             { icon: '📚', text: 'My Subjects', page: 'my-subjects', permission: 'subjects.view' },
-            { icon: '📖', text: 'Lessons',     page: 'lessons',     permission: 'lessons.view' },
-            { icon: '📝', text: 'Quizzes',     page: 'quizzes',     permission: 'quizzes.view' },
         ]},
         { section: 'Progress', items: [
             { icon: '📋', text: 'My Grades',   page: 'grades',      permission: 'grades.view' },
-            { icon: '📊', text: 'My Progress', page: 'progress',    permission: null },
         ]},
         { section: 'Communication', items: [
             { icon: '📢', text: 'Announcements', page: 'announcements', permission: null },
             { icon: '💬', text: 'Messages',      page: 'messages',      permission: null, badge: true },
         ]},
-    ]
+    ],
 };
 
 /**
