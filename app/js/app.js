@@ -56,6 +56,34 @@ const PAGE_PERMISSIONS = {
     'student/grades':            'grades.view',
 };
 
+// ── Page aliases: when a role doesn't have its own page file,
+//    load an existing one from another role instead.
+//    Format: 'role/page' → 'actual-role/actual-page'
+const PAGE_ALIASES = {
+    // Instructor accessing shared admin/dean modules
+    'instructor/departments':       'admin/departments',
+    'instructor/programs':          'admin/programs',
+    'instructor/curriculum':        'admin/curriculum',
+    'instructor/subject-offerings': 'admin/subject-offerings',
+    'instructor/faculty-assignments': 'admin/faculty-assignments',
+    'instructor/reports':           'dean/reports',
+    'instructor/users':             'admin/users',
+    'instructor/rbac':              'admin/rbac',
+    'instructor/settings':          'admin/settings',
+    // Dean accessing shared admin modules
+    'dean/departments':             'admin/departments',
+    'dean/programs':                'admin/programs',
+    'dean/curriculum':              'admin/curriculum',
+    'dean/sections':                'admin/sections',
+    'dean/subject-offerings':       'admin/subject-offerings',
+    'dean/analytics':               'instructor/analytics',
+    'dean/users':                   'admin/users',
+    'dean/rbac':                    'admin/rbac',
+    'dean/settings':                'admin/settings',
+    // Student accessing shared modules if granted
+    'student/announcements':        'instructor/announcements',
+};
+
 // Page registry - maps route names to page modules
 const pages = {};
 
@@ -148,21 +176,25 @@ async function loadCurrentPage() {
         return;
     }
 
-    if (pages[pageKey]) {
+    // Resolve alias — use shared page if this role has no own page file
+    const resolvedKey  = PAGE_ALIASES[pageKey] || pageKey;
+    const [resolvedRole, resolvedPage] = resolvedKey.split('/');
+
+    if (pages[resolvedKey]) {
         content.innerHTML = '<div style="display:flex;justify-content:center;padding:60px"><div class="spinner-lg" style="width:36px;height:36px;border:3px solid var(--gray-200);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite"></div></div>';
         try {
-            await pages[pageKey](content, route.params);
+            await pages[resolvedKey](content, route.params);
         } catch (err) {
             console.error('Page load error:', err);
             content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><h3>Error Loading Page</h3><p>${err.message}</p></div>`;
         }
     } else {
-        // Try to dynamically import the page module
+        // Try to dynamically import the page module (use resolved role/page)
         try {
             content.innerHTML = '<div style="display:flex;justify-content:center;padding:60px"><div class="spinner-lg" style="width:36px;height:36px;border:3px solid var(--gray-200);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite"></div></div>';
-            const module = await import(`./pages/${route.role}/${route.page}.js?v=${Date.now()}`);
+            const module = await import(`./pages/${resolvedRole}/${resolvedPage}.js?v=${Date.now()}`);
             if (module.render) {
-                pages[pageKey] = module.render;
+                pages[resolvedKey] = module.render;
                 await module.render(content, route.params);
             }
         } catch (err) {
