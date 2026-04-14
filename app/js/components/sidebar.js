@@ -32,28 +32,47 @@ const menus = {
             { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
             { icon: '👨‍🏫', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
         ]},
+        { section: 'Reports', items: [
+            { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
+            { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
+        ]},
     ],
     dean: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
         ]},
+        { section: 'System', items: [
+            { icon: '👥', text: 'Users',               page: 'users',               permission: 'users.view' },
+            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: 'rbac.view' },
+            { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: 'settings.view' },
+        ]},
         { section: 'Academic', items: [
-            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: 'faculty_assignments.view' },
+            { icon: '🏢', text: 'Departments',         page: 'departments',         permission: 'departments.view' },
+            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: 'programs.view' },
             { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: 'subjects.view' },
+            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: 'curriculum.view' },
             { icon: '🏫', text: 'Sections',            page: 'sections',            permission: 'sections.view' },
             { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: 'subject_offerings.view' },
+            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: 'faculty_assignments.view' },
             { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: 'faculty_assignments.view' },
         ]},
         { section: 'Reports', items: [
             { icon: '📈', text: 'Reports',             page: 'reports',             permission: 'reports.view' },
+            { icon: '📉', text: 'Analytics',           page: 'analytics',           permission: 'analytics.view' },
         ]},
     ],
     instructor: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',   page: 'dashboard',    permission: null },
         ]},
+        { section: 'Academic', items: [
+            { icon: '🏢', text: 'Departments',       page: 'departments',       permission: 'departments.view' },
+            { icon: '🎓', text: 'Programs',          page: 'programs',          permission: 'programs.view' },
+            { icon: '📋', text: 'Curriculum',        page: 'curriculum',        permission: 'curriculum.view' },
+            { icon: '🏫', text: 'Sections',          page: 'sections',          permission: 'sections.view' },
+            { icon: '📅', text: 'Subject Offerings', page: 'subject-offerings', permission: 'subject_offerings.view' },
+        ]},
         { section: 'Teaching', items: [
-            { icon: '🏫', text: 'Sections',    page: 'sections',     permission: 'sections.view' },
             { icon: '📚', text: 'My Classes',  page: 'my-classes',   permission: 'subjects.view' },
             { icon: '📖', text: 'Lesson Bank', page: 'lesson-bank',  permission: 'lessons.view' },
             { icon: '🏦', text: 'Content Bank',page: 'content-bank', permission: 'lessons.view' },
@@ -62,7 +81,8 @@ const menus = {
             { icon: '📝', text: 'Quizzes',     page: 'quizzes',      permission: 'quizzes.view' },
             { icon: '📋', text: 'Gradebook',   page: 'gradebook',    permission: 'grades.view' },
         ]},
-        { section: 'Analytics', items: [
+        { section: 'Reports', items: [
+            { icon: '📈', text: 'Reports',     page: 'reports',      permission: 'reports.view' },
             { icon: '📉', text: 'Analytics',   page: 'analytics',    permission: 'analytics.view' },
         ]},
         { section: 'Communication', items: [
