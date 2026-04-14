@@ -63,31 +63,33 @@ const menus = {
     ],
     instructor: [
         { section: 'Main', items: [
-            { icon: '📊', text: 'Dashboard',   page: 'dashboard',    permission: null },
+            { icon: '📊', text: 'Dashboard',         page: 'dashboard',         permission: null },
         ]},
-        { section: 'Academic', items: [
+        { section: 'Teaching', items: [
+            { icon: '🏫', text: 'Sections',          page: 'sections',          permission: 'sections.view' },
+            { icon: '📚', text: 'My Classes',        page: 'my-classes',        permission: 'subjects.view' },
+            { icon: '📖', text: 'Lesson Bank',       page: 'lesson-bank',       permission: 'lessons.view' },
+            { icon: '🏦', text: 'Content Bank',      page: 'content-bank',      permission: 'lessons.view' },
+        ]},
+        { section: 'Assessment', items: [
+            { icon: '📝', text: 'Quizzes',           page: 'quizzes',           permission: 'quizzes.view' },
+            { icon: '📋', text: 'Gradebook',         page: 'gradebook',         permission: 'grades.view' },
+        ]},
+        { section: 'Administration', items: [
             { icon: '🏢', text: 'Departments',       page: 'departments',       permission: 'departments.view' },
             { icon: '🎓', text: 'Programs',          page: 'programs',          permission: 'programs.view' },
             { icon: '📋', text: 'Curriculum',        page: 'curriculum',        permission: 'curriculum.view' },
-            { icon: '🏫', text: 'Sections',          page: 'sections',          permission: 'sections.view' },
             { icon: '📅', text: 'Subject Offerings', page: 'subject-offerings', permission: 'subject_offerings.view' },
-        ]},
-        { section: 'Teaching', items: [
-            { icon: '📚', text: 'My Classes',  page: 'my-classes',   permission: 'subjects.view' },
-            { icon: '📖', text: 'Lesson Bank', page: 'lesson-bank',  permission: 'lessons.view' },
-            { icon: '🏦', text: 'Content Bank',page: 'content-bank', permission: 'lessons.view' },
-        ]},
-        { section: 'Assessment', items: [
-            { icon: '📝', text: 'Quizzes',     page: 'quizzes',      permission: 'quizzes.view' },
-            { icon: '📋', text: 'Gradebook',   page: 'gradebook',    permission: 'grades.view' },
+            { icon: '👥', text: 'Users',             page: 'users',             permission: 'users.view' },
+            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',            permission: 'rbac.view' },
         ]},
         { section: 'Reports', items: [
-            { icon: '📈', text: 'Reports',     page: 'reports',      permission: 'reports.view' },
-            { icon: '📉', text: 'Analytics',   page: 'analytics',    permission: 'analytics.view' },
+            { icon: '📈', text: 'Reports',           page: 'reports',           permission: 'reports.view' },
+            { icon: '📉', text: 'Analytics',         page: 'analytics',         permission: 'analytics.view' },
         ]},
         { section: 'Communication', items: [
-            { icon: '📢', text: 'Announcements', page: 'announcements', permission: null },
-            { icon: '💬', text: 'Messages',      page: 'messages',      permission: null, badge: true },
+            { icon: '📢', text: 'Announcements',     page: 'announcements',     permission: null },
+            { icon: '💬', text: 'Messages',          page: 'messages',          permission: null, badge: true },
         ]},
     ],
     student: [
