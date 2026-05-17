@@ -81,13 +81,16 @@ export const Auth = {
      * Logout
      */
     async logout() {
-        try {
-            await Api.get('/AuthAPI.php?action=logout');
-        } catch (e) {
-            // Ignore errors
-        }
+        // Clear client state immediately so any in-flight page loads see no user
         this._user = null;
         this._permissions = null;
+        localStorage.removeItem('jwt_token');
+
+        // Tell the server to destroy the session (best-effort — ignore failures)
+        try {
+            await Api.get('/AuthAPI.php?action=logout');
+        } catch (e) { /* ignore */ }
+
         window.location.href = BASE_URL + '/app/login.html';
     },
 

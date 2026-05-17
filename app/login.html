@@ -3,112 +3,454 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | CIT-LMS</title>
+    <title>Login | COC-LMS</title>
     <link rel="icon" type="image/png" href="/COC-LMS/assets/images/phinma_logo2.png">
-    <link rel="stylesheet" href="/COC-LMS/css/auth.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        input[type="password"]::-ms-reveal,
+        input[type="password"]::-ms-clear { display: none; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #00461B 0%, #006428 60%, #004d1f 100%);
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Subtle background bubbles matching sidebar style */
+        body::before, body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        body::before {
+            width: 480px; height: 480px;
+            top: -160px; right: -160px;
+            background: radial-gradient(circle, rgba(255,255,255,.06) 0%, transparent 70%);
+        }
+        body::after {
+            width: 380px; height: 380px;
+            bottom: -100px; left: -100px;
+            background: radial-gradient(circle, rgba(255,255,255,.04) 0%, transparent 70%);
+        }
+
+        /* ── LOGIN CARD ── */
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: #fff;
+            border-radius: 16px;
+            padding: 44px 40px 36px;
+            border: 1px solid #E8E8E8;
+            box-shadow: 0 4px 24px rgba(0,70,27,.08), 0 1px 4px rgba(0,0,0,.06);
+            position: relative;
+            animation: cardIn .45s cubic-bezier(.22,.97,.58,1) both;
+            z-index: 1;
+        }
+
+        /* Green top accent */
+        .card-accent {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #00461B, #006428, #40916C);
+            border-radius: 16px 16px 0 0;
+        }
+
+        /* Logo + title */
+        .card-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 32px;
+            text-align: center;
+        }
+        .brand-logo {
+            width: 72px; height: 72px;
+            object-fit: contain;
+            border-radius: 50%;
+            border: 2px solid #E5DFC0;
+            padding: 6px;
+            background: #F7F5E8;
+            margin-bottom: 16px;
+            transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+        }
+        .brand-logo:hover { transform: scale(1.08) rotate(-3deg); }
+        .brand-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1a1a1a;
+            margin-bottom: 2px;
+            letter-spacing: -.3px;
+        }
+        .brand-sub {
+            font-size: 12.5px;
+            color: #9ca3af;
+        }
+
+        /* Error */
+        #error-container { margin-bottom: 16px; }
+        .auth-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 10px 14px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            animation: shake .4s ease;
+        }
+
+        /* Form groups */
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+
+        .input-wrap { position: relative; }
+        .input-wrap input {
+            width: 100%;
+            padding: 12px 14px 12px 42px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            color: #1a1a1a;
+            background: #fafafa;
+            transition: border-color .2s, box-shadow .2s, background .2s, transform .15s;
+            outline: none;
+        }
+        .input-wrap input:focus {
+            border-color: #00461B;
+            box-shadow: 0 0 0 3.5px rgba(27,77,62,.12);
+            background: #fff;
+        }
+        /* Subtle lift on focus */
+        .input-wrap input:focus { transform: translateY(-1px); }
+        .input-wrap input::placeholder { color: #c5cdd6; font-size: 13.5px; }
+
+        .input-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #c5cdd6;
+            display: flex;
+            align-items: center;
+            pointer-events: none;
+            transition: color .2s;
+        }
+        /* Icon turns green when input focused */
+        .input-wrap:focus-within .input-icon { color: #00461B; }
+
+        #password { padding-right: 44px; }
+        .pw-toggle {
+            position: absolute;
+            right: 11px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #c5cdd6;
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            border-radius: 6px;
+            transition: color .15s, background .15s;
+        }
+        .pw-toggle:hover { color: #00461B; background: #f0faf4; }
+
+        /* Options row */
+        .form-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+        .remember-wrap {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #6b7280;
+            user-select: none;
+        }
+        .remember-wrap input[type="checkbox"] {
+            width: 15px; height: 15px;
+            accent-color: #00461B;
+            cursor: pointer;
+        }
+        .forgot-link {
+            font-size: 13px;
+            font-weight: 600;
+            color: #00461B;
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+        .forgot-link:hover { opacity: .7; text-decoration: underline; }
+
+        /* CAPTCHA */
+        .captcha-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .captcha-text-box {
+            flex: 1;
+            background: #F7F5E8;
+            border: 1.5px solid #E5DFC0;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: #00461B;
+            letter-spacing: 6px;
+            user-select: none;
+            text-align: center;
+            text-shadow: 1px 1px 0 rgba(0,0,0,.06);
+        }
+        .captcha-reload {
+            flex-shrink: 0;
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            border: 1.5px solid #e5e7eb;
+            background: #fff;
+            color: #9ca3af;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color .15s, color .15s, transform .35s cubic-bezier(.34,1.56,.64,1);
+        }
+        .captcha-reload:hover {
+            border-color: #00461B;
+            color: #00461B;
+            transform: rotate(180deg);
+        }
+        .captcha-reload:active { transform: rotate(180deg) scale(.9); }
+        #captcha-input.error {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239,68,68,.12) !important;
+            background: #fff8f8 !important;
+        }
+        #captcha-input.correct {
+            border-color: #16a34a !important;
+            box-shadow: 0 0 0 3px rgba(22,163,74,.12) !important;
+            background: #f0fdf4 !important;
+        }
+
+        /* ── SIGN IN BUTTON ── */
+        .btn-signin {
+            width: 100%;
+            padding: 13px;
+            background: #00461B;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: .03em;
+            margin-top: 6px;
+            position: relative;
+            overflow: hidden;
+            /* transitions */
+            transition: background .2s, box-shadow .2s, transform .12s cubic-bezier(.34,1.56,.64,1);
+        }
+        .btn-signin:hover:not(:disabled) {
+            background: #006428;
+            box-shadow: 0 8px 24px rgba(27,77,62,.38);
+            transform: translateY(-2px);
+        }
+        .btn-signin:active:not(:disabled) {
+            transform: translateY(0) scale(.97);
+            box-shadow: 0 2px 8px rgba(27,77,62,.25);
+        }
+        .btn-signin:disabled {
+            opacity: .65;
+            cursor: not-allowed;
+        }
+
+        /* Ripple */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,.3);
+            transform: scale(0);
+            animation: rippleAnim .55s linear;
+            pointer-events: none;
+        }
+
+        .btn-signin .spinner {
+            width: 17px; height: 17px;
+            border: 2.5px solid rgba(255,255,255,.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin .75s linear infinite;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        /* Footer */
+        .card-footer {
+            margin-top: 28px;
+            text-align: center;
+            border-top: 1px solid #f3f4f6;
+            padding-top: 20px;
+        }
+        .card-footer p {
+            font-size: 12px;
+            color: #b4bdc7;
+            line-height: 1.8;
+        }
+
+        /* ── Animations ── */
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(28px) scale(.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60%  { transform: translateX(-6px); }
+            40%, 80%  { transform: translateX(6px); }
+        }
+        @keyframes rippleAnim {
+            to { transform: scale(4); opacity: 0; }
+        }
+        @keyframes successPop {
+            0%   { transform: scale(.7); opacity: 0; }
+            60%  { transform: scale(1.15); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Success state */
+        .btn-signin.success {
+            background: #16a34a;
+            box-shadow: 0 8px 24px rgba(22,163,74,.35);
+            transform: none !important;
+        }
+        .btn-signin.success .check-icon {
+            animation: successPop .35s cubic-bezier(.34,1.56,.64,1) both;
+        }
+
+        /* Input background to cream-light */
+        .input-wrap input { background: #FAFAF5; }
+
+        /* Mobile */
+        @media (max-width: 480px) {
+            .login-card { padding: 36px 24px 28px; }
+        }
+    </style>
 </head>
 <body>
-    <div class="auth-page">
 
-        <!-- Branding above card -->
-        <div class="auth-brand">
-            <img src="/COC-LMS/assets/images/phinma_logo2.png" alt="PHINMA Logo" class="brand-logo">
-            <h1 class="brand-title">Cagayan De Oro College</h1>
-            <p class="brand-sub">Max Suniel St.Carmen, Cagayan De Oro City,</p>
-            <p class="brand-school">Misamis Oriental, Philippines 9000</p>
+    <div class="login-card">
+        <div class="card-accent"></div>
+
+        <!-- Brand / Logo -->
+        <div class="card-brand">
+            <img src="/COC-LMS/assets/images/phinma_logo2.png" alt="COC Logo" class="brand-logo">
+            <div class="brand-title">COC Learning Management</div>
+            <div class="brand-sub">Sign in to access your dashboard</div>
         </div>
 
-        <!-- Login Card -->
-        <div class="auth-card">
-            <h2 class="card-title">Welcome Back</h2>
-            <p class="card-sub">Sign in to continue to your dashboard</p>
+        <div id="error-container" style="display:none;"></div>
 
-            <!-- Error -->
-            <div id="error-container" style="display:none;"></div>
+        <form id="login-form" autocomplete="on">
 
-            <!-- Form -->
-            <form id="login-form" autocomplete="on">
-
-                <div class="form-group">
-                    <label for="user_id">User ID</label>
-                    <div class="input-wrap">
-                        <span class="input-icon">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <input type="text" id="user_id" name="user_id" placeholder="Enter your Student ID or Employee ID" autocomplete="username" required>
-                    </div>
+            <div class="form-group">
+                <label for="user_id">User ID</label>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </span>
+                    <input type="text" id="user_id" name="user_id" placeholder="Student ID or Employee ID" autocomplete="username" required>
                 </div>
+            </div>
 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <div class="input-wrap">
-                        <span class="input-icon">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        </span>
-                        <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required minlength="6">
-                        <button type="button" id="password-toggle" class="pw-toggle" title="Show/hide password">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required minlength="6">
+                    <button type="button" id="password-toggle" class="pw-toggle" title="Show/hide password">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
                 </div>
+            </div>
 
-                <div class="form-options">
-                    <label class="remember-wrap">
-                        <input type="checkbox" id="remember" name="remember">
-                        <span>Remember me</span>
-                    </label>
-                    <a href="#" class="forgot-link">Forgot password?</a>
+            <div class="form-options">
+                <label class="remember-wrap">
+                    <input type="checkbox" id="remember" name="remember">
+                    <span>Remember me</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>Captcha Verification</label>
+                <div class="captcha-row">
+                    <div class="captcha-text-box" id="captcha-challenge"></div>
+                    <button type="button" id="captcha-refresh" class="captcha-reload" title="Refresh">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                            <path d="M3 3v5h5"/>
+                        </svg>
+                    </button>
                 </div>
-
-                <!-- CAPTCHA -->
-                <div class="form-group">
-                    <label>Captcha</label>
-                    <div class="captcha-row">
-                        <div class="captcha-text-box" id="captcha-challenge"></div>
-                        <button type="button" id="captcha-refresh" class="captcha-reload" title="Refresh captcha">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                <path d="M3 3v5h5"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="input-wrap" style="margin-top:8px;">
-                        <span class="input-icon">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        </span>
-                        <input type="text" id="captcha-input" placeholder="Enter the answer"
-                               autocomplete="off" inputmode="numeric" maxlength="3" required>
-                    </div>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </span>
+                    <input type="text" id="captcha-input" placeholder="Enter the answer" autocomplete="off" inputmode="numeric" maxlength="3" required>
                 </div>
+            </div>
 
-                <button type="submit" id="submit-btn" class="btn-signin">
-                    Sign In
-                </button>
+            <button type="submit" id="submit-btn" class="btn-signin">
+                <span id="btn-text">Sign In</span>
+            </button>
 
-            </form>
-        </div>
+        </form>
 
-        <!-- Page Footer -->
-        <div class="auth-page-footer">
+        <div class="card-footer">
             <p>© 2025 PHINMA Cagayan de Oro College</p>
-            <p>Making Lives Better Through Education</p>
+            <p>COC Learning Management System</p>
         </div>
-
     </div>
 
     <script type="module">
         import { Api } from '/COC-LMS/app/js/api.js';
         import { Auth } from '/COC-LMS/app/js/auth.js';
 
-        // If already logged in, redirect
         const user = await Auth.check();
-        if (user) {
-            window.location.href = '/COC-LMS/app/index.html';
-        }
+        if (user) window.location.href = '/COC-LMS/app/index.html';
 
-        // ── CAPTCHA ────────────────────────────────────────────────
         let captchaAnswer = '';
-
         function generateCaptcha() {
             const a = Math.floor(Math.random() * 20) + 1;
             const b = Math.floor(Math.random() * 20) + 1;
@@ -117,36 +459,60 @@
             document.getElementById('captcha-input').value = '';
             document.getElementById('captcha-input').classList.remove('error');
         }
-
         generateCaptcha();
         document.getElementById('captcha-refresh').addEventListener('click', generateCaptcha);
 
-        // ── Password toggle ────────────────────────────────────────
+        // Live captcha color feedback
+        document.getElementById('captcha-input').addEventListener('input', (e) => {
+            const input = e.target;
+            const val   = input.value.trim();
+            input.classList.remove('error', 'correct');
+            if (val === '') return;
+            if (val === captchaAnswer) {
+                input.classList.add('correct');
+            } else if (val.length >= captchaAnswer.length) {
+                input.classList.add('error');
+            }
+        });
+
         document.getElementById('password-toggle').addEventListener('click', () => {
             const input = document.getElementById('password');
             input.type = input.type === 'password' ? 'text' : 'password';
         });
 
-        // ── Login form submit ──────────────────────────────────────
+        // Ripple effect on Sign In button
+        const btn = document.getElementById('submit-btn');
+        btn.addEventListener('mousedown', (e) => {
+            if (btn.disabled) return;
+            const rect   = btn.getBoundingClientRect();
+            const size   = Math.max(rect.width, rect.height) * 2;
+            const x      = e.clientX - rect.left - size / 2;
+            const y      = e.clientY - rect.top  - size / 2;
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple';
+            ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+            btn.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+        });
+
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const btn            = document.getElementById('submit-btn');
+            const btnText        = document.getElementById('btn-text');
             const errorContainer = document.getElementById('error-container');
             const captchaInput   = document.getElementById('captcha-input');
 
-            // Validate CAPTCHA first
             if (captchaInput.value.trim() !== captchaAnswer) {
                 captchaInput.classList.add('error');
                 captchaInput.value = '';
                 captchaInput.focus();
                 generateCaptcha();
-                errorContainer.innerHTML = `<div class="auth-error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>Incorrect answer. A new question has been generated.</span></div>`;
+                errorContainer.innerHTML = `<div class="auth-error"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>Incorrect answer. A new question has been generated.</span></div>`;
                 errorContainer.style.display = 'block';
                 return;
             }
 
             btn.disabled = true;
-            btn.innerHTML = '<div class="spinner"></div> Signing in...';
+            btnText.innerHTML = '<div class="spinner"></div> Signing in...';
             errorContainer.style.display = 'none';
 
             try {
@@ -156,20 +522,25 @@
                 });
 
                 if (result.success) {
-                    window.location.href = '/COC-LMS/app/index.html';
+                    if (result.data?.token) localStorage.setItem('jwt_token', result.data.token);
+                    // Success feedback before redirect
+                    btn.classList.add('success');
+                    btnText.innerHTML = `<svg class="check-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Welcome!`;
+                    setTimeout(() => { window.location.href = '/COC-LMS/app/index.html'; }, 600);
                 } else {
                     generateCaptcha();
-                    errorContainer.innerHTML = `<div class="auth-error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>${result.message}</span></div>`;
+                    errorContainer.innerHTML = `<div class="auth-error"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>${result.message}</span></div>`;
                     errorContainer.style.display = 'block';
+                    btn.disabled = false;
+                    btnText.textContent = 'Sign In';
                 }
             } catch (err) {
                 generateCaptcha();
                 errorContainer.innerHTML = `<div class="auth-error"><span>An error occurred. Please try again.</span></div>`;
                 errorContainer.style.display = 'block';
+                btn.disabled = false;
+                btnText.textContent = 'Sign In';
             }
-
-            btn.disabled = false;
-            btn.innerHTML = 'Sign In';
         });
     </script>
 </body>

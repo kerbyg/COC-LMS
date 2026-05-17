@@ -349,7 +349,7 @@ async function loadMessages(otherId, isPolling = false) {
     if (isPolling && msgs.length === lastMessageCount) return;
     lastMessageCount = msgs.length;
 
-    const me = Auth.user()?.id;
+    const me = Auth.user()?.users_id;
     const wasAtBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 40;
 
     if (!msgs.length) {

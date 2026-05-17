@@ -11,31 +11,26 @@ import { renderTopbar } from './components/topbar.js';
 // ── Permission map: page → required permission slug ───────────
 // null = no permission required (always accessible)
 const PAGE_PERMISSIONS = {
-    // Admin
+    // Admin — technical pages
     'admin/users':               'users.view',
     'admin/rbac':                'rbac.view',
     'admin/settings':            'settings.view',
     'admin/departments':         'departments.view',
     'admin/programs':            'programs.view',
+    // Admin academic pages still guarded (accessible via direct URL if RBAC granted)
     'admin/subjects':            'subjects.view',
     'admin/curriculum':          'curriculum.view',
     'admin/sections':            'sections.view',
     'admin/subject-offerings':   'subject_offerings.view',
     'admin/faculty-assignments': 'faculty_assignments.view',
-    // Dean
-    'dean/users':                'users.view',
-    'dean/rbac':                 'rbac.view',
-    'dean/settings':             'settings.view',
-    'dean/departments':          'departments.view',
-    'dean/programs':             'programs.view',
-    'dean/subjects':             'subjects.view',
-    'dean/curriculum':           'curriculum.view',
-    'dean/sections':             'sections.view',
-    'dean/subject-offerings':    'subject_offerings.view',
-    'dean/instructors':          'faculty_assignments.view',
-    'dean/faculty-assignments':  'faculty_assignments.view',
-    'dean/reports':              'reports.view',
-    'dean/analytics':            'analytics.view',
+    // Dean — academic pages are role-intrinsic (no RBAC gate needed)
+    'dean/subjects':             null,
+    'dean/curriculum':           null,
+    'dean/sections':             null,
+    'dean/subject-offerings':    null,
+    'dean/faculty-assignments':  null,
+    'dean/instructors':          null,
+    'dean/reports':              null,
     // Instructor
     'instructor/departments':    'departments.view',
     'instructor/programs':       'programs.view',
@@ -43,7 +38,6 @@ const PAGE_PERMISSIONS = {
     'instructor/sections':       'sections.view',
     'instructor/subject-offerings': 'subject_offerings.view',
     'instructor/my-classes':     'subjects.view',
-    'instructor/lesson-bank':    'lessons.view',
     'instructor/content-bank':   'lessons.view',
     'instructor/quizzes':        'quizzes.view',
     'instructor/gradebook':      'grades.view',
@@ -54,6 +48,9 @@ const PAGE_PERMISSIONS = {
     'student/lessons':           'lessons.view',
     'student/quizzes':           'quizzes.view',
     'student/grades':            'grades.view',
+    'student/messages':          null,
+    // Instructor — messaging
+    'instructor/messages':       null,
 };
 
 // ── Page aliases: when a role doesn't have its own page file,

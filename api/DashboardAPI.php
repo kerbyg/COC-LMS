@@ -439,7 +439,7 @@ function handleDeanDashboard() {
             COUNT(DISTINCT q.quiz_id) as quiz_count,
             COUNT(CASE WHEN sqa.status = 'completed' THEN 1 END) as attempts,
             AVG(CASE WHEN sqa.status = 'completed' THEN sqa.percentage END) as avg_score,
-            COUNT(DISTINCT sqa.student_id) as student_count
+            COUNT(DISTINCT sqa.user_student_id) as student_count
          FROM subject s
          JOIN department_program dp2 ON s.program_id = dp2.program_id
          LEFT JOIN quiz q ON q.subject_id = s.subject_id

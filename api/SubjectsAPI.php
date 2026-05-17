@@ -41,7 +41,9 @@ $_subjPerms = [
     'update'      => 'subjects.edit',
     'delete'      => 'subjects.delete',
 ];
-if (isset($_subjPerms[$action]) && !Auth::can($_subjPerms[$action])) {
+// Dean has intrinsic access to read subjects (scoped by dept)
+$isDeanSubj = Auth::role() === 'dean' && in_array($action, ['all','list','programs','departments','semesters','by-program','get','details']);
+if (!$isDeanSubj && isset($_subjPerms[$action]) && !Auth::can($_subjPerms[$action])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => "Permission denied: {$_subjPerms[$action]}"]);
     exit;
@@ -341,7 +343,17 @@ function getAllSubjects() {
         echo json_encode(['success' => false, 'message' => 'Access denied']);
         return;
     }
-    
+
+    // Dean: scope to their department only
+    $deanDeptId = null;
+    if (Auth::role() === 'dean') {
+        $deanUser = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [Auth::id()]);
+        $deanDeptId = $deanUser['department_id'] ?? null;
+    }
+
+    $deptCondition = $deanDeptId ? "WHERE dp.department_id = ?" : "";
+    $params = $deanDeptId ? [$deanDeptId] : [];
+
     try {
         $subjects = db()->fetchAll(
             "SELECT
@@ -354,15 +366,17 @@ function getAllSubjects() {
             LEFT JOIN program p ON s.program_id = p.program_id
             LEFT JOIN department_program dp ON p.program_id = dp.program_id
             LEFT JOIN department d ON dp.department_id = d.department_id
-            ORDER BY s.subject_code"
+            $deptCondition
+            ORDER BY s.subject_code",
+            $params
         );
-        
+
         echo json_encode([
             'success' => true,
             'data' => $subjects,
             'count' => count($subjects)
         ]);
-        
+
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Database error']);

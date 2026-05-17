@@ -4,6 +4,9 @@
  */
 
 import { Auth } from '../auth.js';
+import { Api }  from '../api.js';
+
+let _notifPollTimer = null;
 
 export function renderTopbar(container) {
     const user = Auth.user();
@@ -25,31 +28,18 @@ export function renderTopbar(container) {
             <div class="dropdown" id="notification-dropdown">
                 <button class="topbar-btn" title="Notifications" id="notification-toggle">
                     🔔
-                    <span class="badge">3</span>
+                    <span class="badge" id="notif-badge" style="display:none">0</span>
                 </button>
                 <div class="dropdown-menu notification-dropdown">
                     <div class="dropdown-header">
                         <strong>Notifications</strong>
-                        <a href="#">Mark all read</a>
+                        <a href="javascript:void(0)" id="notif-mark-all">Mark all read</a>
                     </div>
-                    <div class="dropdown-body">
-                        <div class="notification-item unread">
-                            <span class="notification-icon">📝</span>
-                            <div class="notification-content">
-                                <span class="notification-title">New quiz available</span>
-                                <span class="notification-time">2 minutes ago</span>
-                            </div>
-                        </div>
-                        <div class="notification-item unread">
-                            <span class="notification-icon">📢</span>
-                            <div class="notification-content">
-                                <span class="notification-title">New announcement posted</span>
-                                <span class="notification-time">1 hour ago</span>
-                            </div>
-                        </div>
+                    <div class="dropdown-body" id="notif-body">
+                        <div class="notif-loading">Loading...</div>
                     </div>
                     <div class="dropdown-footer">
-                        <a href="#">View all notifications</a>
+                        <a href="#${role}/messages" id="notif-view-all">View all messages</a>
                     </div>
                 </div>
             </div>
@@ -92,15 +82,16 @@ export function renderTopbar(container) {
 
     // Dropdown toggles
     ['notification', 'user'].forEach(id => {
-        const toggle = document.getElementById(`${id}-toggle`);
+        const toggle   = document.getElementById(`${id}-toggle`);
         const dropdown = document.getElementById(`${id}-dropdown`);
         toggle.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Close other dropdowns
             document.querySelectorAll('.dropdown.active').forEach(d => {
                 if (d !== dropdown) d.classList.remove('active');
             });
+            const opening = !dropdown.classList.contains('active');
             dropdown.classList.toggle('active');
+            if (opening && id === 'notification') loadNotifications(role);
         });
     });
 
@@ -109,10 +100,109 @@ export function renderTopbar(container) {
         document.querySelectorAll('.dropdown.active').forEach(d => d.classList.remove('active'));
     });
 
+    // Mark all read
+    document.getElementById('notif-mark-all').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const res = await Api.get('/MessagingAPI.php?action=threads');
+        const threads = res.success ? res.data : [];
+        await Promise.all(
+            threads
+                .filter(t => parseInt(t.unread) > 0)
+                .map(t => Api.post('/MessagingAPI.php?action=mark_read', { other_user_id: parseInt(t.other_id) }))
+        );
+        updateNotifBadge(0);
+        loadNotifications(role);
+    });
+
     // Logout — custom modal
     document.getElementById('topbar-logout').addEventListener('click', () => {
         showLogoutModal();
     });
+
+    // Start polling unread count
+    pollUnreadCount();
+    clearInterval(_notifPollTimer);
+    _notifPollTimer = setInterval(pollUnreadCount, 30000);
+}
+
+async function pollUnreadCount() {
+    try {
+        const res   = await Api.get('/MessagingAPI.php?action=unread_count');
+        const count = res.success ? (res.count || 0) : 0;
+        updateNotifBadge(count);
+    } catch (_) {}
+}
+
+function updateNotifBadge(count) {
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent   = count > 99 ? '99+' : count;
+        badge.style.display = 'inline-flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+async function loadNotifications(role) {
+    const body = document.getElementById('notif-body');
+    if (!body) return;
+    body.innerHTML = '<div class="notif-loading">Loading...</div>';
+
+    const res     = await Api.get('/MessagingAPI.php?action=threads');
+    const threads = res.success ? res.data : [];
+    const unread  = threads.filter(t => parseInt(t.unread) > 0);
+
+    if (!unread.length) {
+        body.innerHTML = '<div class="notif-empty">No new messages</div>';
+        return;
+    }
+
+    body.innerHTML = unread.map(t => {
+        const initials = (t.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const preview  = (t.last_message || '').slice(0, 55);
+        const time     = relativeTime(t.last_at);
+        return `
+            <div class="notification-item unread notif-msg-item" style="cursor:pointer"
+                 data-id="${t.other_id}" data-name="${escapeHtml(t.name)}">
+                <span class="notification-icon">
+                    <span style="width:36px;height:36px;border-radius:50%;
+                                 background:linear-gradient(135deg,#1B4D3E,#2D6A4F);
+                                 color:#fff;font-size:13px;font-weight:700;
+                                 display:flex;align-items:center;justify-content:center;">
+                        ${initials}
+                    </span>
+                </span>
+                <div class="notification-content">
+                    <span class="notification-title">${escapeHtml(t.name)}</span>
+                    <span class="notification-time" style="display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px;font-size:12px;color:#555">
+                        ${escapeHtml(preview)}
+                    </span>
+                    <span class="notification-time">${time} · ${parseInt(t.unread)} new</span>
+                </div>
+            </div>`;
+    }).join('');
+
+    // Click → navigate to messages thread
+    body.querySelectorAll('.notif-msg-item').forEach(el => {
+        el.addEventListener('click', async () => {
+            document.querySelectorAll('.dropdown.active').forEach(d => d.classList.remove('active'));
+            // Mark this thread read
+            await Api.post('/MessagingAPI.php?action=mark_read', { other_user_id: parseInt(el.dataset.id) });
+            window.location.hash = `#${role}/messages?with=${el.dataset.id}&name=${encodeURIComponent(el.dataset.name)}`;
+            pollUnreadCount();
+        });
+    });
+}
+
+function relativeTime(ts) {
+    if (!ts) return '';
+    const d    = new Date(ts.replace(' ', 'T'));
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60)    return 'Just now';
+    if (diff < 3600)  return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return d.toLocaleDateString();
 }
 
 function addTopbarStyles() {
@@ -163,6 +253,9 @@ function addTopbarStyles() {
         .notification-content { flex: 1; }
         .notification-title { display: block; font-size: 13px; font-weight: 500; color: var(--gray-800); }
         .notification-time { font-size: 11px; color: var(--gray-500); }
+        .notif-loading, .notif-empty {
+            padding: 24px 16px; text-align: center; color: var(--gray-400); font-size: 13px;
+        }
         .topbar-user {
             display: flex; align-items: center; gap: 12px;
             padding: 8px 12px; border-radius: var(--border-radius);

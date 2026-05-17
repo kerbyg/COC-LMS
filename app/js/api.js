@@ -69,11 +69,23 @@ export const Api = {
     async _handleResponse(response) {
         const data = await response.json();
 
-        // If unauthorized, clear token and redirect to login
+        // 401 — session expired, force re-login
         if (response.status === 401) {
             localStorage.removeItem('jwt_token');
             window.location.href = BASE_URL + '/app/login.html';
             return data;
+        }
+
+        // 403 — authenticated but not allowed; surface clearly without redirecting
+        if (response.status === 403) {
+            console.warn('[API] 403 Forbidden:', data.message || 'Permission denied');
+            return { ...data, success: false, _forbidden: true };
+        }
+
+        // 500 — server error; normalise to success:false so callers don't need to check HTTP status
+        if (response.status >= 500) {
+            console.error('[API] Server error:', response.status, data.message || '');
+            return { ...data, success: false, _serverError: true };
         }
 
         return data;

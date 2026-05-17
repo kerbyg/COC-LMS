@@ -40,28 +40,28 @@ function handleContacts() {
     $role = Auth::role();
 
     if ($role === 'student') {
-        // Instructors teaching subjects in sections the student is enrolled in
+        // Instructors teaching subjects the student is enrolled in
         $contacts = db()->fetchAll(
             "SELECT DISTINCT u.users_id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.role,
-                    so.subject_code, so.subject_name
-             FROM enrollment e
-             JOIN section_subject ss ON ss.section_id = e.section_id
-             JOIN subject_offered so  ON so.subject_offered_id = ss.subject_offered_id
-             JOIN users u             ON u.users_id = so.user_teacher_id
-             WHERE e.student_id = ? AND e.status = 'active' AND u.users_id IS NOT NULL
+                    s.subject_code, s.subject_name
+             FROM student_subject ss
+             JOIN subject_offered so ON so.subject_offered_id = ss.subject_offered_id
+             JOIN subject         s  ON s.subject_id          = so.subject_id
+             JOIN users           u  ON u.users_id            = so.user_teacher_id
+             WHERE ss.user_student_id = ? AND ss.status = 'enrolled' AND u.users_id IS NOT NULL
              ORDER BY u.last_name, u.first_name",
             [$me]
         );
     } elseif ($role === 'instructor') {
-        // Students enrolled in sections for this instructor's offerings
+        // Students enrolled in this instructor's subject offerings
         $contacts = db()->fetchAll(
             "SELECT DISTINCT u.users_id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.role,
                     s.subject_code, s.subject_name
              FROM subject_offered so
-             JOIN section_subject  ss ON ss.subject_offered_id = so.subject_offered_id
-             JOIN enrollment        e  ON e.section_id = ss.section_id AND e.status = 'active'
-             JOIN users             u  ON u.users_id = e.student_id
-             JOIN subject           s  ON s.subject_id = so.subject_id
+             JOIN student_subject stss ON stss.subject_offered_id = so.subject_offered_id
+                                      AND stss.status = 'enrolled'
+             JOIN users           u    ON u.users_id = stss.user_student_id
+             JOIN subject         s    ON s.subject_id = so.subject_id
              WHERE so.user_teacher_id = ?
              ORDER BY u.last_name, u.first_name",
             [$me]

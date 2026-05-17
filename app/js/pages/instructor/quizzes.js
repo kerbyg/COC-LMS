@@ -7,10 +7,10 @@ import { Api } from '../../api.js';
 let subjects          = [];
 let closeMenusHandler = null;
 
-export async function render(container) {
+export async function render(container, params = {}) {
     const subjRes = await Api.get('/LessonsAPI.php?action=subjects');
     subjects = subjRes.success ? subjRes.data : [];
-    renderList(container);
+    renderList(container, params.subject_id || '');
 }
 
 async function renderList(container, filterSubject = '') {

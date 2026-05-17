@@ -119,10 +119,33 @@ function submitQuiz() {
         $timeTaken = (int)($_POST['time_taken'] ?? 0);
     }
 
-    if (!$quizId) {
-        echo json_encode(['success' => false, 'message' => 'Invalid quiz']);
+    // ── Input validation ─────────────────────────────────────
+    if (!$quizId || $quizId < 1) {
+        echo json_encode(['success' => false, 'message' => 'Invalid quiz ID']);
         return;
     }
+    if (!is_array($answers)) {
+        echo json_encode(['success' => false, 'message' => 'Answers must be an array']);
+        return;
+    }
+    if ($timeTaken < 0 || $timeTaken > 86400) {
+        echo json_encode(['success' => false, 'message' => 'Invalid time value']);
+        return;
+    }
+    // Sanitise answer keys — only allow integer question IDs
+    $cleanAnswers = [];
+    foreach ($answers as $qId => $val) {
+        $cleanId = (int)$qId;
+        if ($cleanId < 1) continue;
+        // MC/TF: option_id must be a positive int; essay/fill: string, max 5000 chars
+        if (is_string($val)) {
+            $cleanAnswers[$cleanId] = mb_substr(strip_tags(trim($val)), 0, 5000);
+        } elseif (is_numeric($val)) {
+            $cleanAnswers[$cleanId] = (int)$val;
+        }
+        // drop anything else (arrays, objects, booleans)
+    }
+    $answers = $cleanAnswers;
 
     try {
         $quiz = db()->fetchOne(
@@ -159,12 +182,16 @@ function submitQuiz() {
         // Get questions from `questions` table via `quiz_questions` junction
         $questions = db()->fetchAll(
             "SELECT q.questions_id, q.question_text, q.question_type, q.points,
-                    (SELECT option_id FROM question_option WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_option_id
+                    (SELECT option_id FROM question_option WHERE questions_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_option_id
              FROM quiz_questions qq
              JOIN questions q ON qq.questions_id = q.questions_id
              WHERE qq.quiz_id = ?",
             [$quizId]
         );
+
+        // Ownership check: strip any submitted answer whose question_id is not in this quiz
+        $validQuestionIds = array_column($questions, 'questions_id');
+        $answers = array_intersect_key($answers, array_flip($validQuestionIds));
 
         $totalPoints = 0;
         $earnedPoints = 0;
@@ -190,7 +217,7 @@ function submitQuiz() {
                 $answerText = is_string($userAnswer) ? trim($userAnswer) : '';
                 // Get expected/model answer
                 $expectedOpt = db()->fetchOne(
-                    "SELECT option_text FROM question_option WHERE quiz_question_id = ? AND is_correct = 1 LIMIT 1",
+                    "SELECT option_text FROM question_option WHERE questions_id = ? AND is_correct = 1 LIMIT 1",
                     [$q['questions_id']]
                 );
                 $expectedAnswer = $expectedOpt ? trim($expectedOpt['option_text']) : '';
@@ -214,7 +241,7 @@ function submitQuiz() {
             } elseif ($q['question_type'] === 'fill_blank' || $q['question_type'] === 'fill_in_the_blank') {
                 $answerText = is_string($userAnswer) ? trim($userAnswer) : '';
                 $correctOpt = db()->fetchOne(
-                    "SELECT option_text FROM question_option WHERE quiz_question_id = ? AND is_correct = 1 LIMIT 1",
+                    "SELECT option_text FROM question_option WHERE questions_id = ? AND is_correct = 1 LIMIT 1",
                     [$q['questions_id']]
                 );
                 if ($correctOpt && $answerText !== '') {
@@ -253,31 +280,7 @@ function submitQuiz() {
         // Use pdo() so errors propagate
         $pdo = pdo();
 
-        $stmt = $pdo->prepare(
-            "INSERT INTO student_quiz_attempts
-             (quiz_id, user_student_id, attempt_number, total_points, earned_points, percentage, passed, time_spent, started_at, completed_at, status, has_pending_grades)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'completed', ?)"
-        );
-        $stmt->execute([$quizId, $userId, $attemptCount + 1, $totalPoints, $earnedPoints, round($percentage, 2), $passed ? 1 : 0, $timeTaken, $hasPendingGrades ? 1 : 0]);
-        $attemptId = $pdo->lastInsertId();
-
-        // Record in student_scores
-        try {
-            $pdo->prepare(
-                "INSERT INTO student_scores (subject_offered_id, quiz_id, raw_score, user_id, status, remarks)
-                 VALUES (?, ?, ?, ?, 'graded', ?)"
-            )->execute([
-                $enrollment['subject_offered_id'],
-                $quizId,
-                $earnedPoints,
-                $userId,
-                $passed ? 'Passed' : 'Failed'
-            ]);
-        } catch (PDOException $e) {
-            error_log("student_scores insert: " . $e->getMessage());
-        }
-
-        // Get linked lesson from quiz_lessons junction
+        // Get linked lesson BEFORE starting transaction (read-only, safe outside)
         $linkedLessonsId = null;
         $linkedLesson = db()->fetchOne(
             "SELECT ql.lessons_id, l.subject_id FROM quiz_lessons ql JOIN lessons l ON ql.lessons_id = l.lessons_id WHERE ql.quiz_id = ? LIMIT 1",
@@ -287,44 +290,47 @@ function submitQuiz() {
             $linkedLessonsId = $linkedLesson['lessons_id'];
         }
 
-        if ($passed) {
-            // Auto-complete the linked lesson
-            if ($linkedLessonsId) {
-                $existingProgress = db()->fetchOne(
-                    "SELECT progress_id FROM student_progress WHERE user_student_id = ? AND lessons_id = ?",
-                    [$userId, $linkedLessonsId]
-                );
-                try {
-                    if ($existingProgress) {
-                        $pdo->prepare("UPDATE student_progress SET status='completed', completed_at=NOW() WHERE user_student_id=? AND lessons_id=?")
-                            ->execute([$userId, $linkedLessonsId]);
-                    } else {
-                        $pdo->prepare("INSERT INTO student_progress (user_student_id, lessons_id, subject_id, status, completed_at, started_at) VALUES (?,?,?,'completed',NOW(),NOW())")
-                            ->execute([$userId, $linkedLessonsId, $linkedLesson['subject_id']]);
-                    }
-                } catch (PDOException $e) {
-                    error_log("Auto-complete lesson failed: " . $e->getMessage());
-                }
-            }
-        }
+        // Wrap all writes in a single transaction — if any insert fails, nothing is partially saved
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare(
+            "INSERT INTO student_quiz_attempts
+             (quiz_id, user_student_id, attempt_number, total_points, earned_points, percentage, passed, time_spent, started_at, completed_at, status, has_pending_grades)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'completed', ?)"
+        );
+        $stmt->execute([$quizId, $userId, $attemptCount + 1, $totalPoints, $earnedPoints, round($percentage, 2), $passed ? 1 : 0, $timeTaken, $hasPendingGrades ? 1 : 0]);
+        $attemptId = $pdo->lastInsertId();
 
         // Save individual answers
         foreach ($answerRecords as $record) {
-            try {
-                $pdo->prepare(
-                    "INSERT INTO student_quiz_answers
-                     (attempt_id, quiz_id, questions_id, user_student_id, selected_option_id, answer_text, is_correct, points_earned, grading_status, grader_feedback)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                )->execute([
-                    $attemptId, $quizId, $record['questions_id'], $userId,
-                    $record['selected_option_id'], $record['answer_text'],
-                    $record['is_correct'], $record['points_earned'], $record['grading_status'],
-                    $record['grader_feedback'] ?? null
-                ]);
-            } catch (PDOException $e) {
-                error_log("Answer save: " . $e->getMessage());
+            $pdo->prepare(
+                "INSERT INTO student_quiz_answers
+                 (attempt_id, quiz_id, questions_id, user_student_id, selected_option_id, answer_text, is_correct, points_earned, grading_status, grader_feedback)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            )->execute([
+                $attemptId, $quizId, $record['questions_id'], $userId,
+                $record['selected_option_id'], $record['answer_text'],
+                $record['is_correct'], $record['points_earned'], $record['grading_status'],
+                $record['grader_feedback'] ?? null
+            ]);
+        }
+
+        // Auto-complete linked lesson if passed
+        if ($passed && $linkedLessonsId) {
+            $existingProgress = db()->fetchOne(
+                "SELECT progress_id FROM student_progress WHERE user_student_id = ? AND lessons_id = ?",
+                [$userId, $linkedLessonsId]
+            );
+            if ($existingProgress) {
+                $pdo->prepare("UPDATE student_progress SET status='completed', completed_at=NOW() WHERE user_student_id=? AND lessons_id=?")
+                    ->execute([$userId, $linkedLessonsId]);
+            } else {
+                $pdo->prepare("INSERT INTO student_progress (user_student_id, lessons_id, subject_id, status, completed_at, started_at) VALUES (?,?,?,'completed',NOW(),NOW())")
+                    ->execute([$userId, $linkedLessonsId, $linkedLesson['subject_id']]);
             }
         }
+
+        $pdo->commit();
 
         echo json_encode([
             'success' => true,
@@ -340,6 +346,8 @@ function submitQuiz() {
         ]);
 
     } catch (Exception $e) {
+        // Roll back if transaction was started but not committed
+        try { if ($pdo && $pdo->inTransaction()) $pdo->rollBack(); } catch (Exception $_) {}
         error_log("Quiz submit error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error submitting quiz: ' . $e->getMessage()]);
     }
@@ -510,7 +518,7 @@ function getAttemptAnswers() {
         "SELECT a.*, a.student_quiz_answer_id AS answer_id,
                 q.question_text, q.question_type, q.points as max_points,
                 (SELECT option_text FROM question_option WHERE option_id = a.selected_option_id LIMIT 1) as selected_option_text,
-                (SELECT option_text FROM question_option WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_answer_text
+                (SELECT option_text FROM question_option WHERE questions_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_answer_text
          FROM student_quiz_answers a
          JOIN questions q ON a.questions_id = q.questions_id
          WHERE a.attempt_id = ?

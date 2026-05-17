@@ -2,17 +2,20 @@
  * Admin Curriculum Page
  * Academic table layout: Year header → 1st & 2nd Semester side-by-side tables
  */
-import { Api } from '../../api.js';
+import { Api }  from '../../api.js';
+import { Auth } from '../../auth.js';
 
 let currentProgramId = '';
 
 export async function render(container) {
-    const [progRes, deptRes] = await Promise.all([
-        Api.get('/CurriculumAPI.php?action=programs'),
-        Api.get('/SubjectsAPI.php?action=departments'),
-    ]);
+    const isDean = Auth.user()?.role === 'dean';
+
+    const fetches = [Api.get('/CurriculumAPI.php?action=programs')];
+    if (!isDean) fetches.push(Api.get('/SubjectsAPI.php?action=departments'));
+    const [progRes, deptRes] = await Promise.all(fetches);
+
     const programs    = progRes.success ? progRes.data : [];
-    const departments = deptRes.success ? deptRes.data : [];
+    const departments = (!isDean && deptRes?.success) ? deptRes.data : [];
 
     container.innerHTML = `
         <style>
@@ -121,10 +124,11 @@ export async function render(container) {
         <div class="page-header">
             <h2>Curriculum</h2>
             <div class="header-right">
+                ${isDean ? '' : `
                 <select class="program-select" id="dept-filter">
                     <option value="">All Departments</option>
                     ${departments.map(d => `<option value="${d.department_id}">${esc(d.department_code)} - ${esc(d.department_name)}</option>`).join('')}
-                </select>
+                </select>`}
                 <select class="program-select" id="program-filter">
                     <option value="">Select a Program</option>
                     ${programs.map(p => `<option value="${p.program_id}" data-dept="${p.department_id}">${esc(p.program_code)} - ${esc(p.program_name)}</option>`).join('')}
@@ -141,22 +145,22 @@ export async function render(container) {
     const deptFilter = container.querySelector('#dept-filter');
     const progFilter = container.querySelector('#program-filter');
 
-    deptFilter.addEventListener('change', () => {
-        const deptId = deptFilter.value;
-        // Show/hide program options based on selected department
-        progFilter.querySelectorAll('option').forEach(opt => {
-            if (!opt.value) return; // keep "Select a Program"
-            opt.hidden = deptId ? opt.dataset.dept !== deptId : false;
+    if (deptFilter) {
+        deptFilter.addEventListener('change', () => {
+            const deptId = deptFilter.value;
+            progFilter.querySelectorAll('option').forEach(opt => {
+                if (!opt.value) return;
+                opt.hidden = deptId ? opt.dataset.dept !== deptId : false;
+            });
+            const selected = progFilter.querySelector(`option[value="${progFilter.value}"]`);
+            if (progFilter.value && selected && selected.hidden) {
+                progFilter.value = '';
+                currentProgramId = '';
+                container.querySelector('#btn-add-subject').classList.remove('visible');
+                loadCurriculum(container, '');
+            }
         });
-        // Reset program selection if the current selection is now hidden
-        const selected = progFilter.querySelector(`option[value="${progFilter.value}"]`);
-        if (progFilter.value && selected && selected.hidden) {
-            progFilter.value = '';
-            currentProgramId = '';
-            container.querySelector('#btn-add-subject').classList.remove('visible');
-            loadCurriculum(container, '');
-        }
-    });
+    }
 
     progFilter.addEventListener('change', (e) => {
         currentProgramId = e.target.value;

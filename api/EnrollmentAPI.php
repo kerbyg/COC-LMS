@@ -37,6 +37,10 @@ function previewCode() {
         echo json_encode(['success' => false, 'message' => 'Enrollment code is required']);
         return;
     }
+    if (!preg_match('/^[A-Z0-9]{3}-[A-Z0-9]{4}$/', $code)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid code format. Expected XXX-XXXX (e.g. ABC-1234)']);
+        return;
+    }
 
     $section = db()->fetchOne(
         "SELECT section_id, section_name, max_students,
@@ -109,11 +113,17 @@ function enrollByCode() {
     $code   = strtoupper(trim($input['enrollment_code'] ?? ''));
     $userId = Auth::id();
 
+    // ── Validation ────────────────────────────────────────────
     if (!$code) {
         echo json_encode(['success' => false, 'message' => 'Enrollment code is required']);
         return;
     }
+    if (!preg_match('/^[A-Z0-9]{3}-[A-Z0-9]{4}$/', $code)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid code format. Expected XXX-XXXX (e.g. ABC-1234)']);
+        return;
+    }
 
+    $pdo = null;
     try {
         // Find section
         $section = db()->fetchOne(
@@ -130,7 +140,7 @@ function enrollByCode() {
         }
 
         // Check capacity
-        if ($section['current_enrollment'] >= $section['max_students']) {
+        if ($section['max_students'] > 0 && $section['current_enrollment'] >= $section['max_students']) {
             echo json_encode(['success' => false, 'message' => 'Section is full']);
             return;
         }
@@ -160,7 +170,10 @@ function enrollByCode() {
             return;
         }
 
+        // ── Transaction: all subjects enroll or none do ───────
         $pdo = pdo();
+        $pdo->beginTransaction();
+
         $enrolled = 0;
         $skipped  = 0;
 
@@ -182,9 +195,12 @@ function enrollByCode() {
         }
 
         if ($enrolled === 0) {
+            $pdo->rollBack();
             echo json_encode(['success' => false, 'message' => 'You are already enrolled in all subjects of this section.']);
             return;
         }
+
+        $pdo->commit();
 
         $msg = $skipped > 0
             ? "Added {$enrolled} new subject" . ($enrolled !== 1 ? 's' : '') . " to your enrollment."
@@ -193,8 +209,9 @@ function enrollByCode() {
         echo json_encode(['success' => true, 'message' => $msg, 'enrolled' => $enrolled]);
 
     } catch (PDOException $e) {
+        if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
         error_log("Enrollment error: " . $e->getMessage());
-        echo json_encode(['success' => false, 'message' => 'Enrollment failed']);
+        echo json_encode(['success' => false, 'message' => 'Enrollment failed. Please try again.']);
     }
 }
 

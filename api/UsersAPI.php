@@ -26,7 +26,10 @@ $_userPerms = [
     'update'      => 'users.edit',
     'delete'      => 'users.delete',
 ];
-if (isset($_userPerms[$action]) && !Auth::can($_userPerms[$action])) {
+// Dean can list/view instructors in their department without users.view permission
+$isDeanListingInstructors = Auth::role() === 'dean'
+    && in_array($action, ['list', 'get', 'programs', 'departments']);
+if (isset($_userPerms[$action]) && !Auth::can($_userPerms[$action]) && !$isDeanListingInstructors) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => "Permission denied: {$_userPerms[$action]}"]);
     exit;

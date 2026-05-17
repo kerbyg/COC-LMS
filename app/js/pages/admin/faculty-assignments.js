@@ -395,7 +395,7 @@ export async function render(container) {
             bySem.get(sk).push(o);
         });
 
-        const myCount = offerings.filter(o => String(o.user_teacher_id) === String(instr.users_id)).length;
+        const myCount = offerings.filter(o => o.is_assigned_to_instructor == 1 || String(o.user_teacher_id) === String(instr.users_id)).length;
         const total   = offerings.length;
 
         const deptTag = instr.department_code
@@ -429,7 +429,7 @@ export async function render(container) {
                 const items = bySem.get(semKey);
                 html += `<div class="fa-sem-header">${SEM_LBL[semKey] || 'Semester ' + semKey}</div>`;
                 items.forEach(o => {
-                    const isMe    = String(o.user_teacher_id) === String(instr.users_id);
+                    const isMe    = o.is_assigned_to_instructor == 1 || String(o.user_teacher_id) === String(instr.users_id);
                     const isOther = !!o.user_teacher_id && !isMe;
                     const secCount = parseInt(o.section_count) || 0;
                     html += `

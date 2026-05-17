@@ -6,9 +6,8 @@ import { Api } from '../../api.js';
 import { Auth } from '../../auth.js';
 
 export async function render(container) {
-    const res = await Api.get('/SubjectsAPI.php?action=list');
+    const res = await Api.get('/SubjectsAPI.php?action=all');
     const allSubjects = res.success ? res.data : [];
-    // Note: Dean sees all subjects for now (dept filtering would require API changes)
 
     container.innerHTML = `
         <style>

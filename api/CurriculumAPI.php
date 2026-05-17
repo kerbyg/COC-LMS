@@ -14,7 +14,10 @@ if (!Auth::check()) {
 
 $action = $_GET['action'] ?? 'view';
 
-// RBAC: enforce permission per action
+// Dean has intrinsic access to curriculum for their department
+$isDean = Auth::role() === 'dean';
+
+// RBAC: enforce permission per action (dean bypasses RBAC — scoped by dept instead)
 $_currPerms = [
     'programs'  => 'curriculum.view',
     'view'      => 'curriculum.view',
@@ -23,7 +26,7 @@ $_currPerms = [
     'update'    => 'curriculum.edit',
     'archive'   => 'curriculum.edit',
 ];
-if (isset($_currPerms[$action]) && !Auth::can($_currPerms[$action])) {
+if (!$isDean && isset($_currPerms[$action]) && !Auth::can($_currPerms[$action])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => "Permission denied: {$_currPerms[$action]}"]);
     exit;
@@ -43,8 +46,40 @@ switch ($action) {
 // ─── Programs list ─────────────────────────────────────────────────────────
 
 function handlePrograms() {
-    $programs = db()->fetchAll("SELECT program_id, program_name, program_code, department_id FROM program WHERE status = 'active' ORDER BY program_code");
+    global $isDean;
+    if ($isDean) {
+        $deanUser = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [Auth::id()]);
+        $deptId   = $deanUser['department_id'] ?? null;
+        if ($deptId) {
+            $programs = db()->fetchAll(
+                "SELECT p.program_id, p.program_name, p.program_code, dp.department_id
+                 FROM program p
+                 JOIN department_program dp ON dp.program_id = p.program_id
+                 WHERE p.status = 'active' AND dp.department_id = ?
+                 ORDER BY p.program_code",
+                [$deptId]
+            );
+        } else {
+            $programs = [];
+        }
+    } else {
+        $programs = db()->fetchAll("SELECT program_id, program_name, program_code, department_id FROM program WHERE status = 'active' ORDER BY program_code");
+    }
     echo json_encode(['success' => true, 'data' => $programs]);
+}
+
+// ─── Helper: verify dean can access a program (must be in their dept) ────────
+
+function deanCanAccessProgram(int $programId): bool {
+    if (Auth::role() !== 'dean') return true; // admin/others handled by RBAC
+    $deanUser = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [Auth::id()]);
+    $deptId   = $deanUser['department_id'] ?? null;
+    if (!$deptId) return false;
+    $row = db()->fetchOne(
+        "SELECT 1 FROM department_program WHERE program_id = ? AND department_id = ?",
+        [$programId, $deptId]
+    );
+    return (bool)$row;
 }
 
 // ─── View curriculum for a program ────────────────────────────────────────
@@ -52,6 +87,12 @@ function handlePrograms() {
 function handleView() {
     $programId = (int)($_GET['program_id'] ?? 0);
     if (!$programId) { echo json_encode(['success' => false, 'message' => 'Program ID required']); return; }
+
+    if (!deanCanAccessProgram($programId)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied: program not in your department']);
+        return;
+    }
 
     $subjects = db()->fetchAll(
         "SELECT s.subject_id, s.subject_code, s.subject_name, s.units,
@@ -102,6 +143,12 @@ function handleAdd() {
         return;
     }
 
+    if (!deanCanAccessProgram($programId)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied: program not in your department']);
+        return;
+    }
+
     $subj = db()->fetchOne("SELECT subject_code FROM subject WHERE subject_id = ?", [$subjectId]);
     if (!$subj) {
         echo json_encode(['success' => false, 'message' => 'Subject not found']);
@@ -147,6 +194,12 @@ function handleUpdate() {
     $subjectId = (int)($data['subject_id'] ?? 0);
     $programId = (int)($data['program_id'] ?? 0);
     if (!$subjectId) { echo json_encode(['success' => false, 'message' => 'subject_id required']); return; }
+
+    if ($programId && !deanCanAccessProgram($programId)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied: program not in your department']);
+        return;
+    }
 
     $yearLevel    = in_array($data['year_level'] ?? '', ['1','2','3','4']) ? (int)$data['year_level'] : null;
     $semester     = in_array((int)($data['semester'] ?? 0), [1,2,3]) ? (int)$data['semester'] : null;
@@ -194,6 +247,12 @@ function handleArchive() {
     $subjectId = (int)($data['subject_id'] ?? 0);
     $programId = (int)($data['program_id'] ?? 0);
     if (!$subjectId) { echo json_encode(['success' => false, 'message' => 'subject_id required']); return; }
+
+    if ($programId && !deanCanAccessProgram($programId)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied: program not in your department']);
+        return;
+    }
 
     // Check if subject is used in active offerings
     $inUse = db()->fetchOne(

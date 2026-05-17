@@ -150,9 +150,10 @@ async function renderPage(container) {
 // Step 2: Show preview card with subjects list, Cancel / Confirm buttons
 function showPreview(container, data) {
     const { section_name, enrollment_code, max_students, current_enrollment, subjects, new_count } = data;
-    const spots    = max_students - current_enrollment;
+    const spots    = max_students > 0 ? max_students - current_enrollment : Infinity;
     const allDone  = new_count === 0;
     const isUpdate = new_count > 0 && new_count < subjects.length; // some already enrolled
+    const isFull   = max_students > 0 && spots <= 0 && !allDone; // section full, new slots needed
 
     const subjectRows = subjects.map(s => {
         if (s.already_enrolled) {
@@ -196,15 +197,17 @@ function showPreview(container, data) {
     efcBody.innerHTML = `
         <div class="preview-section-name">${esc(section_name)}</div>
         <div class="preview-code-badge">${esc(enrollment_code)}</div>
-        <div class="preview-capacity">${current_enrollment} / ${max_students} enrolled &nbsp;·&nbsp; ${spots} spot${spots !== 1 ? 's' : ''} left</div>
+        <div class="preview-capacity" style="${isFull ? 'color:#b91c1c;font-weight:600' : ''}">${current_enrollment} / ${max_students} enrolled &nbsp;·&nbsp; ${spots === Infinity ? 'Unlimited' : spots + ' spot' + (spots !== 1 ? 's' : '') + ' left'}</div>
         <hr class="preview-divider">
         <div class="preview-subjects-label">${labelText}</div>
         <div class="preview-subject-list">${subjectRows}</div>
         <div id="enroll-alert"></div>
         ${allDone
             ? `<div class="alert alert-success" style="margin-bottom:12px">You are already enrolled in all subjects of this section.</div>`
-            : ''}
-        <button class="btn-primary" id="btn-confirm-enroll" ${allDone ? 'disabled' : ''}>${btnLabel}</button>
+            : isFull
+                ? `<div class="alert alert-error" style="margin-bottom:12px">This section is full. No spots remaining.</div>`
+                : ''}
+        <button class="btn-primary" id="btn-confirm-enroll" ${allDone || isFull ? 'disabled' : ''}>${isFull ? 'Section Full' : btnLabel}</button>
         <button class="btn-secondary" id="btn-cancel-preview" style="margin-top:8px">← Back</button>
     `;
 

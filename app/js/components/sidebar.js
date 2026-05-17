@@ -13,40 +13,45 @@ import { Api }  from '../api.js';
 // permission: 'x.view' → hidden if user lacks that slug
 const menus = {
 
-    // ── Admin (ORIGINAL — unchanged) ──────────────────────────
+    // ── Admin — Technical/System only ────────────────────────
     admin: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
         ]},
-        { section: 'Academic', items: [
+        { section: 'Organization', items: [
             { icon: '🏢', text: 'Departments',         page: 'departments',         permission: null },
-            { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: null },
-            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: null },
+            { icon: '🎓', text: 'Programs',            page: 'programs',            permission: null },
         ]},
-        { section: 'Scheduling', items: [
-            { icon: '👨‍🏫', text: 'Faculty Assignments', page: 'faculty-assignments', permission: null },
+        { section: 'User Management', items: [
+            { icon: '👤', text: 'Users',               page: 'users',               permission: null },
+            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: null },
         ]},
         { section: 'System', items: [
             { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: null },
         ]},
     ],
 
-    // ── Dean (ORIGINAL — unchanged) ───────────────────────────
+    // ── Dean — Academic management (dept-scoped) ──────────────
     dean: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',           page: 'dashboard',           permission: null },
         ]},
         { section: 'Academic', items: [
-            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: null },
+            { icon: '📋', text: 'Curriculum',          page: 'curriculum',          permission: null },
             { icon: '📚', text: 'Subjects',            page: 'subjects',            permission: null },
+            { icon: '📅', text: 'Subject Offerings',   page: 'subject-offerings',   permission: null },
+            { icon: '🏫', text: 'Sections',            page: 'sections',            permission: null },
+        ]},
+        { section: 'Staff', items: [
+            { icon: '👨‍🏫', text: 'Instructors',         page: 'instructors',         permission: null },
             { icon: '👥', text: 'Faculty Assignments', page: 'faculty-assignments', permission: null },
+        ]},
+        { section: 'Reports', items: [
             { icon: '📈', text: 'Reports',             page: 'reports',             permission: null },
         ]},
     ],
 
     // ── Instructor ────────────────────────────────────────────
-    // Original: Sections, My Classes, Content Bank, Gradebook, Announcements
-    // RBAC extras: anything that requires a non-default instructor permission
     instructor: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',   page: 'dashboard',    permission: null },
@@ -57,7 +62,11 @@ const menus = {
             { icon: '🏦', text: 'Content Bank',page: 'content-bank', permission: 'lessons.view' },
         ]},
         { section: 'Assessment', items: [
+            { icon: '📝', text: 'Quizzes',     page: 'quizzes',      permission: 'quizzes.view' },
             { icon: '📋', text: 'Gradebook',   page: 'gradebook',    permission: 'grades.view' },
+        ]},
+        { section: 'Communication', items: [
+            { icon: '💬', text: 'Messages',    page: 'messages',     permission: null, badge: true },
         ]},
         // RBAC-unlockable extras (not granted to instructor by default)
         { section: 'Administration', items: [
@@ -74,17 +83,19 @@ const menus = {
     ],
 
     // ── Student ───────────────────────────────────────────────
-    // Original: My Subjects, My Grades
-    // RBAC extras: anything admin explicitly grants
     student: [
         { section: 'Main', items: [
             { icon: '📊', text: 'Dashboard',   page: 'dashboard',   permission: null },
         ]},
         { section: 'Learning', items: [
             { icon: '📚', text: 'My Subjects', page: 'my-subjects', permission: 'subjects.view' },
+            { icon: '📝', text: 'My Quizzes',  page: 'quizzes',     permission: 'quizzes.view' },
         ]},
         { section: 'Progress', items: [
             { icon: '📋', text: 'My Grades',   page: 'grades',      permission: 'grades.view' },
+        ]},
+        { section: 'Communication', items: [
+            { icon: '💬', text: 'Messages',    page: 'messages',    permission: null, badge: true },
         ]},
     ],
 };

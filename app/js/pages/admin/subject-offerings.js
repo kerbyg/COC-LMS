@@ -28,10 +28,11 @@ export async function render(container) {
     renderList(container, '', '', preProgram);
 }
 
-async function renderList(container, semFilter = '', batchFilter = '', programFilter = '') {
+async function renderList(container, semFilter = '', batchFilter = '', programFilter = '', statusFilter = '') {
     let params = semFilter    ? '&semester_id=' + semFilter : '';
     if (batchFilter)   params += '&batch='      + encodeURIComponent(batchFilter);
     if (programFilter) params += '&program_id=' + programFilter;
+    if (statusFilter)  params += '&status='     + encodeURIComponent(statusFilter);
     const result = await Api.get('/SubjectOfferingsAPI.php?action=list' + params);
     const offerings = result.success ? result.data : [];
 
@@ -107,16 +108,22 @@ async function renderList(container, semFilter = '', batchFilter = '', programFi
                 ${programs.map(p => `<option value="${p.program_id}" ${programFilter==p.program_id?'selected':''}>${esc(p.program_code)} – ${esc(p.program_name)}</option>`).join('')}
             </select>
             <select id="filter-batch">
-                <option value="">All Batches</option>
+                <option value="">All Year Levels</option>
                 <option value="1st Year">1st Year</option>
                 <option value="2nd Year">2nd Year</option>
                 <option value="3rd Year">3rd Year</option>
                 <option value="4th Year">4th Year</option>
             </select>
+            <select id="filter-status">
+                <option value="">All Status</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
         </div>
 
         <table class="data-table">
-            <thead><tr><th>Subject</th><th>Semester</th><th>Batch</th><th>Units</th><th>Sections</th><th>Students</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Subject</th><th>Semester</th><th>Year Level</th><th>Units</th><th>Sections</th><th>Students</th><th>Status</th><th></th></tr></thead>
             <tbody>
                 ${offerings.length === 0 ? '<tr><td colspan="8"><div class="empty-state-sm">No offerings found</div></td></tr>' :
                   offerings.map(o => `
@@ -148,16 +155,14 @@ async function renderList(container, semFilter = '', batchFilter = '', programFi
             sem     : container.querySelector('#filter-sem').value,
             program : container.querySelector('#filter-program').value,
             batch   : container.querySelector('#filter-batch').value,
+            status  : container.querySelector('#filter-status').value,
         };
     }
-    container.querySelector('#filter-sem').addEventListener('change', () => {
-        const f = getFilters(); renderList(container, f.sem, f.batch, f.program);
-    });
-    container.querySelector('#filter-program').addEventListener('change', () => {
-        const f = getFilters(); renderList(container, f.sem, f.batch, f.program);
-    });
-    container.querySelector('#filter-batch').addEventListener('change', () => {
-        const f = getFilters(); renderList(container, f.sem, f.batch, f.program);
+    ['#filter-sem','#filter-program','#filter-batch','#filter-status'].forEach(sel => {
+        container.querySelector(sel).addEventListener('change', () => {
+            const f = getFilters();
+            renderList(container, f.sem, f.batch, f.program, f.status);
+        });
     });
 
     container.querySelectorAll('.btn-actions').forEach(btn => {

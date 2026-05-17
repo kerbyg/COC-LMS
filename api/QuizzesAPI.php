@@ -47,6 +47,9 @@ switch ($action) {
     case 'list':
         getQuizzes();
         break;
+    case 'by-lesson':
+        getQuizzesByLesson();
+        break;
     case 'get':
         getQuiz();
         break;
@@ -143,6 +146,56 @@ function getQuizzes() {
             'count' => count($quizzes)
         ]);
         
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error']);
+    }
+}
+
+/**
+ * Get published quizzes linked to a specific lesson (via quiz_lessons junction)
+ */
+function getQuizzesByLesson() {
+    $lessonId = (int)($_GET['lesson_id'] ?? 0);
+    $userId   = Auth::id();
+
+    if (!$lessonId) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'lesson_id required']);
+        return;
+    }
+
+    try {
+        $quizzes = db()->fetchAll(
+            "SELECT
+                q.quiz_id,
+                q.quiz_title,
+                q.quiz_description,
+                q.time_limit,
+                q.passing_rate,
+                q.max_attempts,
+                q.due_date,
+                (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
+                (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
+                (SELECT MAX(score) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score
+            FROM quiz q
+            JOIN quiz_lessons ql ON ql.quiz_id = q.quiz_id
+            WHERE ql.lessons_id = ? AND q.status = 'published'
+            ORDER BY q.created_at ASC",
+            [$userId, $userId, $lessonId]
+        );
+
+        foreach ($quizzes as &$quiz) {
+            $now     = time();
+            $due     = $quiz['due_date'] ? strtotime($quiz['due_date']) : null;
+            $overdue = $due && $now > $due;
+            $passed  = $quiz['best_score'] !== null && $quiz['best_score'] >= $quiz['passing_rate'];
+
+            $quiz['status']   = $passed ? 'passed' : ($quiz['attempts_used'] > 0 ? 'attempted' : ($overdue ? 'overdue' : 'available'));
+            $quiz['can_take'] = !$overdue;
+        }
+
+        echo json_encode(['success' => true, 'data' => $quizzes]);
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Database error']);

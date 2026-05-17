@@ -329,44 +329,14 @@ function openSectionModal(container, sec = null) {
     });
 }
 
-// ─── Add subject modal — curriculum hierarchy: Dept → Program → Year → Sem ────
+// ─── Add subject modal — shows only subjects the dean assigned to this instructor ─
 
 async function openAddSubjectModal(container, sectionId) {
+    const YEAR_LABELS = { 1:'1st Year', 2:'2nd Year', 3:'3rd Year', 4:'4th Year' };
+    const SEM_LABELS  = { 1:'1st Semester', 2:'2nd Semester', 3:'Summer' };
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-
-    const YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-    const SEM_LABELS  = { 1: '1st Semester', 2: '2nd Semester', 3: 'Summer' };
-
-    // Load departments, all programs, and instructor's own programs in parallel
-    const [deptRes, progRes, myProgRes] = await Promise.all([
-        Api.get('/SubjectOfferingsAPI.php?action=departments'),
-        Api.get('/SubjectOfferingsAPI.php?action=programs'),
-        Api.get('/SectionsAPI.php?action=instructor-programs'),
-    ]);
-
-    const departments = deptRes.success ? deptRes.data : [];
-    const allPrograms = progRes.success ? progRes.data : [];
-    const myPrograms  = myProgRes.success ? myProgRes.data : [];
-
-    // Default to instructor's first program
-    const defaultProg = myPrograms[0] || null;
-    const defaultDept = defaultProg
-        ? departments.find(d => d.department_id == defaultProg.department_id) || null
-        : null;
-
-    // Build program options filtered to a dept
-    function programOptions(deptId) {
-        const filtered = deptId
-            ? allPrograms.filter(p => p.department_id == deptId)
-            : allPrograms;
-        return `<option value="">All Programs</option>` +
-            filtered.map(p => `<option value="${p.program_id}"
-                ${defaultProg && p.program_id == defaultProg.program_id ? 'selected' : ''}>
-                ${esc(p.program_code)} — ${esc(p.program_name)}
-            </option>`).join('');
-    }
-
     overlay.innerHTML = `
         <div class="modal">
             <div class="modal-header">
@@ -375,59 +345,13 @@ async function openAddSubjectModal(container, sectionId) {
             </div>
             <div class="modal-body">
                 <div id="modal-alert"></div>
-
-                <div style="background:#f8fdf9;border:1px solid #d1e7d8;border-radius:10px;padding:14px 16px 8px;margin-bottom:16px;">
-                    <div style="font-size:11px;font-weight:700;color:#1B4D3E;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;">
-                        Filter by Curriculum
-                    </div>
-
-                    <div class="form-row" style="margin-bottom:0;">
-                        <div class="form-group">
-                            <label class="form-label">Department</label>
-                            <select class="form-select" id="m-dept">
-                                <option value="">All Departments</option>
-                                ${departments.map(d => `<option value="${d.department_id}"
-                                    ${defaultDept && d.department_id == defaultDept.department_id ? 'selected' : ''}>
-                                    ${esc(d.department_code)} — ${esc(d.department_name)}
-                                </option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Program</label>
-                            <select class="form-select" id="m-program">
-                                ${programOptions(defaultDept?.department_id || '')}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-row" style="margin-bottom:0;">
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <label class="form-label">Year Level</label>
-                            <select class="form-select" id="m-year-level">
-                                <option value="">All Years</option>
-                                ${YEAR_LEVELS.map((y, i) => `<option value="${i + 1}">${y}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <label class="form-label">Semester</label>
-                            <select class="form-select" id="m-semester">
-                                <option value="">All Semesters</option>
-                                <option value="1">1st Semester</option>
-                                <option value="2">2nd Semester</option>
-                                <option value="3">Summer</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="form-group">
-                    <label class="form-label">Subject *</label>
+                    <label class="form-label">My Assigned Subject *</label>
                     <select class="form-select" id="m-subject">
                         <option value="">Loading…</option>
                     </select>
                     <div id="m-subject-hint" style="font-size:12px;color:#737373;margin-top:4px;"></div>
                 </div>
-
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Schedule</label>
@@ -451,68 +375,37 @@ async function openAddSubjectModal(container, sectionId) {
     overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-    const deptSel  = overlay.querySelector('#m-dept');
-    const progSel  = overlay.querySelector('#m-program');
-    const yearSel  = overlay.querySelector('#m-year-level');
-    const semSel   = overlay.querySelector('#m-semester');
     const subjSel  = overlay.querySelector('#m-subject');
     const subjHint = overlay.querySelector('#m-subject-hint');
     const saveBtn  = overlay.querySelector('#modal-save');
 
-    // Department change → re-filter program dropdown, then refresh subjects
-    deptSel.addEventListener('change', () => {
-        progSel.innerHTML = programOptions(deptSel.value);
-        refreshSubjects();
-    });
+    // Fetch only subjects assigned to this instructor by the dean
+    const res  = await Api.get(`/SectionsAPI.php?action=instructor-assigned-subjects&section_id=${sectionId}`);
+    const list = res.success ? res.data : [];
 
-    async function refreshSubjects() {
-        const programId = progSel.value;
-        const yearLevel = yearSel.value;
-        const semLevel  = semSel.value;
+    if (list.length === 0) {
+        subjSel.innerHTML = '<option value="">No assigned subjects available</option>';
+        subjHint.textContent = 'The dean has not assigned any subjects to you yet, or all your assigned subjects are already in this section.';
+    } else {
+        // Group by program for optgroup display
+        const byProgram = {};
+        list.forEach(s => {
+            const key = s.program_code;
+            if (!byProgram[key]) byProgram[key] = { name: s.program_name, code: s.program_code, items: [] };
+            byProgram[key].items.push(s);
+        });
 
-        let url = `/SectionsAPI.php?action=instructor-avail-subjects&section_id=${sectionId}`;
-        if (programId) url += `&program_id=${programId}`;
-        if (yearLevel) url += `&year_level=${yearLevel}`;
-        if (semLevel)  url += `&sem_level=${semLevel}`;
-
-        subjSel.innerHTML = '<option value="">Loading…</option>';
-        subjSel.disabled = true;
-        saveBtn.disabled = true;
-
-        const res = await Api.get(url);
-        console.log('[Add Subject] API:', res);
-        const list = res.success ? res.data : [];
-
-        if (list.length === 0) {
-            subjSel.innerHTML = '<option value="">No subjects found for these filters</option>';
-            subjHint.textContent = programId
-                ? 'No curriculum subjects matched. Try changing Year Level or Semester, or check that the curriculum is set up.'
-                : 'Select a program above to see curriculum subjects.';
-        } else {
-            subjSel.innerHTML = `<option value="">— ${list.length} subject(s) available —</option>` +
-                list.map(s => {
-                    const yr  = s.year_level ? YEAR_LEVELS[s.year_level - 1] : '';
-                    const sem = s.curriculum_semester ? SEM_LABELS[s.curriculum_semester] || `Sem ${s.curriculum_semester}` : '';
-                    const ctx = [yr, sem].filter(Boolean).join(', ');
-                    return `<option value="${s.subject_id}">
-                        ${esc(s.subject_code)} — ${esc(s.subject_name)}${ctx ? ` (${ctx})` : ''}
-                    </option>`;
-                }).join('');
-            subjHint.textContent = '';
-        }
-        subjSel.disabled = false;
+        subjSel.innerHTML = `<option value="">— Select a subject (${list.length} available) —</option>` +
+            Object.values(byProgram).map(prog => `
+                <optgroup label="${esc(prog.code)} — ${esc(prog.name)}">
+                    ${prog.items.map(s => {
+                        const ctx = [YEAR_LABELS[s.year_level], SEM_LABELS[s.curriculum_semester]].filter(Boolean).join(' · ');
+                        return `<option value="${s.subject_offered_id}">${esc(s.subject_code)} — ${esc(s.subject_name)}${ctx ? ` (${ctx})` : ''}</option>`;
+                    }).join('')}
+                </optgroup>`).join('');
     }
 
-    progSel.addEventListener('change', refreshSubjects);
-    yearSel.addEventListener('change', refreshSubjects);
-    semSel.addEventListener('change',  refreshSubjects);
-
-    subjSel.addEventListener('change', () => {
-        saveBtn.disabled = !subjSel.value;
-    });
-
-    // Initial load with instructor's default program pre-selected
-    await refreshSubjects();
+    subjSel.addEventListener('change', () => { saveBtn.disabled = !subjSel.value; });
 
     overlay.querySelector('#modal-save').addEventListener('click', async () => {
         const offeredId = parseInt(subjSel.value);
@@ -520,14 +413,12 @@ async function openAddSubjectModal(container, sectionId) {
             overlay.querySelector('#modal-alert').innerHTML = '<div class="alert alert-error">Please select a subject</div>';
             return;
         }
-
         const r = await Api.post('/SectionsAPI.php?action=add-subject', {
-            section_id: sectionId,
-            subject_id: offeredId,   // API auto-creates subject_offered if needed
-            schedule: overlay.querySelector('#m-schedule').value.trim(),
-            room: overlay.querySelector('#m-room').value.trim()
+            section_id:         sectionId,
+            subject_offered_id: offeredId,
+            schedule:           overlay.querySelector('#m-schedule').value.trim(),
+            room:               overlay.querySelector('#m-room').value.trim(),
         });
-
         if (r.success) { overlay.remove(); renderList(container); }
         else overlay.querySelector('#modal-alert').innerHTML = `<div class="alert alert-error">${r.message}</div>`;
     });

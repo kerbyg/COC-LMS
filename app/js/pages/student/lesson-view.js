@@ -30,6 +30,13 @@ export async function render(container, params) {
     const videoLinks = materials.filter(m => m.material_type === 'link' && (m.file_type === 'youtube' || m.file_type === 'vimeo'));
     const otherMaterials = materials.filter(m => !(m.material_type === 'link' && (m.file_type === 'youtube' || m.file_type === 'vimeo')));
 
+    // Fetch quizzes linked to this lesson
+    let linkedQuizzes = [];
+    try {
+        const qRes = await Api.get('/QuizzesAPI.php?action=by-lesson&lesson_id=' + lessonId);
+        if (qRes.success) linkedQuizzes = qRes.data || [];
+    } catch (_) { /* non-fatal */ }
+
     container.innerHTML = `
         <style>${getStyles()}</style>
         <div class="lv-wrap">
@@ -38,7 +45,7 @@ export async function render(container, params) {
                 Back to ${esc(lesson.subject_code)} Lessons
             </a>
 
-            ${!d.prerequisite_met ? renderLocked(d.prerequisite_lesson) : renderContent(lesson, d, allLessons, completedCount, videoLinks, otherMaterials)}
+            ${!d.prerequisite_met ? renderLocked(d.prerequisite_lesson) : renderContent(lesson, d, allLessons, completedCount, videoLinks, otherMaterials, linkedQuizzes)}
         </div>
     `;
 
@@ -66,7 +73,7 @@ function renderLocked(prereq) {
         </div>`;
 }
 
-function renderContent(lesson, d, allLessons, completedCount, videoLinks, otherMaterials) {
+function renderContent(lesson, d, allLessons, completedCount, videoLinks, otherMaterials, linkedQuizzes = []) {
     return `
         <div class="lesson-layout">
             <!-- Sidebar -->
@@ -170,6 +177,9 @@ function renderContent(lesson, d, allLessons, completedCount, videoLinks, otherM
                     </div>
                 </div>` : ''}
 
+                <!-- Related Quizzes -->
+                ${linkedQuizzes.length > 0 ? renderQuizzesCard(linkedQuizzes) : ''}
+
                 <!-- Actions -->
                 <div class="actions-card">
                     ${!d.is_completed
@@ -198,6 +208,53 @@ function renderContent(lesson, d, allLessons, completedCount, videoLinks, otherM
                         </a>`
                         : ''}
                 </div>
+            </div>
+        </div>`;
+}
+
+function renderQuizzesCard(quizzes) {
+    const statusMeta = {
+        passed:    { label: 'Passed',    bg: '#E8F5E9', color: '#1B4D3E', icon: '✓' },
+        attempted: { label: 'Attempted', bg: '#EFF6FF', color: '#1d4ed8', icon: '↺' },
+        overdue:   { label: 'Overdue',   bg: '#FEE2E2', color: '#b91c1c', icon: '!' },
+        available: { label: 'Available', bg: '#F0FDF4', color: '#166534', icon: '▶' },
+    };
+
+    return `
+        <div class="resources-card">
+            <h3>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                Lesson Assessments
+            </h3>
+            <div class="quiz-list">
+                ${quizzes.map(q => {
+                    const s = statusMeta[q.status] || statusMeta.available;
+                    const due = q.due_date ? new Date(q.due_date).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : null;
+                    return `
+                        <div class="quiz-row">
+                            <div class="quiz-row-info">
+                                <div class="quiz-row-title">${esc(q.quiz_title)}</div>
+                                <div class="quiz-row-meta">
+                                    ${q.question_count} question${q.question_count != 1 ? 's' : ''}
+                                    ${q.time_limit ? ` &middot; ${q.time_limit} min` : ''}
+                                    ${due ? ` &middot; Due ${due}` : ''}
+                                    ${q.attempts_used > 0 ? ` &middot; ${q.attempts_used} attempt${q.attempts_used != 1 ? 's' : ''}` : ''}
+                                    ${q.best_score !== null ? ` &middot; Best: <strong>${parseFloat(q.best_score).toFixed(1)}%</strong>` : ''}
+                                </div>
+                            </div>
+                            <div class="quiz-row-right">
+                                <span class="quiz-status-badge" style="background:${s.bg};color:${s.color}">${s.icon} ${s.label}</span>
+                                ${q.can_take
+                                    ? `<a href="#student/take-quiz?quiz_id=${q.quiz_id}" class="btn-take-quiz">
+                                        ${q.attempts_used > 0 ? 'Retake' : 'Take Quiz'}
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                       </a>`
+                                    : `<span class="btn-take-quiz disabled">Closed</span>`}
+                            </div>
+                        </div>`;
+                }).join('')}
             </div>
         </div>`;
 }
@@ -483,6 +540,30 @@ function getStyles() {
     padding:4px 12px; border:1px solid #1B4D3E; border-radius:6px;
 }
 .res-download-btn:hover { background:#E8F5E9; }
+
+/* Quiz list */
+.quiz-list { display:flex; flex-direction:column; gap:10px; }
+.quiz-row {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px 16px; background:#f9fafb; border:1px solid #e8e8e8; border-radius:10px;
+}
+.quiz-row:hover { border-color:#1B4D3E; background:#f8fdf9; }
+.quiz-row-info { flex:1; min-width:0; }
+.quiz-row-title { font-size:14px; font-weight:600; color:#1a1a1a; margin-bottom:4px; }
+.quiz-row-meta { font-size:12px; color:#6b7280; }
+.quiz-row-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.quiz-status-badge {
+    font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px;
+    white-space:nowrap;
+}
+.btn-take-quiz {
+    display:inline-flex; align-items:center; gap:6px;
+    background:#1B4D3E; color:#fff; border:none; border-radius:8px;
+    padding:7px 14px; font-size:13px; font-weight:600; text-decoration:none;
+    cursor:pointer; transition:background .2s; white-space:nowrap;
+}
+.btn-take-quiz:hover { background:#2D6A4F; }
+.btn-take-quiz.disabled { background:#d1d5db; color:#6b7280; cursor:not-allowed; pointer-events:none; }
 
 /* Actions */
 .btn-complete {

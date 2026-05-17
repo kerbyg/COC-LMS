@@ -24,7 +24,8 @@ async function renderList(container) {
             .btn-primary { background:linear-gradient(135deg,#00461B,#006428); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; transition:all .2s; }
             .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,70,27,.3); }
 
-            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #e8e8e8; }
+            .table-wrap { border:1px solid #e8e8e8; border-radius:12px; overflow:hidden; background:#fff; }
+            .data-table { width:100%; border-collapse:collapse; background:#fff; }
             .data-table th { text-align:left; padding:14px 16px; font-size:12px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
             .data-table td { padding:14px 16px; border-bottom:1px solid #f5f5f5; font-size:14px; }
             .data-table tr:last-child td { border-bottom:none; }
@@ -38,10 +39,10 @@ async function renderList(container) {
             .badge-active { background:#E8F5E9; color:#1B4D3E; }
             .badge-inactive { background:#FEE2E2; color:#b91c1c; }
 
-            .actions-cell { position:relative; }
-            .btn-actions { background:none; border:1px solid #e0e0e0; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+            .actions-cell { position:relative; text-align:right; }
+            .btn-actions { background:none; border:1px solid #e0e0e0; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:16px; display:inline-flex; align-items:center; justify-content:center; }
             .btn-actions:hover { background:#f5f5f5; }
-            .actions-dropdown { display:none; position:absolute; right:0; top:100%; background:#fff; border:1px solid #e8e8e8; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.12); min-width:160px; z-index:50; overflow:hidden; }
+            .actions-dropdown { display:none; position:fixed; background:#fff; border:1px solid #e8e8e8; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.15); min-width:160px; z-index:9999; overflow:hidden; }
             .actions-dropdown.show { display:block; }
             .actions-dropdown a { display:flex; align-items:center; gap:8px; padding:10px 16px; font-size:13px; color:#404040; cursor:pointer; text-decoration:none; }
             .actions-dropdown a:hover { background:#f5f5f5; }
@@ -74,7 +75,7 @@ async function renderList(container) {
             <button class="btn-primary" id="btn-add">+ Add Department</button>
         </div>
 
-        <table class="data-table">
+        <div class="table-wrap"><table class="data-table">
             <thead>
                 <tr>
                     <th>Code</th>
@@ -107,7 +108,7 @@ async function renderList(container) {
                     </tr>
                   `).join('')}
             </tbody>
-        </table>
+        </table></div>
     `;
 
     // Events
@@ -116,11 +117,18 @@ async function renderList(container) {
     container.querySelectorAll('.btn-actions').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
+            const dropdown = container.querySelector(`[data-dropdown="${btn.dataset.id}"]`);
+            const isShown = dropdown.classList.contains('show');
             container.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-            container.querySelector(`[data-dropdown="${btn.dataset.id}"]`).classList.toggle('show');
+            if (!isShown) {
+                const rect = btn.getBoundingClientRect();
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+                dropdown.classList.add('show');
+            }
         });
     });
-    document.addEventListener('click', () => container.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show')), { once: true });
+    document.addEventListener('click', () => container.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show')));
 
     container.querySelectorAll('[data-edit]').forEach(a => {
         a.addEventListener('click', (e) => {
