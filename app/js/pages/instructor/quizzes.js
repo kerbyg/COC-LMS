@@ -203,6 +203,23 @@ function openModal(container, filterSubject, quiz = null) {
                     <div class="form-group"><label class="form-label">Max Attempts</label><input type="number" class="form-input" id="m-attempts" value="${quiz?.max_attempts||3}" min="1"></div>
                     <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="m-status"><option value="draft" ${quiz?.status==='draft'||!quiz?'selected':''}>Draft</option><option value="published" ${quiz?.status==='published'?'selected':''}>Published</option></select></div>
                 </div>
+                <div style="border:1px solid #e8e8e8;border-radius:10px;padding:14px 16px;margin-top:4px;">
+                    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;">Quiz Behavior</div>
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;">
+                        <input type="checkbox" id="m-randomize" style="margin-top:2px;width:15px;height:15px;accent-color:#1B4D3E;flex-shrink:0;" ${quiz?.is_randomized?'checked':''}>
+                        <div>
+                            <div style="font-size:13px;font-weight:600;color:#111827;">Randomize questions &amp; answers</div>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:1px;">Shuffle question order and answer choices for each student — prevents answer sharing</div>
+                        </div>
+                    </label>
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                        <input type="checkbox" id="m-one-at-a-time" style="margin-top:2px;width:15px;height:15px;accent-color:#1B4D3E;flex-shrink:0;" ${quiz?.one_at_a_time?'checked':''}>
+                        <div>
+                            <div style="font-size:13px;font-weight:600;color:#111827;">One question at a time</div>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:1px;">Students see only one question and cannot go back to previous ones</div>
+                        </div>
+                    </label>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary modal-cancel">Cancel</button>
@@ -218,13 +235,15 @@ function openModal(container, filterSubject, quiz = null) {
 
     overlay.querySelector('#modal-save').addEventListener('click', async () => {
         const payload = {
-            subject_id: isEdit ? quiz.subject_id : overlay.querySelector('#m-subject').value,
-            quiz_title: overlay.querySelector('#m-title').value,
+            subject_id:    isEdit ? quiz.subject_id : overlay.querySelector('#m-subject').value,
+            quiz_title:    overlay.querySelector('#m-title').value,
             quiz_description: overlay.querySelector('#m-desc').value,
-            time_limit: parseInt(overlay.querySelector('#m-time').value),
-            passing_rate: parseInt(overlay.querySelector('#m-pass').value),
-            max_attempts: parseInt(overlay.querySelector('#m-attempts').value),
-            status: overlay.querySelector('#m-status').value,
+            time_limit:    parseInt(overlay.querySelector('#m-time').value),
+            passing_rate:  parseInt(overlay.querySelector('#m-pass').value),
+            max_attempts:  parseInt(overlay.querySelector('#m-attempts').value),
+            status:        overlay.querySelector('#m-status').value,
+            is_randomized: overlay.querySelector('#m-randomize').checked ? 1 : 0,
+            one_at_a_time: overlay.querySelector('#m-one-at-a-time').checked ? 1 : 0,
         };
         if (isEdit) payload.quiz_id = quiz.quiz_id;
         const action = isEdit ? 'update' : 'create';

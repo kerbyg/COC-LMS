@@ -17,6 +17,8 @@ export async function render(container) {
 
     const s = result.data.stats;
     const users = result.data.recent_users;
+    const enrollmentByDept  = result.data.enrollment_by_dept  || [];
+    const programEnrollment = result.data.program_enrollment  || [];
     const today = new Date().toLocaleDateString('en-US', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
@@ -101,15 +103,14 @@ export async function render(container) {
             .dash-card-head a:hover { text-decoration:underline; }
 
             /* ── User table ── */
-            .user-table { width:100%; border-collapse:collapse; }
+            .user-table { width:100%; border-collapse:collapse; border-radius:10px; overflow:hidden; border:2px solid #1B4D3E; }
             .user-table th {
-                padding:10px 16px; font-size:11px; font-weight:700; color:#9ca3af;
-                text-transform:uppercase; letter-spacing:.06em;
-                background:#fafbfc; border-bottom:1px solid #f3f4f6; text-align:left;
+                padding:10px 14px; font-size:12px; font-weight:700; color:#404040;
+                background:#f7f7f7; border-bottom:1px solid #ccc; text-align:left;
             }
-            .user-table td { padding:12px 16px; border-bottom:1px solid #f9fafb; vertical-align:middle; }
+            .user-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; vertical-align:middle; font-size:13px; }
             .user-table tr:last-child td { border-bottom:none; }
-            .user-table tr:hover td { background:#fafbfc; }
+            .user-table tr:hover td { background:#f9fffe; }
             .user-av {
                 width:36px; height:36px; border-radius:10px; font-weight:700; font-size:12px;
                 display:flex; align-items:center; justify-content:center; flex-shrink:0;
@@ -160,8 +161,123 @@ export async function render(container) {
             .qa-item:hover .qa-text { color:#1B4D3E; }
             .qa-item:hover .qa-arrow { color:#1B4D3E; }
 
+            /* ── Enrollment Overview ── */
+            .enroll-section { margin-top: 24px; }
+            .enroll-panel {
+                background: #fff; border-radius: 16px;
+                border: 1px solid #edf0f4;
+                box-shadow: 0 1px 4px rgba(0,0,0,.05);
+                overflow: hidden;
+            }
+            .enroll-panel-head {
+                padding: 18px 24px;
+                border-bottom: 1px solid #f3f4f6;
+                display: flex; align-items: center; justify-content: space-between;
+            }
+            .enroll-panel-head-left h3 { font-size:15px; font-weight:700; color:#111827; margin:0 0 2px; }
+            .enroll-panel-head-left p  { font-size:12.5px; color:#9ca3af; margin:0; }
+            .enroll-total-badge {
+                background: #E8F5E9; color: #1B4D3E;
+                font-size: 12px; font-weight: 700;
+                padding: 5px 14px; border-radius: 20px;
+            }
+            /* column header */
+            .enroll-col-head {
+                display: grid;
+                grid-template-columns: 36px 1fr 90px 80px 80px 28px;
+                align-items: center;
+                gap: 12px;
+                padding: 8px 20px;
+                background: #fafbfc;
+                border-bottom: 1px solid #f3f4f6;
+            }
+            .enroll-col-head span {
+                font-size: 10.5px; font-weight: 700; color: #9ca3af;
+                text-transform: uppercase; letter-spacing: .06em;
+            }
+            .enroll-col-head span:nth-child(3),
+            .enroll-col-head span:nth-child(4),
+            .enroll-col-head span:nth-child(5) { text-align: center; }
+            /* each department row */
+            .dept-row {
+                border-bottom: 1px solid #f9fafb;
+                transition: background .12s;
+            }
+            .dept-row:last-child { border-bottom: none; }
+            .dept-row-main {
+                display: grid;
+                grid-template-columns: 36px 1fr 90px 80px 80px 28px;
+                align-items: center;
+                gap: 12px;
+                padding: 13px 20px;
+                cursor: pointer;
+                user-select: none;
+            }
+            .dept-row:hover .dept-row-main { background: #fafbfc; }
+            .dept-rank {
+                width: 28px; height: 28px; border-radius: 8px;
+                background: #f3f4f6; color: #6b7280;
+                font-size: 12px; font-weight: 700;
+                display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0;
+            }
+            .dept-rank.top { background: #E8F5E9; color: #1B4D3E; }
+            .dept-row-info { min-width: 0; }
+            .dept-row-name {
+                font-size: 13.5px; font-weight: 700; color: #111827;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .dept-row-meta { font-size: 11.5px; color: #9ca3af; margin-top: 1px; }
+            .dept-row-count {
+                text-align: center;
+                font-size: 18px; font-weight: 800; color: #1B4D3E;
+            }
+            .dept-row-count.zero { color: #d1d5db; }
+            .dept-row-num {
+                text-align: center;
+                font-size: 13px; font-weight: 600; color: #374151;
+            }
+            /* inline bar cell */
+            .dept-bar-cell { display: flex; align-items: center; gap: 8px; }
+            .dept-bar-track {
+                flex: 1; height: 6px; background: #f0f0f0;
+                border-radius: 10px; overflow: hidden;
+            }
+            .dept-bar-fill {
+                height: 100%; border-radius: 10px;
+                background: linear-gradient(90deg, #1B4D3E, #40916C);
+                min-width: 3px; transition: width .5s ease;
+            }
+            .dept-bar-fill.zero { background: #e5e7eb; }
+            /* chevron */
+            .dept-chevron {
+                color: #d1d5db; transition: transform .2s, color .15s;
+                display: flex; align-items: center;
+            }
+            .dept-row.open .dept-chevron { transform: rotate(90deg); color: #1B4D3E; }
+            /* expandable program section */
+            .dept-prog-expand {
+                display: none;
+                padding: 0 20px 14px 68px;
+                flex-wrap: wrap; gap: 7px;
+            }
+            .dept-row.open .dept-prog-expand { display: flex; }
+            .prog-chip {
+                display: inline-flex; align-items: center; gap: 6px;
+                background: #f3f4f6; border-radius: 20px;
+                padding: 4px 11px; font-size: 12px;
+                border: 1px solid #e5e7eb;
+            }
+            .prog-chip-code { font-weight: 700; color: #374151; }
+            .prog-chip-count {
+                background: #E8F5E9; color: #1B4D3E;
+                font-weight: 700; font-size: 11px;
+                padding: 1px 7px; border-radius: 20px;
+            }
+            .prog-chip-count.zero { background: #f3f4f6; color: #9ca3af; }
+
             @media(max-width:1100px) { .stat-row { grid-template-columns:repeat(2,1fr); } }
-            @media(max-width:900px)  { .dash-grid { grid-template-columns:1fr; } }
+            @media(max-width:900px)  { .dash-grid { grid-template-columns:1fr; } .enroll-col-head { display:none; } .dept-row-main { grid-template-columns:36px 1fr auto 28px; } .dept-row-num { display:none; } }
             @media(max-width:600px)  { .stat-row { grid-template-columns:1fr; } }
         </style>
 
@@ -328,8 +444,82 @@ export async function render(container) {
                     </div>
                 </div>
             </div>
+
+            <!-- Department Enrollment Overview -->
+            <div class="enroll-section">
+                <div class="enroll-panel">
+                    <div class="enroll-panel-head">
+                        <div class="enroll-panel-head-left">
+                            <h3>Department Enrollment Overview</h3>
+                            <p>Students currently enrolled · click a row to see program breakdown</p>
+                        </div>
+                        <span class="enroll-total-badge">${s.total_enrolled} Total Enrolled</span>
+                    </div>
+
+                    ${enrollmentByDept.length === 0
+                        ? `<div style="padding:32px;text-align:center;color:#9ca3af;font-size:13px;">No active departments found.</div>`
+                        : (() => {
+                            const maxEnrolled = Math.max(1, ...enrollmentByDept.map(d => parseInt(d.enrolled_count) || 0));
+                            return `
+                            <div class="enroll-col-head">
+                                <span></span>
+                                <span>Department</span>
+                                <span>Enrolled</span>
+                                <span>Programs</span>
+                                <span>Sections</span>
+                                <span></span>
+                            </div>
+                            ${enrollmentByDept.map((dept, i) => {
+                                const count   = parseInt(dept.enrolled_count) || 0;
+                                const pct     = Math.round((count / maxEnrolled) * 100);
+                                const isTop   = i === 0 && count > 0;
+                                const deptProgs = programEnrollment.filter(p => p.department_id == dept.department_id);
+                                return `
+                                <div class="dept-row" data-dept="${dept.department_id}">
+                                    <div class="dept-row-main">
+                                        <div class="dept-rank ${isTop ? 'top' : ''}">${i + 1}</div>
+                                        <div class="dept-row-info">
+                                            <div class="dept-row-name">${escapeHtml(dept.department_name)}</div>
+                                            <div class="dept-row-meta">${escapeHtml(dept.department_code || '')}</div>
+                                        </div>
+                                        <div class="dept-bar-cell">
+                                            <div class="dept-bar-track">
+                                                <div class="dept-bar-fill ${count === 0 ? 'zero' : ''}" style="width:${pct}%"></div>
+                                            </div>
+                                            <span class="dept-row-count ${count === 0 ? 'zero' : ''}">${count}</span>
+                                        </div>
+                                        <div class="dept-row-num">${dept.program_count}</div>
+                                        <div class="dept-row-num">${dept.section_count}</div>
+                                        <div class="dept-chevron">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                                        </div>
+                                    </div>
+                                    <div class="dept-prog-expand">
+                                        ${deptProgs.length > 0
+                                            ? deptProgs.map(p => `
+                                                <span class="prog-chip" title="${escapeHtml(p.program_name)}">
+                                                    <span class="prog-chip-code">${escapeHtml(p.program_code)}</span>
+                                                    <span class="prog-chip-count ${parseInt(p.enrolled_count) === 0 ? 'zero' : ''}">${p.enrolled_count}</span>
+                                                </span>`).join('')
+                                            : `<span style="font-size:12px;color:#9ca3af;font-style:italic;">No programs linked</span>`
+                                        }
+                                    </div>
+                                </div>`;
+                            }).join('')}`;
+                        })()
+                    }
+                </div>
+            </div>
+
         </div>
     `;
+
+    // Toggle program breakdown on row click
+    container.querySelectorAll('.dept-row').forEach(row => {
+        row.querySelector('.dept-row-main').addEventListener('click', () => {
+            row.classList.toggle('open');
+        });
+    });
 }
 
 function escapeHtml(str) {

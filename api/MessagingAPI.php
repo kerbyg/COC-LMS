@@ -23,12 +23,13 @@ if (!Auth::check()) {
 $action = $_GET['action'] ?? 'threads';
 
 switch ($action) {
-    case 'contacts':     handleContacts();    break;
-    case 'threads':      handleThreads();     break;
-    case 'messages':     handleMessages();    break;
-    case 'unread_count': handleUnreadCount(); break;
-    case 'send':         handleSend();        break;
-    case 'mark_read':    handleMarkRead();    break;
+    case 'contacts':      handleContacts();     break;
+    case 'threads':       handleThreads();      break;
+    case 'messages':      handleMessages();     break;
+    case 'unread_count':  handleUnreadCount();  break;
+    case 'send':          handleSend();         break;
+    case 'mark_read':     handleMarkRead();     break;
+    case 'mark_all_read': handleMarkAllRead();  break;
     default:
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
 }
@@ -201,7 +202,7 @@ function handleSend() {
     }
 }
 
-// ─── Mark conversation as read ─────────────────────────────────────────────
+// ─── Mark one conversation as read ────────────────────────────────────────
 
 function handleMarkRead() {
     $me   = Auth::id();
@@ -213,9 +214,28 @@ function handleMarkRead() {
         return;
     }
 
-    pdo()->prepare(
-        "UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ? AND is_read = 0"
-    )->execute([$otherId, $me]);
+    try {
+        pdo()->prepare(
+            "UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ? AND is_read = 0"
+        )->execute([$otherId, $me]);
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Failed to mark as read']);
+    }
+}
 
-    echo json_encode(['success' => true]);
+// ─── Mark ALL unread messages as read (single query) ──────────────────────
+
+function handleMarkAllRead() {
+    $me = Auth::id();
+    try {
+        $stmt = pdo()->prepare(
+            "UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND is_read = 0"
+        );
+        $stmt->execute([$me]);
+        $affected = $stmt->rowCount();
+        echo json_encode(['success' => true, 'marked' => $affected]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Failed to mark all as read']);
+    }
 }

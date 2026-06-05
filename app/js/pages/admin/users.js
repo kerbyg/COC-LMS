@@ -42,11 +42,11 @@ async function renderList(container, filters = {}) {
             .filters input { min-width:240px; }
             .filters .clear-btn { color:#00461B; font-size:13px; cursor:pointer; text-decoration:underline; }
 
-            .users-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #e8e8e8; }
-            .users-table th { text-align:left; padding:14px 16px; font-size:12px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
-            .users-table td { padding:14px 16px; border-bottom:1px solid #f5f5f5; font-size:14px; }
+            .users-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:2px solid #1B4D3E; }
+            .users-table th { text-align:left; padding:10px 14px; font-size:12px; font-weight:700; color:#404040; background:#f7f7f7; border-bottom:1px solid #ccc; }
+            .users-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; }
             .users-table tr:last-child td { border-bottom:none; }
-            .users-table tr:hover td { background:#fafafa; }
+            .users-table tr:hover td { background:#f9fffe; }
 
             .user-cell { display:flex; align-items:center; gap:12px; }
             .user-av { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0; }

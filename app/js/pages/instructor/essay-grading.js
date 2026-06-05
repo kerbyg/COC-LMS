@@ -151,23 +151,30 @@ async function loadList(container, subjectId) {
     const res = await Api.get(url);
     const attempts = res.success ? res.data : [];
 
-    // Stats
-    const totalAnswers = attempts.reduce((s, a) => s + parseInt(a.pending_count || 0), 0);
+    // Stats — count only attempts that still have ungraded answers
+    const pendingAttempts  = attempts.filter(a => parseInt(a.pending_count || 0) > 0);
+    const totalAnswers     = pendingAttempts.reduce((s, a) => s + parseInt(a.pending_count || 0), 0);
+    const flaggedAttempts  = attempts.filter(a => parseInt(a.tab_switch_count || 0) > 0);
     statsEl.innerHTML = `
         <div class="eg-stat">
             <div class="eg-stat-icon warn">✏️</div>
-            <div><span class="eg-stat-num">${attempts.length}</span><span class="eg-stat-lbl">Submissions Pending</span></div>
+            <div><span class="eg-stat-num">${pendingAttempts.length}</span><span class="eg-stat-lbl">Submissions Pending</span></div>
         </div>
         <div class="eg-stat">
             <div class="eg-stat-icon ok">✅</div>
             <div><span class="eg-stat-num">${totalAnswers}</span><span class="eg-stat-lbl">Answers to Grade</span></div>
-        </div>`;
+        </div>
+        ${flaggedAttempts.length > 0 ? `
+        <div class="eg-stat" style="border-color:#FCA5A5;">
+            <div class="eg-stat-icon" style="background:#FEE2E2;">🚨</div>
+            <div><span class="eg-stat-num" style="color:#b91c1c;">${flaggedAttempts.length}</span><span class="eg-stat-lbl">Integrity Flags</span></div>
+        </div>` : ''}`;
 
     if (attempts.length === 0) {
         wrap.innerHTML = `<div class="empty-state">
-            <div style="font-size:48px;margin-bottom:12px;">✅</div>
-            <h3>All Caught Up!</h3>
-            <p>No subjective responses are waiting to be graded.</p>
+            <div style="font-size:48px;margin-bottom:12px;">📝</div>
+            <h3>No Subjective Submissions</h3>
+            <p>No students have submitted quizzes with essay or short answer questions yet.</p>
         </div>`;
         return;
     }
@@ -197,10 +204,13 @@ async function loadList(container, subjectId) {
                     <div class="eg-avatar">${esc(initials)}</div>
                     <div>
                         <div class="eg-student">${esc(st.first_name)} ${esc(st.last_name)}</div>
-                        <div class="eg-meta">${totalAttempts} submission${totalAttempts!==1?'s':''} to review</div>
+                        <div class="eg-meta">${totalAttempts} submission${totalAttempts!==1?'s':''}</div>
                     </div>
                 </div>
-                <span class="eg-pending-count">${totalPending} pending</span>
+                ${totalPending > 0
+                    ? `<span class="eg-pending-count">${totalPending} pending</span>`
+                    : `<span class="eg-pending-count" style="background:#E8F5E9;color:#1B4D3E;">✓ all graded</span>`
+                }
                 <span style="font-size:12px;color:#9ca3af;">${totalAttempts} attempt${totalAttempts!==1?'s':''}</span>
             </div>
             <div class="eg-attempts-list" id="${groupId}">
@@ -214,15 +224,23 @@ async function loadList(container, subjectId) {
                         <div class="eg-attempt-meta">
                             <strong>${esc(a.quiz_title)}</strong>
                             <span>${esc(a.subject_code)} &bull; ${date}</span>
+                            ${parseInt(a.tab_switch_count || 0) > 0
+                                ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#FEE2E2;color:#b91c1c;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-top:3px;">
+                                    🚨 ${a.tab_switch_count} tab switch${parseInt(a.tab_switch_count)>1?'es':''}
+                                   </span>`
+                                : ''}
                         </div>
                         <div class="eg-progress" style="min-width:120px;">
                             <div class="eg-prog-label"><span style="font-size:11px;color:#888;">${graded}/${total} graded</span></div>
                             <div class="eg-prog-bar"><div class="eg-prog-fill" style="width:${pct}%"></div></div>
                         </div>
-                        <span class="eg-pending-count" style="font-size:11px;">${a.pending_count} pending</span>
-                        <button class="eg-btn grade-btn" data-attempt="${a.attempt_id}">
+                        ${parseInt(a.pending_count) > 0
+                            ? `<span class="eg-pending-count" style="font-size:11px;">${a.pending_count} pending</span>`
+                            : `<span class="eg-pending-count" style="font-size:11px;background:#E8F5E9;color:#1B4D3E;">✓ graded</span>`
+                        }
+                        <button class="eg-btn grade-btn" data-attempt="${a.attempt_id}" data-switches="${a.tab_switch_count || 0}">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            Grade
+                            ${parseInt(a.pending_count) > 0 ? 'Grade' : 'Review'}
                         </button>
                     </div>`;
                 }).join('')}
@@ -246,12 +264,12 @@ async function loadList(container, subjectId) {
     wrap.querySelectorAll('.grade-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            openPanel(container, btn.dataset.attempt, subjectId);
+            openPanel(container, btn.dataset.attempt, subjectId, parseInt(btn.dataset.switches || 0));
         });
     });
 }
 
-async function openPanel(container, attemptId, subjectId) {
+async function openPanel(container, attemptId, subjectId, tabSwitches = 0) {
     const overlay = document.createElement('div');
     overlay.className = 'eg-overlay';
     overlay.innerHTML = `<div class="eg-panel">
@@ -291,7 +309,23 @@ async function openPanel(container, attemptId, subjectId) {
     document.getElementById('panel-sub').textContent =
         `${attempt.first_name} ${attempt.last_name}${attempt.student_id ? ' (' + attempt.student_id + ')' : ''} — ${attempt.subject_code}`;
 
-    let html = `<div class="attempt-meta">
+    // Integrity alert — shown at top of panel if student switched tabs
+    const switches = parseInt(attempt.tab_switch_count || tabSwitches || 0);
+    const integrityHtml = switches > 0 ? `
+        <div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;">
+            <span style="font-size:22px;flex-shrink:0;">🚨</span>
+            <div>
+                <div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:2px;">
+                    Integrity Flag — ${switches} tab switch${switches > 1 ? 'es' : ''} detected
+                </div>
+                <div style="font-size:12px;color:#b91c1c;">
+                    This student left the quiz tab ${switches} time${switches > 1 ? 's' : ''} while taking this quiz.
+                    ${switches >= 3 ? ' <strong>Multiple violations — consider reviewing this submission carefully.</strong>' : ''}
+                </div>
+            </div>
+        </div>` : '';
+
+    let html = `${integrityHtml}<div class="attempt-meta">
         <div><strong>${attempt.earned_points}/${attempt.total_points} pts</strong>Current Score</div>
         <div><strong>${attempt.percentage}%</strong>Percentage</div>
         <div><strong>${attempt.passing_rate}%</strong>Passing Rate</div>
@@ -328,7 +362,13 @@ async function openPanel(container, attemptId, subjectId) {
                 ${isAiGraded ? `<div style="background:#EDE9FE;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#5B21B6;">
                     🤖 <strong>AI Score: ${currentPts}/${a.max_points} pts</strong>${currentFb ? ` — <em>${esc(currentFb)}</em>` : ''}<br>
                     <span style="opacity:.75">Review and adjust below if needed.</span>
-                </div>` : ''}
+                </div>` : `<div id="ai-hint-${a.answer_id}" style="background:#F5F3FF;border:1px dashed #C4B5FD;border-radius:8px;padding:9px 14px;margin-bottom:10px;font-size:12px;color:#7C3AED;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                    <span>🤖 AI grading didn't run for this answer.</span>
+                    <button class="ai-grade-btn" id="aibtn_${a.answer_id}" data-answer="${a.answer_id}" data-max="${a.max_points}"
+                        style="background:#7C3AED;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                        🤖 Auto-grade with AI
+                    </button>
+                </div>`}
                 <div class="grade-row">
                     <div class="pts-wrap">
                         <span class="pts-label">Points</span>
@@ -370,6 +410,11 @@ async function openPanel(container, attemptId, subjectId) {
 
     document.getElementById('panel-body').innerHTML = html;
 
+    // Wire up AI grade buttons
+    overlay.querySelectorAll('.ai-grade-btn').forEach(btn => {
+        btn.addEventListener('click', () => runAiGrade(overlay, btn.dataset.answer, parseFloat(btn.dataset.max)));
+    });
+
     // Wire up save buttons
     overlay.querySelectorAll('.save-btn').forEach(btn => {
         btn.addEventListener('click', () => saveAnswer(overlay, btn.dataset.answer, parseFloat(btn.dataset.max)));
@@ -400,6 +445,50 @@ function checkFinalize(overlay, attemptId, closePanel, subjectId, container) {
             alert(res.message || 'Failed to finalize');
         }
     };
+}
+
+async function runAiGrade(overlay, answerId, maxPts) {
+    const btn  = document.getElementById('aibtn_' + answerId);
+    const hint = document.getElementById('ai-hint-' + answerId);
+    const saveBtn = document.getElementById('sbtn_' + answerId);
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Grading…';
+
+    const res = await Api.post('/QuizAttemptsAPI.php?action=ai-grade-answer', {
+        answer_id: parseInt(answerId)
+    });
+
+    if (res.success) {
+        // Pre-fill the score and feedback inputs
+        const ptsInput = document.getElementById('pts_' + answerId);
+        const fbInput  = document.getElementById('fb_'  + answerId);
+        if (ptsInput) ptsInput.value = res.score;
+        if (fbInput)  fbInput.value  = res.feedback || '';
+
+        // Replace the hint box with the purple AI result summary
+        if (hint) {
+            hint.style.background  = '#EDE9FE';
+            hint.style.border      = 'none';
+            hint.style.color       = '#5B21B6';
+            hint.innerHTML = `🤖 <strong>AI Score: ${res.score}/${maxPts} pts</strong>${res.feedback ? ` — <em>${esc(res.feedback)}</em>` : ''}<br><span style="opacity:.75">Review and adjust below if needed.</span>`;
+        }
+
+        // Update save button label to "Override / Confirm Grade"
+        if (saveBtn) {
+            saveBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg> Override / Confirm Grade';
+        }
+    } else {
+        btn.disabled = false;
+        btn.textContent = '🤖 Retry AI grade';
+        if (hint) {
+            const msgEl = hint.querySelector('span');
+            if (msgEl) msgEl.textContent = res.message || 'AI grading failed. Check Groq API key in Settings.';
+            hint.style.background = '#FEE2E2';
+            hint.style.border     = '1px dashed #FCA5A5';
+            hint.style.color      = '#b91c1c';
+        }
+    }
 }
 
 async function saveAnswer(overlay, answerId, maxPts) {

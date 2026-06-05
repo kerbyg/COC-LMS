@@ -111,8 +111,8 @@ function getQuizzes() {
                 q.created_at,
                 (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
                 (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
-                (SELECT MAX(score) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score,
-                (SELECT attempt_id FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? ORDER BY score DESC LIMIT 1) as best_attempt_id
+                (SELECT MAX(percentage) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score,
+                (SELECT attempt_id FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ? ORDER BY percentage DESC LIMIT 1) as best_attempt_id
             FROM quiz q
             WHERE q.subject_id = ? AND q.status = 'published'
             ORDER BY q.due_date ASC, q.created_at ASC",
@@ -177,7 +177,7 @@ function getQuizzesByLesson() {
                 q.due_date,
                 (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.quiz_id) as question_count,
                 (SELECT COUNT(*) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as attempts_used,
-                (SELECT MAX(score) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score
+                (SELECT MAX(percentage) FROM student_quiz_attempts WHERE quiz_id = q.quiz_id AND user_student_id = ?) as best_score
             FROM quiz q
             JOIN quiz_lessons ql ON ql.quiz_id = q.quiz_id
             WHERE ql.lessons_id = ? AND q.status = 'published'
@@ -317,10 +317,12 @@ function getQuestions() {
             'success' => true,
             'data' => [
                 'quiz' => [
-                    'quiz_id' => $quiz['quiz_id'],
-                    'title' => $quiz['quiz_title'],
-                    'time_limit' => $quiz['time_limit'],
-                    'passing_rate' => $quiz['passing_rate']
+                    'quiz_id'       => $quiz['quiz_id'],
+                    'title'         => $quiz['quiz_title'],
+                    'time_limit'    => $quiz['time_limit'],
+                    'passing_rate'  => $quiz['passing_rate'],
+                    'is_randomized' => !empty($quiz['is_randomized']),
+                    'one_at_a_time' => !empty($quiz['one_at_a_time']),
                 ],
                 'questions' => $questions
             ]
@@ -357,8 +359,8 @@ function createQuiz() {
     $subjectId = (int)($d['subject_id'] ?? 0); $title = trim($d['quiz_title'] ?? '');
     if (!$subjectId || !$title) { echo json_encode(['success' => false, 'message' => 'Subject and title required']); return; }
     try {
-        pdo()->prepare("INSERT INTO quiz (subject_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, max_attempts, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,NOW(),NOW())")
-            ->execute([$subjectId, Auth::id(), $title, trim($d['quiz_description']??''), (int)($d['time_limit']??30), (int)($d['passing_rate']??60), (int)($d['max_attempts']??3), $d['status']??'draft']);
+        pdo()->prepare("INSERT INTO quiz (subject_id, user_teacher_id, quiz_title, quiz_description, time_limit, passing_rate, max_attempts, status, is_randomized, one_at_a_time, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())")
+            ->execute([$subjectId, Auth::id(), $title, trim($d['quiz_description']??''), (int)($d['time_limit']??30), (int)($d['passing_rate']??60), (int)($d['max_attempts']??3), $d['status']??'draft', empty($d['is_randomized'])?0:1, empty($d['one_at_a_time'])?0:1]);
         echo json_encode(['success' => true, 'message' => 'Quiz created', 'data' => ['id' => pdo()->lastInsertId()]]);
     } catch (Exception $e) { echo json_encode(['success' => false, 'message' => 'Failed to create quiz']); }
 }
@@ -368,8 +370,8 @@ function updateQuiz() {
     $id = (int)($d['quiz_id'] ?? 0);
     if (!$id) { echo json_encode(['success' => false, 'message' => 'Quiz ID required']); return; }
     try {
-        pdo()->prepare("UPDATE quiz SET quiz_title=?, quiz_description=?, time_limit=?, passing_rate=?, max_attempts=?, status=?, updated_at=NOW() WHERE quiz_id=? AND user_teacher_id=?")
-            ->execute([trim($d['quiz_title']??''), trim($d['quiz_description']??''), (int)($d['time_limit']??30), (int)($d['passing_rate']??60), (int)($d['max_attempts']??3), $d['status']??'draft', $id, Auth::id()]);
+        pdo()->prepare("UPDATE quiz SET quiz_title=?, quiz_description=?, time_limit=?, passing_rate=?, max_attempts=?, status=?, is_randomized=?, one_at_a_time=?, updated_at=NOW() WHERE quiz_id=? AND user_teacher_id=?")
+            ->execute([trim($d['quiz_title']??''), trim($d['quiz_description']??''), (int)($d['time_limit']??30), (int)($d['passing_rate']??60), (int)($d['max_attempts']??3), $d['status']??'draft', empty($d['is_randomized'])?0:1, empty($d['one_at_a_time'])?0:1, $id, Auth::id()]);
         echo json_encode(['success' => true, 'message' => 'Quiz updated']);
     } catch (Exception $e) { echo json_encode(['success' => false, 'message' => 'Failed']); }
 }

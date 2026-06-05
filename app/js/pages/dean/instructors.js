@@ -42,11 +42,11 @@ export async function render(container) {
             .di-stat-val { font-size:22px; font-weight:800; color:#262626; line-height:1.1; }
             .di-stat-label { font-size:12px; color:#737373; margin-top:2px; }
 
-            .di-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #e8e8e8; }
-            .di-table th { text-align:left; padding:14px 18px; font-size:11px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
-            .di-table td { padding:14px 18px; border-bottom:1px solid #f5f5f5; font-size:14px; }
+            .di-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:2px solid #1B4D3E; }
+            .di-table th { text-align:left; padding:10px 14px; font-size:12px; font-weight:700; color:#404040; background:#f7f7f7; border-bottom:1px solid #ccc; }
+            .di-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; }
             .di-table tr:last-child td { border-bottom:none; }
-            .di-table tr:hover td { background:#fafafa; }
+            .di-table tr:hover td { background:#f9fffe; }
 
             .di-user { display:flex; align-items:center; gap:12px; }
             .di-av { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#1e40af,#3b82f6); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0; }

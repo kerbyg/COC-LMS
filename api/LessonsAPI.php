@@ -290,9 +290,14 @@ function markComplete() {
 function getInstructorSubjects() {
     $userId = Auth::id();
     $subjects = db()->fetchAll(
+        // Only return subjects actually assigned to at least one active section.
+        // Subjects the dean assigned but not yet added to any section are excluded
+        // (same rule as the My Classes dashboard HAVING COUNT(DISTINCT sec.section_id) > 0).
         "SELECT DISTINCT s.subject_id, s.subject_code, s.subject_name
          FROM subject_offered so
-         JOIN subject s ON so.subject_id = s.subject_id
+         JOIN subject s          ON s.subject_id          = so.subject_id
+         JOIN section_subject ss ON ss.subject_offered_id = so.subject_offered_id
+                                AND ss.status = 'active'
          WHERE so.user_teacher_id = ? AND so.status = 'open'
          ORDER BY s.subject_code",
         [$userId]
@@ -393,22 +398,38 @@ function getStudentsForOffering() {
     $offeringId = (int)($_GET['subject_offered_id'] ?? 0);
     if (!$offeringId) { echo json_encode(['success' => true, 'data' => []]); return; }
 
+    // Resolve offering → subject_id + teacher_id so we find students enrolled
+    // under ANY offering row for this subject (avoids mismatch when dedup
+    // returns a different offering_id than what the student was enrolled through)
+    $offering = db()->fetchOne(
+        "SELECT subject_id, user_teacher_id FROM subject_offered WHERE subject_offered_id = ?",
+        [$offeringId]
+    );
+    if (!$offering) { echo json_encode(['success' => true, 'data' => []]); return; }
+
+    $subjectId   = (int)$offering['subject_id'];
+    $teacherId   = (int)$offering['user_teacher_id'];
+
     $students = db()->fetchAll(
         "SELECT u.users_id, u.first_name, u.last_name, u.email, u.student_id,
             ss.enrollment_date, ss.status as enrollment_status,
             (SELECT COUNT(*) FROM student_progress sp
              JOIN lessons l ON sp.lessons_id = l.lessons_id
-             WHERE sp.user_student_id = u.users_id AND l.subject_id = so.subject_id AND sp.status = 'completed') as completed_lessons,
-            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = so.subject_id AND l.status = 'published') as total_lessons,
+             WHERE sp.user_student_id = u.users_id AND l.subject_id = ? AND sp.status = 'completed') as completed_lessons,
+            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = ? AND l.status = 'published') as total_lessons,
             (SELECT ROUND(AVG(qa.percentage),1) FROM student_quiz_attempts qa
              JOIN quiz q ON qa.quiz_id = q.quiz_id
-             WHERE qa.user_student_id = u.users_id AND q.subject_id = so.subject_id AND qa.status = 'completed') as avg_score
+             WHERE qa.user_student_id = u.users_id AND q.subject_id = ? AND qa.status = 'completed') as avg_score
          FROM student_subject ss
          JOIN users u ON ss.user_student_id = u.users_id
          JOIN subject_offered so ON ss.subject_offered_id = so.subject_offered_id
-         WHERE ss.subject_offered_id = ? AND ss.status = 'enrolled'
+         WHERE so.subject_id = ?
+           AND so.user_teacher_id = ?
+           AND ss.status = 'enrolled'
+         GROUP BY u.users_id, u.first_name, u.last_name, u.email, u.student_id,
+                  ss.enrollment_date, ss.status
          ORDER BY u.last_name, u.first_name",
-        [$offeringId]
+        [$subjectId, $subjectId, $subjectId, $subjectId, $teacherId]
     );
 
     foreach ($students as &$s) {

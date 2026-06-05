@@ -57,6 +57,45 @@ function handleAdminDashboard() {
          FROM users ORDER BY created_at DESC LIMIT 6"
     );
 
+    // Enrollment by department (students currently enrolled via subject offerings)
+    $enrollmentByDept = db()->fetchAll(
+        "SELECT
+            d.department_id,
+            d.department_name,
+            d.department_code,
+            COUNT(DISTINCT ss.user_student_id) AS enrolled_count,
+            COUNT(DISTINCT p.program_id)        AS program_count,
+            COUNT(DISTINCT sec.section_id)      AS section_count
+         FROM department d
+         LEFT JOIN department_program dp   ON dp.department_id = d.department_id
+         LEFT JOIN program p               ON p.program_id = dp.program_id     AND p.status = 'active'
+         LEFT JOIN subject s               ON s.program_id  = p.program_id     AND s.status = 'active'
+         LEFT JOIN subject_offered so      ON so.subject_id = s.subject_id     AND so.status = 'open'
+         LEFT JOIN student_subject ss      ON ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled'
+         LEFT JOIN section_subject ssec    ON ssec.subject_offered_id = so.subject_offered_id
+         LEFT JOIN section sec             ON sec.section_id = ssec.section_id  AND sec.status = 'active'
+         WHERE d.status = 'active'
+         GROUP BY d.department_id, d.department_name, d.department_code
+         ORDER BY enrolled_count DESC"
+    );
+
+    // Per-program enrollment breakdown (for the department cards)
+    $programEnrollment = db()->fetchAll(
+        "SELECT
+            dp.department_id,
+            p.program_id,
+            p.program_code,
+            p.program_name,
+            COUNT(DISTINCT ss.user_student_id) AS enrolled_count
+         FROM department_program dp
+         JOIN program p               ON dp.program_id = p.program_id            AND p.status = 'active'
+         LEFT JOIN subject s          ON s.program_id  = p.program_id            AND s.status = 'active'
+         LEFT JOIN subject_offered so ON so.subject_id = s.subject_id            AND so.status = 'open'
+         LEFT JOIN student_subject ss ON ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled'
+         GROUP BY dp.department_id, p.program_id, p.program_code, p.program_name
+         ORDER BY dp.department_id, enrolled_count DESC"
+    );
+
     echo json_encode([
         'success' => true,
         'data' => [
@@ -75,7 +114,9 @@ function handleAdminDashboard() {
                 'total_enrolled'        => (int)$totalEnrolled,
                 'total_faculty_assigned' => (int)$totalFacultyAssigned
             ],
-            'recent_users' => $recentUsers
+            'recent_users'       => $recentUsers,
+            'enrollment_by_dept' => $enrollmentByDept,
+            'program_enrollment' => $programEnrollment
         ]
     ]);
 }
@@ -93,23 +134,39 @@ function handleInstructorDashboard() {
     $sIds = array_map(fn($r) => $r['subject_id'], $subjectIds);
     $sPlaceholders = $sIds ? implode(',', array_fill(0, count($sIds), '?')) : '0';
 
-    // Classes assigned — one row per subject offering, sections aggregated
+    // Classes assigned — ONE card per subject (deduplicated by subject_id).
+    // When the instructor has multiple subject_offered rows for the same subject
+    // (multi-instructor scenario), prefer the offering that is already assigned
+    // to a section; fall back to the most recently created orphaned offering.
+    // This prevents duplicate cards appearing in My Classes.
     $classes = db()->fetchAll(
-        "SELECT so.subject_offered_id, s.subject_id, s.subject_code, s.subject_name, s.units,
+        "SELECT
+            -- Pick the section-assigned offering if one exists, else the newest orphaned one
+            COALESCE(
+                MAX(CASE WHEN ss2.section_subject_id IS NOT NULL THEN so.subject_offered_id ELSE NULL END),
+                MAX(so.subject_offered_id)
+            ) AS subject_offered_id,
+            s.subject_id, s.subject_code, s.subject_name, s.units,
             GROUP_CONCAT(DISTINCT sec.section_name ORDER BY sec.section_name SEPARATOR ', ') AS section_name,
-            GROUP_CONCAT(DISTINCT ss2.schedule ORDER BY sec.section_name SEPARATOR ', ') AS schedule,
-            GROUP_CONCAT(DISTINCT ss2.room     ORDER BY sec.section_name SEPARATOR ', ') AS room,
-            (SELECT COUNT(DISTINCT ss.user_student_id) FROM student_subject ss WHERE ss.subject_offered_id = so.subject_offered_id AND ss.status = 'enrolled') as student_count,
-            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id AND l.status = 'published') as published_lessons,
-            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id) as total_lessons,
-            (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id AND q.status = 'published') as published_quizzes,
-            (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id) as total_quizzes
+            GROUP_CONCAT(DISTINCT ss2.schedule     ORDER BY sec.section_name SEPARATOR ', ') AS schedule,
+            GROUP_CONCAT(DISTINCT ss2.room         ORDER BY sec.section_name SEPARATOR ', ') AS room,
+            (SELECT COUNT(DISTINCT ss.user_student_id)
+             FROM student_subject ss
+             JOIN subject_offered so2 ON so2.subject_offered_id = ss.subject_offered_id
+             WHERE so2.subject_id = s.subject_id
+               AND so2.user_teacher_id = $userId
+               AND ss.status = 'enrolled') AS student_count,
+            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id AND l.status = 'published') AS published_lessons,
+            (SELECT COUNT(*) FROM lessons l WHERE l.subject_id = s.subject_id) AS total_lessons,
+            (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id AND q.status = 'published') AS published_quizzes,
+            (SELECT COUNT(*) FROM quiz q WHERE q.subject_id = s.subject_id) AS total_quizzes
          FROM subject_offered so
          JOIN subject s ON so.subject_id = s.subject_id
          LEFT JOIN section_subject ss2 ON ss2.subject_offered_id = so.subject_offered_id AND ss2.status = 'active'
          LEFT JOIN section sec ON sec.section_id = ss2.section_id
          WHERE so.user_teacher_id = ? AND so.status = 'open'
-         GROUP BY so.subject_offered_id, s.subject_id, s.subject_code, s.subject_name, s.units
+         GROUP BY s.subject_id, s.subject_code, s.subject_name, s.units
+         HAVING COUNT(DISTINCT sec.section_id) > 0
          ORDER BY s.subject_code",
         [$userId]
     );

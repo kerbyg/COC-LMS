@@ -4,13 +4,14 @@
  */
 import { Api } from '../../api.js';
 
-let _instructors = [];
-let _semesters   = [];
+let _instructors   = [];
+let _semesters     = [];
 let _selectedInstr = null;
-let _semId       = '';
-let _subjects    = [];       // full list from API
-let _original    = new Set(); // subject_offered_ids originally assigned
-let _pending     = new Set(); // current checked state (subject_offered_ids OR 'new:subjectId')
+let _semId         = '';
+let _subjects      = [];        // full list from API
+let _original      = new Set(); // subject_offered_ids originally assigned
+let _pending       = new Set(); // current checked state
+let _deptFilter    = '';        // currently selected department/program filter
 
 export async function render(container) {
     container.innerHTML = `<style>${css()}</style><div class="fa-boot"><div class="spinner"></div></div>`;
@@ -58,8 +59,16 @@ export async function render(container) {
         <!-- LEFT: Instructor list -->
         <div class="fa-left">
             <div class="fa-left-head">
-                <span class="fa-left-title">Instructors <span class="fa-instr-count">${_instructors.length}</span></span>
-                <input id="fa-instr-search" class="fa-instr-search" type="text" placeholder="Search...">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span class="fa-left-title">Instructors <span class="fa-instr-count" id="fa-instr-count">${_instructors.length}</span></span>
+                </div>
+                <div class="fa-dept-wrap">
+                    <select id="fa-dept-filter" class="fa-dept-sel">
+                        <option value="">All Programs</option>
+                        ${buildDeptOptions(_instructors)}
+                    </select>
+                </div>
+                <input id="fa-instr-search" class="fa-instr-search" type="text" placeholder="Search by name or ID...">
             </div>
             <div id="fa-instr-list" class="fa-instr-list">
                 ${renderInstructorList(_instructors)}
@@ -84,16 +93,57 @@ export async function render(container) {
         if (_selectedInstr) loadSubjects(_selectedInstr);
     });
 
-    // Instructor search
-    container.querySelector('#fa-instr-search').addEventListener('input', e => {
-        const q = e.target.value.toLowerCase();
-        const filtered = q ? _instructors.filter(i =>
-            (i.first_name + ' ' + i.last_name + ' ' + (i.employee_id||'')).toLowerCase().includes(q)
-        ) : _instructors;
-        container.querySelector('#fa-instr-list').innerHTML = renderInstructorList(filtered);
-        bindInstructorClicks();
+    // Department filter
+    container.querySelector('#fa-dept-filter').addEventListener('change', e => {
+        _deptFilter = e.target.value;
+        applyFilters(container);
     });
 
+    // Instructor search
+    container.querySelector('#fa-instr-search').addEventListener('input', () => applyFilters(container));
+
+    bindInstructorClicks();
+}
+
+/** Build unique sorted program options from instructor list */
+function buildDeptOptions(instructors) {
+    // Group by program_code (e.g. BSIT, BSCS) — this is what the dean wants to separate
+    const programs = new Map(); // program_code → display label
+    instructors.forEach(i => {
+        const code  = i.program_code || '';
+        const label = code
+            ? (i.program_name ? `${code} — ${i.program_name}` : code)
+            : '';
+        if (code) programs.set(code, label);
+    });
+    return [...programs.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([code, label]) => `<option value="${esc(code)}">${esc(label)}</option>`)
+        .join('');
+}
+
+/** Apply both program filter and text search, refresh the list */
+function applyFilters(container) {
+    const q = (container.querySelector('#fa-instr-search')?.value || '').toLowerCase();
+
+    let filtered = _instructors;
+
+    // Program filter (by program_code)
+    if (_deptFilter) {
+        filtered = filtered.filter(i => (i.program_code || '') === _deptFilter);
+    }
+
+    // Text search
+    if (q) {
+        filtered = filtered.filter(i =>
+            (i.first_name + ' ' + i.last_name + ' ' + (i.employee_id || '')).toLowerCase().includes(q)
+        );
+    }
+
+    const countEl = container.querySelector('#fa-instr-count');
+    if (countEl) countEl.textContent = filtered.length;
+
+    container.querySelector('#fa-instr-list').innerHTML = renderInstructorList(filtered);
     bindInstructorClicks();
 }
 
@@ -108,6 +158,7 @@ function renderInstructorList(list) {
             <div class="fa-instr-info">
                 <div class="fa-instr-name">${esc(i.first_name)} ${esc(i.last_name)}</div>
                 <div class="fa-instr-meta">${esc(i.employee_id||'—')}</div>
+                ${i.program_code ? `<div class="fa-instr-dept">${esc(i.program_code)}</div>` : ''}
             </div>
             <div class="fa-instr-badge" id="badge-${i.users_id}">—</div>
         </div>`;
@@ -141,8 +192,10 @@ async function loadSubjects(instr) {
     _original = new Set();
     _pending  = new Set();
 
+    // Keys are always "sid:{subject_id}" — one key per subject regardless of how
+    // many subject_offered rows exist (multi-instructor aware).
     _subjects.forEach(s => {
-        const key = s.has_offering == 1 ? `so:${s.subject_offered_id}` : `new:${s.subject_id}`;
+        const key = `sid:${s.subject_id}`;
         if (s.is_assigned == 1) {
             _original.add(key);
             _pending.add(key);
@@ -172,6 +225,14 @@ function renderRight(instr, right) {
         grouped[prog][yr][sem].push(s);
     });
 
+    // Sort program blocks: instructor's own program first, then alphabetically
+    const instrProg = instr.program_code || '';
+    const sortedProgEntries = Object.entries(grouped).sort(([a], [b]) => {
+        if (a === instrProg && b !== instrProg) return -1;
+        if (b === instrProg && a !== instrProg) return  1;
+        return a.localeCompare(b);
+    });
+
     right.innerHTML = `
     <!-- Instructor profile -->
     <div class="fa-prof-card">
@@ -182,6 +243,7 @@ function renderRight(instr, right) {
                 ${instr.employee_id ? `<span>ID: ${esc(instr.employee_id)}</span>` : ''}
                 ${instr.email ? `<span>${esc(instr.email)}</span>` : ''}
                 ${instr.department_name ? `<span>${esc(instr.department_name)}</span>` : ''}
+                ${instr.program_code ? `<span style="color:#1B4D3E;font-weight:700;">${esc(instr.program_code)}${instr.program_name ? ' – ' + esc(instr.program_name) : ''}</span>` : ''}
             </div>
         </div>
         <div class="fa-prof-stat">
@@ -193,28 +255,32 @@ function renderRight(instr, right) {
     <!-- Legend -->
     <div class="fa-legend">
         <span class="fa-leg-item"><span class="fa-leg-dot checked"></span> Assigned to this instructor</span>
-        <span class="fa-leg-item"><span class="fa-leg-dot other"></span> Assigned to another instructor</span>
+        <span class="fa-leg-item"><span class="fa-leg-dot other"></span> Also assigned to others (shared)</span>
         <span class="fa-leg-item"><span class="fa-leg-dot free"></span> Unassigned</span>
     </div>
 
     <!-- Subject checklist -->
     <div id="fa-checklist" class="fa-checklist">
-        ${Object.entries(grouped).map(([prog, years]) => `
-        <div class="fa-prog-block">
-            <div class="fa-prog-header">
-                <span class="fa-prog-code">${esc(prog)}</span>
-                <span class="fa-prog-name">${esc(_subjects.find(s=>s.program_code===prog)?.program_name||'')}</span>
-            </div>
-            ${Object.entries(years).map(([yr, sems]) => `
-            <div class="fa-year-block">
-                <div class="fa-year-label">${esc(yr)}</div>
-                ${Object.entries(sems).map(([sem, subjects]) => `
-                <div class="fa-sem-block">
-                    <div class="fa-sem-label">${esc(sem)}</div>
-                    ${subjects.map(s => renderSubjectRow(s)).join('')}
+        ${sortedProgEntries.map(([prog, years]) => {
+            const isPrimary = prog === instrProg;
+            return `
+            <div class="fa-prog-block">
+                <div class="fa-prog-header">
+                    <span class="fa-prog-code">${esc(prog)}</span>
+                    <span class="fa-prog-name">${esc(_subjects.find(s=>s.program_code===prog)?.program_name||'')}</span>
+                    ${isPrimary ? `<span class="fa-prog-primary">★ Primary Program</span>` : ''}
+                </div>
+                ${Object.entries(years).map(([yr, sems]) => `
+                <div class="fa-year-block">
+                    <div class="fa-year-label">${esc(yr)}</div>
+                    ${Object.entries(sems).map(([sem, subjects]) => `
+                    <div class="fa-sem-block">
+                        <div class="fa-sem-label">${esc(sem)}</div>
+                        ${subjects.map(s => renderSubjectRow(s)).join('')}
+                    </div>`).join('')}
                 </div>`).join('')}
-            </div>`).join('')}
-        </div>`).join('')}
+            </div>`;
+        }).join('')}
     </div>
 
     <!-- Sticky save bar -->
@@ -234,21 +300,22 @@ function renderRight(instr, right) {
 }
 
 function renderSubjectRow(s) {
-    const key      = s.has_offering == 1 ? `so:${s.subject_offered_id}` : `new:${s.subject_id}`;
-    const checked  = _pending.has(key);
+    // Key is always "sid:{subject_id}" — multi-instructor aware
+    const key          = `sid:${s.subject_id}`;
+    const checked      = _pending.has(key);
     const takenByOther = s.taken_by_other == 1;
-    const hasOffer = s.has_offering == 1;
+    const otherNames   = s.other_instructor_names || '';
 
-    let rowClass = 'fa-subj-row';
-    let dotClass = 'free';
-    if (checked)      { rowClass += ' assigned'; dotClass = 'checked'; }
-    else if (takenByOther) { dotClass = 'other'; }
+    const dotClass = checked ? 'checked' : (takenByOther ? 'other' : 'free');
+
+    // "Also assigned to" note — informational only, does NOT disable the row
+    const alsoNote = takenByOther
+        ? `<span class="fa-also-note">Also: ${esc(otherNames || 'another instructor')}</span>`
+        : '';
 
     return `
-    <label class="fa-subj-row ${checked?'assigned':''} ${takenByOther&&!checked?'taken':''}" data-key="${key}">
-        <input type="checkbox" class="fa-cb" data-key="${key}"
-            ${checked ? 'checked' : ''}
-            ${takenByOther && !checked ? 'disabled title="Already assigned to '+esc(s.other_instructor_name||'another instructor')+'"' : ''}>
+    <label class="fa-subj-row ${checked ? 'assigned' : ''}" data-key="${key}">
+        <input type="checkbox" class="fa-cb" data-key="${key}" ${checked ? 'checked' : ''}>
         <span class="fa-dot ${dotClass}"></span>
         <div class="fa-subj-body">
             <div class="fa-subj-top">
@@ -256,9 +323,8 @@ function renderSubjectRow(s) {
                 <span class="fa-subj-name">${esc(s.subject_name)}</span>
             </div>
             <div class="fa-subj-meta">
-                <span>${s.units} unit${s.units!=1?'s':''}</span>
-                ${takenByOther && !checked ? `<span class="fa-taken-note">Assigned to ${esc(s.other_instructor_name||'another instructor')}</span>` : ''}
-                ${!hasOffer ? `<span class="fa-no-offer">No offering yet — will be created on save</span>` : ''}
+                <span>${s.units} unit${s.units != 1 ? 's' : ''}</span>
+                ${alsoNote}
             </div>
         </div>
     </label>`;
@@ -283,8 +349,8 @@ function bindCheckboxes() {
 }
 
 function updateChangeState() {
-    const added   = [..._pending].filter(k => !_original.has(k));
-    const removed = [..._original].filter(k => !_pending.has(k));
+    const added   = [..._pending].filter(k => !_original.has(k) && k.startsWith('sid:'));
+    const removed = [..._original].filter(k => !_pending.has(k)  && k.startsWith('sid:'));
     const hasChanges = added.length > 0 || removed.length > 0;
 
     const bar = document.getElementById('fa-save-bar');
@@ -319,28 +385,19 @@ function bindSaveBar(instr) {
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving...';
 
-        // Split pending into assign (existing offerings) and create_assign (new)
-        const assign        = [];
-        const create_assign = [];
-        const unassign      = [];
-
-        [..._pending].forEach(key => {
-            if (!_original.has(key)) {
-                if (key.startsWith('so:'))  assign.push(parseInt(key.slice(3)));
-                else                        create_assign.push(parseInt(key.slice(4)));
-            }
-        });
-
-        [..._original].forEach(key => {
-            if (!_pending.has(key) && key.startsWith('so:')) {
-                unassign.push(parseInt(key.slice(3)));
-            }
-        });
+        // Keys are "sid:{subject_id}" — extract IDs for added/removed subjects
+        const assignIds   = [..._pending]
+            .filter(k => !_original.has(k) && k.startsWith('sid:'))
+            .map(k => parseInt(k.slice(4)));
+        const unassignIds = [..._original]
+            .filter(k => !_pending.has(k)  && k.startsWith('sid:'))
+            .map(k => parseInt(k.slice(4)));
 
         const res = await Api.post('/SubjectOfferingsAPI.php?action=dean-assign', {
-            instructor_id: instr.users_id,
-            semester_id:   parseInt(_semId),
-            assign, create_assign, unassign
+            instructor_id:        instr.users_id,
+            semester_id:          parseInt(_semId),
+            assign_subject_ids:   assignIds,
+            unassign_subject_ids: unassignIds
         });
 
         if (res.success) {
@@ -411,6 +468,12 @@ function css() { return `
     .fa-left-head { padding:14px 16px;border-bottom:1px solid #f0f0f0;display:flex;flex-direction:column;gap:8px; }
     .fa-left-title { font-size:13px;font-weight:700;color:#404040;display:flex;align-items:center;gap:6px; }
     .fa-instr-count { background:#E8F5E9;color:#1B4D3E;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700; }
+    .fa-dept-wrap { position:relative; }
+    .fa-dept-sel { width:100%;padding:8px 30px 8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:12px;font-weight:600;color:#374151;background:#f9fafb;appearance:none;-webkit-appearance:none;cursor:pointer;box-sizing:border-box;outline:none;transition:border-color .15s; }
+    .fa-dept-sel:focus { border-color:#00461B;background:#fff; }
+    .fa-dept-wrap::after { content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:11px;color:#9ca3af; }
+    .fa-dept-divider { height:1px;background:#f0f0f0;margin:0 0 4px; }
+
     .fa-instr-search { padding:8px 12px;border:1px solid #e0e0e0;border-radius:8px;font-size:13px;width:100%;box-sizing:border-box; }
     .fa-instr-search:focus { outline:none;border-color:#00461B; }
     .fa-instr-list { overflow-y:auto;flex:1; }
@@ -421,6 +484,7 @@ function css() { return `
     .fa-instr-av { width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0; }
     .fa-instr-name { font-size:13px;font-weight:600;color:#1a1a1a; }
     .fa-instr-meta { font-size:11px;color:#9ca3af;margin-top:1px; }
+    .fa-instr-dept { display:inline-block;margin-top:3px;font-size:10px;font-weight:700;background:#E8F5E9;color:#1B4D3E;padding:1px 6px;border-radius:8px; }
     .fa-instr-badge { margin-left:auto;min-width:22px;text-align:center;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;background:#f3f4f6;color:#9ca3af;flex-shrink:0; }
     .fa-instr-badge.has { background:#E8F5E9;color:#1B4D3E; }
     .fa-no-inst { padding:24px;text-align:center;color:#9ca3af;font-size:13px; }
@@ -458,6 +522,7 @@ function css() { return `
     .fa-prog-header { display:flex;align-items:center;gap:8px;margin-bottom:10px; }
     .fa-prog-code { background:#1B4D3E;color:#fff;padding:3px 10px;border-radius:5px;font-family:monospace;font-size:12px;font-weight:700; }
     .fa-prog-name { font-size:13px;font-weight:600;color:#404040; }
+    .fa-prog-primary { margin-left:auto;background:#FEF9C3;color:#854D0E;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;flex-shrink:0; }
 
     .fa-year-block { margin-bottom:14px; }
     .fa-year-label { font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-left:4px; }
@@ -482,7 +547,7 @@ function css() { return `
     .fa-subj-row.assigned .fa-subj-code { background:#E8F5E9;color:#166534; }
     .fa-subj-name { font-size:13px;font-weight:600;color:#1a1a1a; }
     .fa-subj-meta { display:flex;gap:10px;font-size:11px;color:#9ca3af;margin-top:3px;flex-wrap:wrap; }
-    .fa-taken-note { color:#b45309;font-weight:600; }
+    .fa-also-note { color:#1d4ed8;font-weight:600; }
     .fa-no-offer { color:#6366f1;font-style:italic; }
 
     /* Save bar */

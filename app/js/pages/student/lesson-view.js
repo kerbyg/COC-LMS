@@ -246,12 +246,14 @@ function renderQuizzesCard(quizzes) {
                             </div>
                             <div class="quiz-row-right">
                                 <span class="quiz-status-badge" style="background:${s.bg};color:${s.color}">${s.icon} ${s.label}</span>
-                                ${q.can_take
-                                    ? `<a href="#student/take-quiz?quiz_id=${q.quiz_id}" class="btn-take-quiz">
-                                        ${q.attempts_used > 0 ? 'Retake' : 'Take Quiz'}
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                       </a>`
-                                    : `<span class="btn-take-quiz disabled">Closed</span>`}
+                                ${q.status === 'passed'
+                                    ? `<a href="#student/take-quiz?quiz_id=${q.quiz_id}" class="btn-take-quiz btn-passed">✓ Passed</a>`
+                                    : q.can_take
+                                        ? `<a href="#student/take-quiz?quiz_id=${q.quiz_id}" class="btn-take-quiz">
+                                            ${q.attempts_used > 0 ? 'Retake' : 'Take Quiz'}
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                           </a>`
+                                        : `<span class="btn-take-quiz disabled">Closed</span>`}
                             </div>
                         </div>`;
                 }).join('')}
@@ -564,6 +566,7 @@ function getStyles() {
 }
 .btn-take-quiz:hover { background:#2D6A4F; }
 .btn-take-quiz.disabled { background:#d1d5db; color:#6b7280; cursor:not-allowed; pointer-events:none; }
+.btn-take-quiz.btn-passed { background:#DCFCE7; color:#15803D; border:1px solid #86EFAC; cursor:default; pointer-events:none; }
 
 /* Actions */
 .btn-complete {

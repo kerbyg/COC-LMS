@@ -21,9 +21,10 @@ export async function render(container) {
         return;
     }
 
-    const quiz = res.data.quiz;
-    const questions = res.data.questions || [];
-    const answers = {};
+    const quiz       = res.data.quiz;
+    const questions  = res.data.questions || [];
+    const answers    = {};
+    const oneAtATime = !!quiz.one_at_a_time;
     let currentQ = 0;
 
     if (questions.length === 0) {
@@ -64,7 +65,9 @@ export async function render(container) {
                 .tq-body { display:grid; grid-template-columns:1fr 220px; gap:20px; align-items:start; }
 
                 /* Question Card */
-                .tq-question { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:28px; }
+                .tq-question { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:28px; user-select:none; -webkit-user-select:none; }
+                /* Allow typing inside inputs/textareas but not selecting question text */
+                .tq-question input, .tq-question textarea { user-select:text; -webkit-user-select:text; }
                 .tq-q-badge { display:inline-flex; align-items:center; gap:6px; margin-bottom:14px; }
                 .tq-q-num { background:#1B4D3E; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
                 .tq-q-of { font-size:13px; color:#737373; }
@@ -137,6 +140,25 @@ export async function render(container) {
                 .tq-modal .warn-text { color:#B45309; font-weight:600; font-size:13px; margin-bottom:20px; }
                 .tq-modal-btns { display:flex; gap:12px; justify-content:center; }
 
+                /* Paste-blocked toast */
+                .tq-paste-toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px); background:#1e293b; color:#fff; padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; z-index:9999; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; white-space:nowrap; }
+                .tq-paste-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+                .tq-paste-toast .tq-pt-icon { font-size:15px; }
+
+                /* Tab-switch warning banner */
+                .tq-tabwarn { position:fixed; top:0; left:0; right:0; z-index:9999; padding:13px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13.5px; font-weight:600; animation:tq-slidein .3s ease forwards; }
+                .tq-tabwarn.mild   { background:#FEF3C7; color:#92400E; border-bottom:2px solid #FCD34D; }
+                .tq-tabwarn.danger { background:#FEE2E2; color:#991B1B; border-bottom:2px solid #FCA5A5; }
+                @keyframes tq-slidein { from{transform:translateY(-100%)} to{transform:translateY(0)} }
+                .tq-tabwarn-msg { display:flex; align-items:center; gap:10px; }
+                .tq-tabwarn-close { background:none; border:none; cursor:pointer; font-size:18px; color:inherit; padding:0 4px; line-height:1; }
+                /* Tab-switch count badge in sidebar */
+                .tq-switch-badge { display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:4px 0; margin-top:4px; }
+                .tq-switch-badge-label { color:#B45309; font-weight:600; }
+                .tq-switch-badge-val   { background:#FEF3C7; color:#B45309; border-radius:12px; padding:1px 9px; font-weight:800; font-size:11px; }
+                .tq-switch-badge.danger .tq-switch-badge-label { color:#b91c1c; }
+                .tq-switch-badge.danger .tq-switch-badge-val   { background:#FEE2E2; color:#b91c1c; }
+
                 @media(max-width:768px) {
                     .tq-body { grid-template-columns:1fr; }
                     .tq-nav { position:static; order:-1; }
@@ -159,6 +181,22 @@ export async function render(container) {
                 <div class="tq-body">
                     <div class="tq-question" id="tq-question"></div>
                     <div class="tq-nav">
+                        ${oneAtATime ? `
+                        <div class="tq-nav-title">Progress</div>
+                        <div style="text-align:center;padding:10px 0 6px;">
+                            <span style="font-size:32px;font-weight:800;color:#1B4D3E;" id="tq-aat-num">1</span>
+                            <span style="font-size:16px;color:#9ca3af;font-weight:600;"> / ${questions.length}</span>
+                        </div>
+                        <div style="font-size:11px;color:#9ca3af;text-align:center;margin-bottom:10px;">questions</div>
+                        <div class="tq-nav-progress" style="margin-bottom:16px;"><div class="tq-nav-progress-fill" id="tq-nav-progress-fill" style="width:${100/questions.length}%"></div></div>
+                        <div class="tq-nav-stats">
+                            <div class="tq-nav-stat-row"><span class="tq-nav-stat-label">Answered</span><span class="tq-nav-stat-value" id="tq-answered-count">0 / ${questions.length}</span></div>
+                            <div class="tq-switch-badge" id="tq-switch-badge" style="display:none;">
+                                <span class="tq-switch-badge-label">⚠️ Tab switches</span>
+                                <span class="tq-switch-badge-val" id="tq-switch-count">0</span>
+                            </div>
+                        </div>
+                        ` : `
                         <div class="tq-nav-title">Questions</div>
                         <div class="tq-nav-grid" id="tq-nav-grid">
                             ${questions.map((q, i) => `<div class="tq-nav-num" data-idx="${i}">${i + 1}</div>`).join('')}
@@ -166,9 +204,14 @@ export async function render(container) {
                         <div class="tq-nav-stats">
                             <div class="tq-nav-stat-row"><span class="tq-nav-stat-label">Answered</span><span class="tq-nav-stat-value" id="tq-answered-count">0 / ${questions.length}</span></div>
                             <div class="tq-nav-stat-row"><span class="tq-nav-stat-label">Remaining</span><span class="tq-nav-stat-value" id="tq-remaining-count">${questions.length}</span></div>
+                            <div class="tq-switch-badge" id="tq-switch-badge" style="display:none;">
+                                <span class="tq-switch-badge-label">⚠️ Tab switches</span>
+                                <span class="tq-switch-badge-val" id="tq-switch-count">0</span>
+                            </div>
                         </div>
                         <div class="tq-nav-progress"><div class="tq-nav-progress-fill" id="tq-nav-progress-fill" style="width:0%"></div></div>
                         <button class="tq-submit-btn" id="tq-submit">Submit Quiz</button>
+                        `}
                     </div>
                 </div>
             </div>
@@ -176,15 +219,23 @@ export async function render(container) {
 
         showQuestion(currentQ);
         startTimer();
+        startTabSwitchDetection();
 
-        container.querySelectorAll('.tq-nav-num').forEach(n => {
-            n.addEventListener('click', () => {
-                currentQ = parseInt(n.dataset.idx);
-                showQuestion(currentQ);
+        // Question navigator — disabled in one-at-a-time mode (can't jump around)
+        if (!oneAtATime) {
+            container.querySelectorAll('.tq-nav-num').forEach(n => {
+                n.addEventListener('click', () => {
+                    currentQ = parseInt(n.dataset.idx);
+                    showQuestion(currentQ);
+                });
             });
-        });
+        }
 
-        container.querySelector('#tq-submit').addEventListener('click', () => showSubmitConfirm());
+        // In one-at-a-time mode the submit button lives only in the last question's nav-btns
+        // so we don't need the sidebar submit button — but we wire it just in case
+        if (!oneAtATime) {
+            container.querySelector('#tq-submit').addEventListener('click', () => showSubmitConfirm());
+        }
     }
 
     function showQuestion(idx) {
@@ -236,7 +287,7 @@ export async function render(container) {
             const charMax = 500;
             answerHtml = `
                 <div class="tq-type-hint short">
-                    📝 &nbsp;Answer briefly and clearly — 1 to 3 sentences is ideal.
+                    📝 &nbsp;Answer briefly and clearly — 1 to 3 sentences is ideal. &nbsp;<strong>⚠️ Pasting is disabled.</strong>
                 </div>
                 <div class="tq-text-answer">
                     <label class="tq-text-label">Your Answer</label>
@@ -250,7 +301,7 @@ export async function render(container) {
             const wordCount = String(curAnswer).trim() ? String(curAnswer).trim().split(/\s+/).length : 0;
             answerHtml = `
                 <div class="tq-type-hint essay">
-                    📄 &nbsp;Write a complete, well-structured response. Use paragraphs and support your ideas.
+                    📄 &nbsp;Write a complete, well-structured response. Use paragraphs and support your ideas. &nbsp;<strong>⚠️ Pasting is disabled.</strong>
                 </div>
                 <div class="tq-text-answer">
                     <label class="tq-text-label">Your Essay Response</label>
@@ -286,10 +337,37 @@ export async function render(container) {
             <div class="tq-q-points">${q.points} point${q.points > 1 ? 's' : ''}</div>
             ${answerHtml}
             <div class="tq-nav-btns">
-                <button class="tq-btn" id="tq-prev" ${idx === 0 ? 'disabled' : ''}>&#8592; Previous</button>
-                <button class="tq-btn primary" id="tq-next" ${idx === questions.length - 1 ? 'disabled' : ''}>Next &#8594;</button>
+                ${oneAtATime
+                    ? `<span></span>
+                       ${idx === questions.length - 1
+                           ? `<button class="tq-btn primary" id="tq-next" onclick="document.getElementById('tq-submit')?.click()">✓ Submit Quiz</button>`
+                           : `<button class="tq-btn primary" id="tq-next">Next &#8594;</button>`
+                       }`
+                    : `<button class="tq-btn" id="tq-prev" ${idx === 0 ? 'disabled' : ''}>&#8592; Previous</button>
+                       <button class="tq-btn primary" id="tq-next" ${idx === questions.length - 1 ? 'disabled' : ''}>Next &#8594;</button>`
+                }
             </div>
         `;
+
+        // Block copying question text / options (ignore events that originate inside inputs/textareas)
+        panel.addEventListener('copy', e => {
+            if (e.target.matches('input, textarea')) return; // student's own typed text — allow
+            e.preventDefault();
+        });
+        panel.addEventListener('contextmenu', e => {
+            if (e.target.matches('input, textarea')) return; // keep browser spellcheck etc.
+            e.preventDefault();
+        });
+        panel.addEventListener('keydown', e => {
+            // Block Ctrl+C / Cmd+C on question content (not inside answer fields)
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !e.target.matches('input, textarea')) {
+                e.preventDefault();
+            }
+            // Block Ctrl+A select-all on question content
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !e.target.matches('input, textarea')) {
+                e.preventDefault();
+            }
+        });
 
         if (isTextType) {
             const inp = panel.querySelector('#tq-text-ans');
@@ -304,6 +382,25 @@ export async function render(container) {
                     panel.querySelector('#tq-char-num').textContent = inp.value.length;
                 }
             });
+
+            // Block copy-paste on essay & short-answer fields
+            if (q.question_type === 'essay' || q.question_type === 'short_answer') {
+                inp.addEventListener('paste', e => {
+                    e.preventDefault();
+                    showPasteBlockedToast();
+                });
+                inp.addEventListener('copy', e => e.preventDefault());
+                inp.addEventListener('cut',  e => e.preventDefault());
+                inp.addEventListener('contextmenu', e => e.preventDefault());
+                inp.addEventListener('keydown', e => {
+                    // Block Ctrl+V / Cmd+V  and  Ctrl+C / Cmd+C  and  Ctrl+X / Cmd+X
+                    if ((e.ctrlKey || e.metaKey) && ['v','c','x'].includes(e.key.toLowerCase())) {
+                        e.preventDefault();
+                        if (e.key.toLowerCase() === 'v') showPasteBlockedToast();
+                    }
+                });
+            }
+
             // Auto-focus for fill in the blank
             if (q.question_type === 'fill_blank' || q.question_type === 'fill_in_the_blank') {
                 setTimeout(() => inp?.focus(), 50);
@@ -319,29 +416,42 @@ export async function render(container) {
             });
         }
 
-        panel.querySelector('#tq-prev').addEventListener('click', () => { if (idx > 0) showQuestion(idx - 1); });
-        panel.querySelector('#tq-next').addEventListener('click', () => { if (idx < questions.length - 1) showQuestion(idx + 1); });
+        // Prev only exists in free-navigation mode
+        panel.querySelector('#tq-prev')?.addEventListener('click', () => { if (idx > 0) showQuestion(idx - 1); });
+        // Next: in one-at-a-time, last question button triggers submit — already handled inline
+        if (!oneAtATime || idx < questions.length - 1) {
+            panel.querySelector('#tq-next')?.addEventListener('click', () => { if (idx < questions.length - 1) showQuestion(idx + 1); });
+        }
 
         updateNavigator();
     }
 
     function updateNavigator() {
         const answered = Object.keys(answers).length;
-        const pct = Math.round((answered / questions.length) * 100);
+        const pct      = Math.round((answered / questions.length) * 100);
 
         container.querySelector('#tq-answered-count').textContent = `${answered} / ${questions.length}`;
-        container.querySelector('#tq-remaining-count').textContent = questions.length - answered;
-        container.querySelector('#tq-progress-fill').style.width = pct + '%';
+        container.querySelector('#tq-progress-fill').style.width  = pct + '%';
         container.querySelector('#tq-nav-progress-fill').style.width = pct + '%';
 
-        container.querySelectorAll('.tq-nav-num').forEach(n => {
-            const i   = parseInt(n.dataset.idx);
-            const q   = questions[i];
-            const ans = answers[q.questions_id];
-            const isAnswered = ans !== undefined && ans !== null && ans !== '';
-            n.classList.toggle('current',  i === currentQ);
-            n.classList.toggle('answered', isAnswered);
-        });
+        if (oneAtATime) {
+            // Update "X / total" counter in simplified sidebar
+            const aaNum = container.querySelector('#tq-aat-num');
+            if (aaNum) aaNum.textContent = currentQ + 1;
+            // Progress bar shows how far through the quiz (by question position, not answered count)
+            const posPct = Math.round(((currentQ + 1) / questions.length) * 100);
+            container.querySelector('#tq-nav-progress-fill').style.width = posPct + '%';
+        } else {
+            container.querySelector('#tq-remaining-count').textContent = questions.length - answered;
+            container.querySelectorAll('.tq-nav-num').forEach(n => {
+                const i   = parseInt(n.dataset.idx);
+                const q   = questions[i];
+                const ans = answers[q.questions_id];
+                const isAnswered = ans !== undefined && ans !== null && ans !== '';
+                n.classList.toggle('current',  i === currentQ);
+                n.classList.toggle('answered', isAnswered);
+            });
+        }
     }
 
     function startTimer() {
@@ -385,6 +495,7 @@ export async function render(container) {
 
     async function submitQuiz() {
         clearInterval(timerInterval);
+        cleanupTabDetection();
         const timeTaken = Math.round((Date.now() - startTime) / 1000);
 
         container.innerHTML = `
@@ -399,6 +510,7 @@ export async function render(container) {
             const submitData = {
                 quiz_id: parseInt(quiz.quiz_id),
                 time_taken: timeTaken,
+                tab_switches: tabSwitchCount,
                 answers: {}
             };
             for (const [qId, optId] of Object.entries(answers)) {
@@ -433,6 +545,109 @@ export async function render(container) {
                 <a href="#student/quizzes" style="color:#1B4D3E;font-weight:600;font-size:14px">Back to Quizzes</a>
             </div>`;
     }
+
+    // ── Tab-switch detection ──────────────────────────────────────────────────
+    let tabSwitchCount  = 0;
+    let lastLeaveTime   = 0;
+    let warnBannerTimer = null;
+
+    function showTabWarnBanner(count) {
+        document.getElementById('tq-tabwarn-banner')?.remove();
+        clearTimeout(warnBannerTimer);
+
+        const isDanger = count >= 3;
+        const banner   = document.createElement('div');
+        banner.id        = 'tq-tabwarn-banner';
+        banner.className = 'tq-tabwarn ' + (isDanger ? 'danger' : 'mild');
+        banner.innerHTML = `
+            <div class="tq-tabwarn-msg">
+                <span style="font-size:18px">${isDanger ? '🚨' : '⚠️'}</span>
+                <span>
+                    <strong>Tab switch #${count} detected!</strong>
+                    ${isDanger
+                        ? ' Multiple violations have been logged. This will be visible to your instructor.'
+                        : ' Please stay on this page during the quiz.'}
+                </span>
+            </div>
+            <button class="tq-tabwarn-close" onclick="document.getElementById('tq-tabwarn-banner')?.remove()">✕</button>
+        `;
+        document.body.appendChild(banner);
+
+        // Auto-dismiss: 8s for warnings, 12s for danger
+        warnBannerTimer = setTimeout(() => banner.remove(), isDanger ? 12000 : 8000);
+    }
+
+    function updateSidebarBadge(count) {
+        const badge    = document.getElementById('tq-switch-badge');
+        const countEl  = document.getElementById('tq-switch-count');
+        if (!badge || !countEl) return;
+        badge.style.display = 'flex';
+        countEl.textContent = count;
+        if (count >= 3) badge.classList.add('danger');
+    }
+
+    const onVisibilityChange = () => {
+        if (document.hidden) {
+            // Student left the tab
+            const now = Date.now();
+            if (now - lastLeaveTime < 1500) return; // debounce
+            lastLeaveTime = now;
+            tabSwitchCount++;
+            updateSidebarBadge(tabSwitchCount);
+        } else {
+            // Student came back — show the warning
+            if (tabSwitchCount > 0) showTabWarnBanner(tabSwitchCount);
+        }
+    };
+
+    const onWindowBlur = () => {
+        // Catches alt-tab to another app (visibilitychange may not fire)
+        const now = Date.now();
+        if (now - lastLeaveTime < 1500) return; // debounce
+        lastLeaveTime = now;
+        tabSwitchCount++;
+        updateSidebarBadge(tabSwitchCount);
+    };
+
+    const onWindowFocus = () => {
+        // Show banner when they return via alt-tab
+        if (tabSwitchCount > 0 && !document.hidden) showTabWarnBanner(tabSwitchCount);
+    };
+
+    function startTabSwitchDetection() {
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        window.addEventListener('blur', onWindowBlur);
+        window.addEventListener('focus', onWindowFocus);
+    }
+
+    function cleanupTabDetection() {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('blur', onWindowBlur);
+        window.removeEventListener('focus', onWindowFocus);
+        document.getElementById('tq-tabwarn-banner')?.remove();
+        clearTimeout(warnBannerTimer);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── Paste-block toast ─────────────────────────────────────────────────────
+    let pasteToastTimer = null;
+    function showPasteBlockedToast() {
+        let toast = document.getElementById('tq-paste-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id        = 'tq-paste-toast';
+            toast.className = 'tq-paste-toast';
+            toast.innerHTML = `<span class="tq-pt-icon">🚫</span> Pasting is not allowed on this question.`;
+            document.body.appendChild(toast);
+        }
+        clearTimeout(pasteToastTimer);
+        // Force reflow so the transition re-plays if already visible
+        toast.classList.remove('show');
+        void toast.offsetWidth;
+        toast.classList.add('show');
+        pasteToastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     renderQuiz();
 }

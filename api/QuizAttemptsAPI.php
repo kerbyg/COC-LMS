@@ -47,14 +47,15 @@ if (!Auth::check()) {
 
 // RBAC: enforce permission per action
 $_attemptPerms = [
-    'submit'          => 'quizzes.view',
-    'get'             => 'quizzes.view',
-    'history'         => 'quizzes.view',
-    'quiz-scores'     => 'grades.view',
-    'pending-grading' => 'quizzes.grade',
-    'attempt-answers' => 'quizzes.grade',
-    'grade-answer'    => 'quizzes.grade',
-    'finalize-grading'=> 'quizzes.grade',
+    'submit'           => 'quizzes.view',
+    'get'              => 'quizzes.view',
+    'history'          => 'quizzes.view',
+    'quiz-scores'      => 'grades.view',
+    'pending-grading'  => 'quizzes.grade',
+    'attempt-answers'  => 'quizzes.grade',
+    'grade-answer'     => 'quizzes.grade',
+    'ai-grade-answer'  => 'quizzes.grade',
+    'finalize-grading' => 'quizzes.grade',
 ];
 if (isset($_attemptPerms[$action]) && !Auth::can($_attemptPerms[$action])) {
     http_response_code(403);
@@ -90,6 +91,10 @@ switch ($action) {
         header('Content-Type: application/json');
         gradeAnswer();
         break;
+    case 'ai-grade-answer':
+        header('Content-Type: application/json');
+        aiGradeAnswerById();
+        break;
     case 'finalize-grading':
         header('Content-Type: application/json');
         finalizeGrading();
@@ -110,13 +115,15 @@ function submitQuiz() {
     // Support both JSON body and form POST
     $input = json_decode(file_get_contents('php://input'), true);
     if ($input) {
-        $quizId = (int)($input['quiz_id'] ?? 0);
-        $answers = $input['answers'] ?? [];
-        $timeTaken = (int)($input['time_taken'] ?? 0);
+        $quizId       = (int)($input['quiz_id']      ?? 0);
+        $answers      = $input['answers']             ?? [];
+        $timeTaken    = (int)($input['time_taken']    ?? 0);
+        $tabSwitches  = max(0, (int)($input['tab_switches'] ?? 0));
     } else {
-        $quizId = (int)($_POST['quiz_id'] ?? 0);
-        $answers = $_POST['answers'] ?? [];
-        $timeTaken = (int)($_POST['time_taken'] ?? 0);
+        $quizId       = (int)($_POST['quiz_id']      ?? 0);
+        $answers      = $_POST['answers']             ?? [];
+        $timeTaken    = (int)($_POST['time_taken']    ?? 0);
+        $tabSwitches  = max(0, (int)($_POST['tab_switches'] ?? 0));
     }
 
     // ── Input validation ─────────────────────────────────────
@@ -180,9 +187,11 @@ function submitQuiz() {
         // Unlimited attempts — no attempt limit check
 
         // Get questions from `questions` table via `quiz_questions` junction
+        // NOTE: question_option.quiz_question_id is the FK column name (points to questions.questions_id)
         $questions = db()->fetchAll(
             "SELECT q.questions_id, q.question_text, q.question_type, q.points,
-                    (SELECT option_id FROM question_option WHERE questions_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_option_id
+                    (SELECT option_id   FROM question_option WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_option_id,
+                    (SELECT option_text FROM question_option WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as expected_answer
              FROM quiz_questions qq
              JOIN questions q ON qq.questions_id = q.questions_id
              WHERE qq.quiz_id = ?",
@@ -208,58 +217,51 @@ function submitQuiz() {
             $answerText = null;
 
             if (in_array($q['question_type'], ['multiple_choice', 'true_false'])) {
-                $isCorrect = ($userAnswer !== null && $userAnswer == $q['correct_option_id']);
+                $isCorrect = $userAnswer !== null && $userAnswer == $q['correct_option_id'];
                 if ($isCorrect) {
                     $pointsEarned = (int)$q['points'];
                     $earnedPoints += $pointsEarned;
                 }
             } elseif (in_array($q['question_type'], ['essay', 'short_answer'])) {
-                $answerText = is_string($userAnswer) ? trim($userAnswer) : '';
-                // Get expected/model answer
-                $expectedOpt = db()->fetchOne(
-                    "SELECT option_text FROM question_option WHERE questions_id = ? AND is_correct = 1 LIMIT 1",
-                    [$q['questions_id']]
-                );
-                $expectedAnswer = $expectedOpt ? trim($expectedOpt['option_text']) : '';
+                $answerText    = is_string($userAnswer) ? trim($userAnswer) : '';
+                $expectedAnswer = trim($q['expected_answer'] ?? ''); // from main query — no extra DB call
 
-                if (!empty($answerText) && !empty($expectedAnswer)) {
-                    // AI grading: compare student answer to expected answer
+                if (!empty($answerText)) {
+                    // Always run AI — works with or without a model answer
                     $ai = aiGradeAnswer($q['question_text'], $expectedAnswer, $answerText, (int)$q['points'], $q['question_type']);
                     $pointsEarned = $ai['score'];
                     $earnedPoints += $pointsEarned;
                     $gradingStatus = $ai['status'];
-                    $isCorrect = ($pointsEarned >= $q['points']);
+                    $isCorrect = $pointsEarned >= $q['points'];
                     $q['_ai_feedback'] = $ai['feedback'];
                     if ($gradingStatus === 'pending') $hasPendingGrades = true;
-                } elseif (empty($answerText)) {
-                    $gradingStatus = 'auto_graded'; // No answer = 0 points, no pending
                 } else {
-                    // No model answer configured — fall back to manual
-                    $gradingStatus = 'pending';
-                    $hasPendingGrades = true;
+                    $gradingStatus = 'auto_graded'; // blank = 0 pts, not pending
                 }
             } elseif ($q['question_type'] === 'fill_blank' || $q['question_type'] === 'fill_in_the_blank') {
                 $answerText = is_string($userAnswer) ? trim($userAnswer) : '';
-                $correctOpt = db()->fetchOne(
-                    "SELECT option_text FROM question_option WHERE questions_id = ? AND is_correct = 1 LIMIT 1",
-                    [$q['questions_id']]
-                );
-                if ($correctOpt && $answerText !== '') {
-                    $correct = trim($correctOpt['option_text']);
-                    // Exact match (case-insensitive)
+                $correct    = trim($q['expected_answer'] ?? ''); // from main query — no extra DB call
+
+                if ($answerText !== '' && $correct !== '') {
+                    // Exact match first (case-insensitive)
                     if (strtolower($answerText) === strtolower($correct)) {
-                        $isCorrect = true;
+                        $isCorrect    = true;
                         $pointsEarned = (int)$q['points'];
                         $earnedPoints += $pointsEarned;
+                        $gradingStatus = 'auto_graded';
                     } else {
-                        // AI fuzzy match for minor typos / paraphrasing
+                        // AI fuzzy match for synonyms / minor typos
                         $ai = aiGradeAnswer($q['question_text'], $correct, $answerText, (int)$q['points'], 'fill_blank');
                         $pointsEarned = $ai['score'];
                         $earnedPoints += $pointsEarned;
-                        $isCorrect = ($pointsEarned >= $q['points']);
+                        $isCorrect = $pointsEarned >= $q['points'];
                         $gradingStatus = $ai['status'];
                         $q['_ai_feedback'] = $ai['feedback'];
                     }
+                } elseif ($answerText !== '' && $correct === '') {
+                    // Answer given but no correct answer configured — mark pending for manual review
+                    $gradingStatus   = 'pending';
+                    $hasPendingGrades = true;
                 }
             }
 
@@ -295,10 +297,10 @@ function submitQuiz() {
 
         $stmt = $pdo->prepare(
             "INSERT INTO student_quiz_attempts
-             (quiz_id, user_student_id, attempt_number, total_points, earned_points, percentage, passed, time_spent, started_at, completed_at, status, has_pending_grades)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'completed', ?)"
+             (quiz_id, user_student_id, attempt_number, total_points, earned_points, percentage, passed, time_spent, started_at, completed_at, status, has_pending_grades, tab_switch_count)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'completed', ?, ?)"
         );
-        $stmt->execute([$quizId, $userId, $attemptCount + 1, $totalPoints, $earnedPoints, round($percentage, 2), $passed ? 1 : 0, $timeTaken, $hasPendingGrades ? 1 : 0]);
+        $stmt->execute([$quizId, $userId, $attemptCount + 1, $totalPoints, $earnedPoints, round($percentage, 2), $passed ? 1 : 0, $timeTaken, $hasPendingGrades ? 1 : 0, $tabSwitches]);
         $attemptId = $pdo->lastInsertId();
 
         // Save individual answers
@@ -347,7 +349,7 @@ function submitQuiz() {
 
     } catch (Exception $e) {
         // Roll back if transaction was started but not committed
-        try { if ($pdo && $pdo->inTransaction()) $pdo->rollBack(); } catch (Exception $_) {}
+        try { if ($pdo?->inTransaction()) $pdo->rollBack(); } catch (Exception $_) {}
         error_log("Quiz submit error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error submitting quiz: ' . $e->getMessage()]);
     }
@@ -423,6 +425,7 @@ function getQuizScores() {
         $scores = db()->fetchAll(
             "SELECT sqa.attempt_id, sqa.attempt_number, sqa.total_points, sqa.earned_points,
                     sqa.percentage, sqa.passed, sqa.completed_at,
+                    COALESCE(sqa.tab_switch_count, 0) AS tab_switch_count,
                     u.first_name, u.last_name, u.student_id
              FROM student_quiz_attempts sqa
              JOIN users u ON sqa.user_student_id = u.users_id
@@ -456,19 +459,22 @@ function getPendingGrading() {
 
     $attempts = db()->fetchAll(
         "SELECT sqa.attempt_id, sqa.quiz_id, sqa.earned_points, sqa.total_points, sqa.percentage,
-                sqa.completed_at, sqa.has_pending_grades,
-                q.quiz_title, s.subject_code, s.subject_name,
+                sqa.completed_at, sqa.has_pending_grades, COALESCE(sqa.tab_switch_count, 0) AS tab_switch_count,
+                COALESCE(NULLIF(TRIM(q.quiz_title),''), '(Untitled Quiz)') AS quiz_title,
+                COALESCE(NULLIF(TRIM(s.subject_code),''), '—') AS subject_code,
+                s.subject_name,
                 u.first_name, u.last_name, u.student_id,
                 (SELECT COUNT(*) FROM student_quiz_answers a
                  JOIN questions q2 ON a.questions_id = q2.questions_id
                  WHERE a.attempt_id = sqa.attempt_id
                  AND q2.question_type IN ('essay','short_answer','fill_blank','fill_in_the_blank')
-                 AND a.grading_status = 'pending') as pending_count,
+                 AND a.grading_status IN ('pending','auto_graded')
+                 AND TRIM(COALESCE(a.answer_text,'')) != '') as pending_count,
                 (SELECT COUNT(*) FROM student_quiz_answers a
                  JOIN questions q2 ON a.questions_id = q2.questions_id
                  WHERE a.attempt_id = sqa.attempt_id
                  AND q2.question_type IN ('essay','short_answer','fill_blank','fill_in_the_blank')
-                 AND a.grading_status IN ('graded','auto_graded')) as graded_count
+                 AND a.grading_status = 'graded') as graded_count
          FROM student_quiz_attempts sqa
          JOIN quiz q ON sqa.quiz_id = q.quiz_id
          JOIN subject s ON q.subject_id = s.subject_id
@@ -481,7 +487,8 @@ function getPendingGrading() {
          AND (SELECT COUNT(*) FROM student_quiz_answers a
               JOIN questions q2 ON a.questions_id = q2.questions_id
               WHERE a.attempt_id = sqa.attempt_id
-              AND q2.question_type IN ('essay','short_answer','fill_blank','fill_in_the_blank')) > 0
+              AND q2.question_type IN ('essay','short_answer','fill_blank','fill_in_the_blank')
+              AND TRIM(COALESCE(a.answer_text,'')) != '') > 0
          ORDER BY sqa.completed_at DESC",
         $params
     );
@@ -518,7 +525,7 @@ function getAttemptAnswers() {
         "SELECT a.*, a.student_quiz_answer_id AS answer_id,
                 q.question_text, q.question_type, q.points as max_points,
                 (SELECT option_text FROM question_option WHERE option_id = a.selected_option_id LIMIT 1) as selected_option_text,
-                (SELECT option_text FROM question_option WHERE questions_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_answer_text
+                (SELECT option_text FROM question_option WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as correct_answer_text
          FROM student_quiz_answers a
          JOIN questions q ON a.questions_id = q.questions_id
          WHERE a.attempt_id = ?
@@ -620,6 +627,79 @@ function finalizeGrading() {
     }
 }
 
+// ── Trigger AI grading for a single answer (instructor-initiated) ────────────
+
+function aiGradeAnswerById() {
+    Auth::requireRole('instructor');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        echo json_encode(['success' => false, 'message' => 'POST required']);
+        return;
+    }
+
+    $data     = json_decode(file_get_contents('php://input'), true);
+    $answerId = (int)($data['answer_id'] ?? 0);
+    if (!$answerId) {
+        echo json_encode(['success' => false, 'message' => 'answer_id required']);
+        return;
+    }
+
+    // Fetch the answer row + question details
+    // NOTE: expected answer lives in question_option (is_correct=1) via quiz_question_id FK
+    $row = db()->fetchOne(
+        "SELECT a.student_quiz_answer_id, a.answer_text, a.max_points, a.grading_status,
+                q.question_text, q.question_type,
+                (SELECT option_text FROM question_option
+                 WHERE quiz_question_id = q.questions_id AND is_correct = 1 LIMIT 1) as expected_answer
+         FROM student_quiz_answers a
+         JOIN questions q ON a.questions_id = q.questions_id
+         WHERE a.student_quiz_answer_id = ?",
+        [$answerId]
+    );
+
+    if (!$row) {
+        echo json_encode(['success' => false, 'message' => 'Answer not found']);
+        return;
+    }
+
+    $answerText  = trim($row['answer_text'] ?? '');
+    $questionText = $row['question_text'] ?? '';
+    $expected    = $row['expected_answer'] ?? '';
+    $maxPoints   = (float)($row['max_points'] ?? 1);
+    $qType       = $row['question_type'] ?? 'essay';
+
+    if (empty($answerText)) {
+        echo json_encode(['success' => false, 'message' => 'Student left this question blank']);
+        return;
+    }
+
+    $result = aiGradeAnswer($questionText, $expected, $answerText, $maxPoints, $qType);
+
+    if ($result['status'] === 'pending') {
+        // AI call failed (no API key, network error, etc.)
+        echo json_encode(['success' => false, 'message' => 'AI grading unavailable. Check that a Groq API key is configured in Settings.']);
+        return;
+    }
+
+    // Save the AI result
+    try {
+        pdo()->prepare(
+            "UPDATE student_quiz_answers
+             SET points_earned = ?, grading_status = 'auto_graded', grader_feedback = ?,
+                 graded_by = NULL, graded_at = NOW()
+             WHERE student_quiz_answer_id = ?"
+        )->execute([$result['score'], $result['feedback'] ?: null, $answerId]);
+
+        echo json_encode([
+            'success'  => true,
+            'score'    => $result['score'],
+            'feedback' => $result['feedback'],
+            'max'      => $maxPoints,
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Failed to save AI grade']);
+    }
+}
+
 // ── AI-powered grading for essay / short_answer / fill_blank ────────────────
 
 function aiGradeAnswer($questionText, $expectedAnswer, $studentAnswer, $maxPoints, $questionType) {
@@ -629,7 +709,6 @@ function aiGradeAnswer($questionText, $expectedAnswer, $studentAnswer, $maxPoint
     if (!$keySetting || empty($keySetting['setting_value'])) return $fallback;
     $apiKey = $keySetting['setting_value'];
 
-    // Use a more capable model for grading accuracy
     $model = 'llama-3.3-70b-versatile';
     $modelSetting = db()->fetchOne("SELECT setting_value FROM system_settings WHERE setting_key = 'ai_model'");
     if ($modelSetting && !empty($modelSetting['setting_value'])) {
@@ -638,53 +717,95 @@ function aiGradeAnswer($questionText, $expectedAnswer, $studentAnswer, $maxPoint
 
     $studentText = trim($studentAnswer);
 
-    // Hard rules BEFORE calling AI — saves tokens and ensures reliability
+    // Hard rule: blank answer — no need to call AI
     if (empty($studentText)) {
         return ['score' => 0, 'feedback' => 'No answer was provided.', 'status' => 'auto_graded'];
     }
 
-    // If student answer is suspiciously short compared to question complexity
-    $minLengthForEssay = 20; // characters
-    if ($questionType === 'essay' && strlen($studentText) < $minLengthForEssay) {
-        return ['score' => 0, 'feedback' => 'Answer is too short to receive credit. Please provide a complete response.', 'status' => 'auto_graded'];
+    // Hard rule: clearly off (single random word / pure gibberish < 4 chars for essay)
+    if ($questionType === 'essay' && strlen($studentText) < 8) {
+        return ['score' => 0, 'feedback' => 'Answer is too brief to evaluate. Please write a complete response.', 'status' => 'auto_graded'];
     }
 
+    // ── Type-specific scoring context ──────────────────────────
     if ($questionType === 'essay') {
-        $typeInstruction = "ESSAY question. A valid essay MUST: (1) directly address the question topic, (2) include specific concepts, explanations or examples, (3) be written in complete sentences with substance. Random text, nonsensical phrases, or off-topic answers = 0 points.";
+        $typeContext = <<<TXT
+ESSAY — reward understanding expressed in any form. Award credit for:
+  • Correctly identifying the main concept or idea (even simply stated)
+  • Relevant supporting points, examples, or explanations
+  • Accurate paraphrasing of key terms
+Partial credit: award proportionally for each key concept the student covers.
+A short but accurate answer can earn significant credit — brevity ≠ wrong.
+TXT;
     } elseif ($questionType === 'short_answer') {
-        $typeInstruction = "SHORT ANSWER question. Award full points if the core concept is correct. Off-topic, vague, or nonsensical answers = 0 points. Partial credit for partially correct answers.";
+        $typeContext = <<<TXT
+SHORT ANSWER — award full credit if the core concept is correct, even if briefly stated.
+Accept synonyms and informal phrasing. Deduct only if the student's answer is factually wrong or entirely off-topic.
+TXT;
     } elseif ($questionType === 'fill_blank' || $questionType === 'fill_in_the_blank') {
-        $typeInstruction = "FILL IN THE BLANK. Accept only the correct word/phrase or clear synonyms. Random text = 0 points.";
+        $typeContext = <<<TXT
+FILL IN THE BLANK — accept the exact answer OR clear synonyms / alternate correct phrasings.
+Minor spelling errors that don't change the meaning should still receive credit.
+TXT;
     } else {
-        $typeInstruction = "Grade proportionally. Off-topic or nonsensical answers = 0 points.";
+        $typeContext = "Grade proportionally based on correctness and relevance. Partial credit for partially correct responses.";
     }
 
-    $expectedSection = !empty($expectedAnswer)
-        ? "Model Answer / Key Points: {$expectedAnswer}"
-        : "No model answer provided — grade based on whether the student's answer correctly addresses the question topic.";
+    $referenceBlock = !empty($expectedAnswer)
+        ? "REFERENCE ANSWER (the key concepts / facts the student should cover):\n\"{$expectedAnswer}\""
+        : "No reference answer provided. Use your subject knowledge to judge whether the student's answer correctly addresses the question.";
 
     $prompt = <<<PROMPT
-You are a STRICT and ACCURATE educational grader. Your job is to evaluate ONLY what the student actually wrote — never assume or add content they did not write.
+You are an experienced, fair educational grader with deep subject knowledge. Your job is to assess a student's understanding — not their writing style.
 
-QUESTION: {$questionText}
+GOLDEN RULE: A simple, correct answer earns full credit. A long but wrong answer earns nothing.
 
-{$expectedSection}
+━━━━━━━━━━━━━━━━━━━━━━
+QUESTION:
+{$questionText}
 
-STUDENT'S EXACT ANSWER (read this carefully word by word):
+{$referenceBlock}
+
+STUDENT'S ANSWER:
 "{$studentText}"
 
-MAXIMUM POINTS: {$maxPoints}
-TYPE: {$typeInstruction}
+MAXIMUM SCORE: {$maxPoints} points
+━━━━━━━━━━━━━━━━━━━━━━
 
-GRADING STEPS — follow in order:
-1. Read the student's answer exactly as written above.
-2. Ask: Does this answer actually address the question topic? If NO → score 0.
-3. Ask: Does it contain correct, relevant information matching the expected answer?
-4. Score proportionally: full points for fully correct, partial for partial, 0 for wrong/irrelevant/gibberish.
-5. NEVER award points for vague filler phrases like "make it accurate", "I don't know", random words, or text that does not relate to the question.
+QUESTION TYPE GUIDANCE:
+{$typeContext}
 
-Return ONLY valid JSON:
-{"score": <number 0 to {$maxPoints}>, "feedback": "<1 direct sentence to the student explaining the score>"}
+━━━━ GRADING METHOD (think through each step) ━━━━
+
+STEP 1 — Extract key concepts:
+  List the 2–4 main facts/ideas/concepts the reference answer covers.
+  (If no reference answer, use the question itself to identify what must be addressed.)
+
+STEP 2 — Match student answer to each concept:
+  For each concept, ask: Did the student express this idea correctly?
+  ACCEPT: exact match · synonym · paraphrase · simplified but accurate version
+  REJECT: factually wrong · completely unrelated · random filler text
+
+STEP 3 — Compute score:
+  score = (number of concepts correctly covered / total concepts) × {$maxPoints}
+  Round to nearest 0.5. Minimum 0, maximum {$maxPoints}.
+
+STEP 4 — Write feedback (1–2 sentences):
+  • If full credit: confirm what the student got right.
+  • If partial: name what was correct AND what key concept(s) were missing.
+  • If zero: explain briefly why the answer did not address the question.
+  Tone: constructive and educational, not harsh.
+
+━━━━ IMPORTANT RULES ━━━━
+✅ Reward correct understanding even if expressed simply or informally
+✅ Accept synonyms, paraphrasing, or alternate correct wording
+✅ Give partial credit — don't make it all-or-nothing unless the answer is completely wrong
+❌ Do NOT penalize for grammar, spelling, or writing style
+❌ Do NOT require the student to copy exact wording from the reference
+❌ Do NOT give points for: completely off-topic answers, random words, "I don't know", pure filler
+
+Respond ONLY with valid JSON — no extra text, no markdown:
+{"score": <number 0 to {$maxPoints}>, "feedback": "<1-2 sentences>"}
 PROMPT;
 
     $payload = [
@@ -692,12 +813,12 @@ PROMPT;
         'messages' => [
             [
                 'role'    => 'system',
-                'content' => 'You are a strict educational grader. You must evaluate only what is literally written in the student answer. Never assume content. Never give points for off-topic or gibberish answers. Respond only with valid JSON.'
+                'content' => 'You are an expert educational grader. You evaluate student answers fairly and accurately — rewarding genuine understanding regardless of how simply it is expressed. You think through the key concepts step by step before scoring. You respond ONLY with valid JSON: {"score": number, "feedback": "string"}. No markdown, no explanation outside the JSON.'
             ],
             ['role' => 'user', 'content' => $prompt]
         ],
-        'max_tokens'  => 200,
-        'temperature' => 0.0
+        'max_tokens'  => 350,
+        'temperature' => 0.1
     ];
 
     $ch = curl_init("https://api.groq.com/openai/v1/chat/completions");
@@ -705,28 +826,32 @@ PROMPT;
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => json_encode($payload),
-        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'],
-        CURLOPT_TIMEOUT        => 20
+        CURLOPT_HTTPHEADER     => ["Authorization: Bearer $apiKey", 'Content-Type: application/json'],
+        CURLOPT_TIMEOUT        => 25
     ]);
     $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    unset($ch); // curl_close() deprecated in PHP 8.5 — let destructor handle it
 
     if ($httpCode !== 200 || !$response) return $fallback;
 
     $data    = json_decode($response, true);
     $content = trim($data['choices'][0]['message']['content'] ?? '');
 
-    // Extract JSON from response (in case there is extra text)
-    if (preg_match('/\{[^}]+\}/s', $content, $m)) $content = $m[0];
+    // Strip markdown fences if model wraps the JSON
+    $content = preg_replace('/^```(?:json)?\s*/i', '', $content);
+    $content = preg_replace('/\s*```$/', '', $content);
+
+    // Extract first JSON object in case there is surrounding text
+    if (preg_match('/\{.*\}/s', $content, $m)) $content = $m[0];
     $result = json_decode($content, true);
 
     if (!$result || !array_key_exists('score', $result)) return $fallback;
 
-    $score = max(0, min($maxPoints, round(floatval($result['score']), 1)));
+    $score = max(0, min((float)$maxPoints, round(floatval($result['score']) * 2) / 2)); // round to 0.5
     return [
         'score'    => $score,
-        'feedback' => $result['feedback'] ?? '',
+        'feedback' => isset($result['feedback']) ? trim($result['feedback']) : '',
         'status'   => 'auto_graded'
     ];
 }

@@ -17,6 +17,7 @@ $action = $_GET['action'] ?? '';
 // RBAC: enforce permission per action
 $_soPerms = [
     'list'                => 'subject_offerings.view',
+    'list-multi'          => 'subject_offerings.view',
     'instructors'         => 'subject_offerings.view',
     'subjects'            => 'subject_offerings.view',
     'semesters'           => 'subject_offerings.view',
@@ -39,6 +40,7 @@ if (!$isDeanSO && isset($_soPerms[$action]) && !Auth::can($_soPerms[$action])) {
 
 switch ($action) {
     case 'list':                 handleList();                break;
+    case 'list-multi':           handleListMulti();           break;
     case 'create':               handleCreate();              break;
     case 'update':               handleUpdate();              break;
     case 'delete':               handleDelete();              break;
@@ -153,6 +155,104 @@ function handleList() {
     echo json_encode(['success' => true, 'data' => $offerings]);
 }
 
+/**
+ * Returns every curriculum subject with ALL assigned instructors as a nested array.
+ * Each subject appears once; its `instructors` key is an array of {subject_offered_id,
+ * user_teacher_id, instructor_name, section_count, offering_status}.
+ * Subjects with no assigned instructor have an empty `instructors` array.
+ */
+function handleListMulti() {
+    $semesterId = $_GET['semester_id'] ?? '';
+    $programId  = (int)($_GET['program_id'] ?? 0);
+
+    $semJoin = '';
+    if ($semesterId) {
+        $intSemId = (int)$semesterId;
+        $semJoin  = "AND so.semester_id IN (
+            SELECT s2.semester_id FROM semester s2
+            JOIN  semester s3 ON s3.semester_id = $intSemId
+            WHERE s2.academic_year  = s3.academic_year
+              AND s2.semester_name = s3.semester_name
+        )";
+    }
+
+    $whereConditions = [];
+    $whereParams     = [];
+    if ($programId) {
+        $whereConditions[] = 's.program_id = ?';
+        $whereParams[]     = $programId;
+    }
+    if (Auth::role() === 'dean') {
+        $deanUser   = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [Auth::id()]);
+        $deanDeptId = $deanUser['department_id'] ?? null;
+        if ($deanDeptId) {
+            $whereConditions[] = 'p.department_id = ?';
+            $whereParams[]     = $deanDeptId;
+        }
+    }
+    $where = $whereConditions ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+    // One row per (subject × instructor). Subjects with no assigned instructor
+    // still appear once (all so.* and u.* columns are NULL).
+    $rows = db()->fetchAll(
+        "SELECT s.subject_id, s.subject_code, s.subject_name, s.units,
+                s.year_level, s.semester AS subject_semester,
+                s.program_id, p.program_code, p.program_name,
+                so.subject_offered_id,
+                so.user_teacher_id,
+                so.status AS offering_status,
+                CONCAT(u.first_name, ' ', u.last_name) AS instructor_name,
+                (SELECT COUNT(*) FROM section_subject ss2
+                 WHERE ss2.subject_offered_id = so.subject_offered_id
+                   AND ss2.status = 'active') AS section_count
+         FROM subject s
+         LEFT JOIN program    p  ON s.program_id     = p.program_id
+         LEFT JOIN department d  ON p.department_id  = d.department_id
+         LEFT JOIN subject_offered so
+               ON  so.subject_id          = s.subject_id
+               AND so.status             != 'cancelled'
+               AND so.user_teacher_id    IS NOT NULL
+               $semJoin
+         LEFT JOIN users u ON u.users_id = so.user_teacher_id
+         $where
+         ORDER BY p.program_code, s.year_level, s.semester, s.subject_code, u.last_name, u.first_name",
+        $whereParams
+    );
+
+    // Group into subject → instructors[]
+    $subjects   = [];
+    $subjectIdx = [];
+    foreach ($rows as $row) {
+        $sid = $row['subject_id'];
+        if (!isset($subjectIdx[$sid])) {
+            $subjectIdx[$sid] = count($subjects);
+            $subjects[] = [
+                'subject_id'       => $row['subject_id'],
+                'subject_code'     => $row['subject_code'],
+                'subject_name'     => $row['subject_name'],
+                'units'            => $row['units'],
+                'year_level'       => $row['year_level'],
+                'subject_semester' => $row['subject_semester'],
+                'program_id'       => $row['program_id'],
+                'program_code'     => $row['program_code'],
+                'program_name'     => $row['program_name'],
+                'instructors'      => [],
+            ];
+        }
+        if ($row['subject_offered_id']) {
+            $subjects[$subjectIdx[$sid]]['instructors'][] = [
+                'subject_offered_id' => $row['subject_offered_id'],
+                'user_teacher_id'    => $row['user_teacher_id'],
+                'instructor_name'    => $row['instructor_name'],
+                'section_count'      => (int)($row['section_count'] ?? 0),
+                'offering_status'    => $row['offering_status'],
+            ];
+        }
+    }
+
+    echo json_encode(['success' => true, 'data' => $subjects]);
+}
+
 function handleCreate() {
     $data = json_decode(file_get_contents('php://input'), true);
     $subjectId  = (int)($data['subject_id']  ?? 0);
@@ -240,6 +340,8 @@ function handleAssign() {
 }
 
 // ─── Get all dept subjects with assignment status for one instructor ──────────
+// Returns ONE row per subject (aggregated). A subject may have multiple
+// subject_offered rows (one per instructor) — we aggregate to avoid duplicates.
 
 function handleInstructorSubjects() {
     if (!in_array(Auth::role(), ['dean','admin'])) {
@@ -266,17 +368,23 @@ function handleInstructorSubjects() {
     }
 
     $instrParam = $instrId ?: 0;
+    // Aggregate: one row per subject.
+    // is_assigned   = 1 if THIS instructor has any offering for this subject
+    // taken_by_other = 1 if ANY OTHER instructor also has an offering (informational — does NOT block)
+    // other_instructor_names = comma-separated names of other assigned instructors
     $subjects = db()->fetchAll(
         "SELECT s.subject_id, s.subject_code, s.subject_name, s.units,
                 s.year_level, s.semester AS subject_semester,
                 p.program_id, p.program_code, p.program_name,
-                so.subject_offered_id,
-                so.user_teacher_id,
-                so.status AS offering_status,
-                CASE WHEN so.user_teacher_id = $instrParam AND $instrParam > 0 THEN 1 ELSE 0 END AS is_assigned,
-                CASE WHEN so.subject_offered_id IS NOT NULL THEN 1 ELSE 0 END AS has_offering,
-                CASE WHEN so.user_teacher_id IS NOT NULL AND so.user_teacher_id != $instrParam THEN 1 ELSE 0 END AS taken_by_other,
-                CONCAT(ou.first_name,' ',ou.last_name) AS other_instructor_name
+                MAX(CASE WHEN so.user_teacher_id = $instrParam AND $instrParam > 0 THEN 1 ELSE 0 END) AS is_assigned,
+                MAX(CASE WHEN so.subject_offered_id IS NOT NULL THEN 1 ELSE 0 END) AS has_offering,
+                MAX(CASE WHEN so.user_teacher_id IS NOT NULL AND so.user_teacher_id != $instrParam THEN 1 ELSE 0 END) AS taken_by_other,
+                GROUP_CONCAT(DISTINCT
+                    CASE WHEN so.user_teacher_id IS NOT NULL AND so.user_teacher_id != $instrParam
+                         THEN CONCAT(ou.first_name,' ',ou.last_name)
+                         ELSE NULL END
+                    ORDER BY ou.last_name SEPARATOR ', ')
+                AS other_instructor_names
          FROM subject s
          JOIN program p ON p.program_id = s.program_id
          JOIN department_program dp ON dp.program_id = p.program_id
@@ -284,8 +392,13 @@ function handleInstructorSubjects() {
                ON so.subject_id = s.subject_id
               AND so.semester_id = $semId
               AND so.status != 'cancelled'
-         LEFT JOIN users ou ON ou.users_id = so.user_teacher_id AND ou.users_id != $instrParam
+         LEFT JOIN users ou
+               ON ou.users_id = so.user_teacher_id
+              AND so.user_teacher_id != $instrParam
          WHERE dp.department_id = $deptId AND s.status = 'active'
+         GROUP BY s.subject_id, s.subject_code, s.subject_name, s.units,
+                  s.year_level, s.semester,
+                  p.program_id, p.program_code, p.program_name
          ORDER BY p.program_code, s.year_level, s.semester, s.subject_code",
         []
     );
@@ -294,6 +407,13 @@ function handleInstructorSubjects() {
 }
 
 // ─── Batch assign subjects to an instructor (dean only) ───────────────────────
+// Multi-instructor aware: never overwrites another instructor's offering.
+// Works with subject_ids (not subject_offered_ids) so multiple offerings per
+// subject are handled by creating new rows, not by clobbering existing ones.
+//
+// POST body: { instructor_id, semester_id?,
+//              assign_subject_ids: int[],   ← subject_ids to assign
+//              unassign_subject_ids: int[]  ← subject_ids to unassign }
 
 function handleDeanAssign() {
     if (!in_array(Auth::role(), ['dean','admin'])) {
@@ -302,15 +422,18 @@ function handleDeanAssign() {
         return;
     }
 
-    $data    = json_decode(file_get_contents('php://input'), true) ?? [];
-    $instrId = (int)($data['instructor_id'] ?? 0);
-    $semId   = (int)($data['semester_id']   ?? 0);
-    $assign  = array_filter(array_map('intval', $data['assign']          ?? []), fn($x) => $x > 0); // subject_offered_ids
-    $create  = array_filter(array_map('intval', $data['create_assign']   ?? []), fn($x) => $x > 0); // subject_ids (no offering yet)
-    $unassign= array_filter(array_map('intval', $data['unassign']        ?? []), fn($x) => $x > 0); // subject_offered_ids
+    $data      = json_decode(file_get_contents('php://input'), true) ?? [];
+    $instrId   = (int)($data['instructor_id'] ?? 0);
+    $semId     = (int)($data['semester_id']   ?? 0);
+    $assignIds = array_filter(array_map('intval', $data['assign_subject_ids']   ?? []), fn($x) => $x > 0);
+    $unassignIds = array_filter(array_map('intval', $data['unassign_subject_ids'] ?? []), fn($x) => $x > 0);
 
     if (!$instrId) {
         echo json_encode(['success' => false, 'message' => 'instructor_id required']);
+        return;
+    }
+    if (empty($assignIds) && empty($unassignIds)) {
+        echo json_encode(['success' => false, 'message' => 'No changes to apply']);
         return;
     }
     if (!$semId) {
@@ -318,9 +441,9 @@ function handleDeanAssign() {
         $semId = $act ? (int)$act['semester_id'] : 0;
     }
 
-    // Verify instructor is in dean's dept
-    $deanUser  = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [Auth::id()]);
-    $deptId    = (int)($deanUser['department_id'] ?? 0);
+    // Verify instructor is in dean's department
+    $deanUser   = db()->fetchOne("SELECT department_id FROM users WHERE users_id = ?", [Auth::id()]);
+    $deptId     = (int)($deanUser['department_id'] ?? 0);
     $instrCheck = db()->fetchOne(
         "SELECT users_id FROM users WHERE users_id = ? AND department_id = ? AND role = 'instructor' AND status = 'active'",
         [$instrId, $deptId]
@@ -334,16 +457,27 @@ function handleDeanAssign() {
         $pdo = pdo();
         $pdo->beginTransaction();
 
-        // Create new offerings for subjects that don't have one yet, then assign
-        foreach ($create as $subjectId) {
-            $existing = db()->fetchOne(
-                "SELECT subject_offered_id FROM subject_offered WHERE subject_id = ? AND semester_id = ?",
+        // ── Assign: find-or-create this instructor's own offering row ─────────
+        foreach ($assignIds as $subjectId) {
+            // Already have their own offering? Skip.
+            $mine = db()->fetchOne(
+                "SELECT subject_offered_id FROM subject_offered
+                  WHERE subject_id = ? AND semester_id = ? AND user_teacher_id = ? AND status = 'open' LIMIT 1",
+                [$subjectId, $semId, $instrId]
+            );
+            if ($mine) continue;
+
+            // Unclaimed offering exists? Claim it.
+            $empty = db()->fetchOne(
+                "SELECT subject_offered_id FROM subject_offered
+                  WHERE subject_id = ? AND semester_id = ? AND user_teacher_id IS NULL AND status = 'open' LIMIT 1",
                 [$subjectId, $semId]
             );
-            if ($existing) {
+            if ($empty) {
                 $pdo->prepare("UPDATE subject_offered SET user_teacher_id = ?, updated_at = NOW() WHERE subject_offered_id = ?")
-                    ->execute([$instrId, $existing['subject_offered_id']]);
+                    ->execute([$instrId, $empty['subject_offered_id']]);
             } else {
+                // All existing offerings belong to other instructors — create a new one.
                 $pdo->prepare(
                     "INSERT INTO subject_offered (subject_id, semester_id, user_teacher_id, status, created_at, updated_at)
                      VALUES (?, ?, ?, 'open', NOW(), NOW())"
@@ -351,20 +485,17 @@ function handleDeanAssign() {
             }
         }
 
-        // Assign instructor to existing offerings
-        foreach ($assign as $soId) {
-            $pdo->prepare("UPDATE subject_offered SET user_teacher_id = ?, updated_at = NOW() WHERE subject_offered_id = ?")
-                ->execute([$instrId, $soId]);
-        }
-
-        // Unassign — only remove if currently this instructor's
-        foreach ($unassign as $soId) {
-            $pdo->prepare("UPDATE subject_offered SET user_teacher_id = NULL, updated_at = NOW() WHERE subject_offered_id = ? AND user_teacher_id = ?")
-                ->execute([$soId, $instrId]);
+        // ── Unassign: only touch this instructor's own row ────────────────────
+        foreach ($unassignIds as $subjectId) {
+            $pdo->prepare(
+                "UPDATE subject_offered SET user_teacher_id = NULL, updated_at = NOW()
+                  WHERE subject_id = ? AND semester_id = ? AND user_teacher_id = ? AND status = 'open'"
+            )->execute([$subjectId, $semId, $instrId]);
         }
 
         $pdo->commit();
-        echo json_encode(['success' => true, 'message' => 'Assignments saved successfully']);
+        $total = count($assignIds) + count($unassignIds);
+        echo json_encode(['success' => true, 'message' => "Updated $total subject(s)"]);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('DeanAssign: ' . $e->getMessage());

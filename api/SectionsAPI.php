@@ -29,6 +29,7 @@ $_sectPerms = [
     'programs'                  => 'sections.view',
     'departments'               => 'sections.view',
     'create'                    => 'sections.create',
+    'bulk-import'               => 'sections.create',
     'update'                    => 'sections.edit',
     'add-subject'               => 'sections.edit',
     'remove-subject'            => 'sections.edit',
@@ -38,9 +39,17 @@ $_sectPerms = [
     'unenroll'                  => 'sections.edit',
     'delete'                    => 'sections.delete',
 ];
-// Dean has intrinsic access to sections (scoped by dept)
-$isDeanSect = Auth::role() === 'dean';
-if (!$isDeanSect && isset($_sectPerms[$action]) && !Auth::can($_sectPerms[$action])) {
+// Dean has intrinsic access to sections (scoped by dept).
+// Instructors have intrinsic access to CRUD on their own sections.
+$isDeanSect  = Auth::role() === 'dean';
+$isInstrSect = Auth::role() === 'instructor';
+// Actions instructors can always perform on their own sections (server-side scoping handles security)
+$instrActions = ['create','update','delete','add-subject','remove-subject','unenroll',
+                 'instructor-list','instructor-avail-subjects','instructor-assigned-subjects',
+                 'instructor-programs','students'];
+$instrBypassed = $isInstrSect && in_array($action, $instrActions);
+
+if (!$isDeanSect && !$instrBypassed && isset($_sectPerms[$action]) && !Auth::can($_sectPerms[$action])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => "Permission denied: {$_sectPerms[$action]}"]);
     exit;
@@ -173,6 +182,14 @@ function handleCreate() {
         }
     }
 
+    // For instructors: auto-fill program_id from their profile if not provided
+    if (Auth::role() === 'instructor' && !$programId) {
+        $instrUser = db()->fetchOne("SELECT program_id FROM users WHERE users_id = ?", [Auth::id()]);
+        if ($instrUser && $instrUser['program_id']) {
+            $programId = (int)$instrUser['program_id'];
+        }
+    }
+
     // Auto-fall-back to active semester if none provided
     if (!$semesterId) {
         $active = db()->fetchOne("SELECT semester_id FROM semester WHERE status = 'active' LIMIT 1");
@@ -250,7 +267,7 @@ function handleAddSubject() {
     $schedule  = trim($data['schedule'] ?? '');
     $room      = trim($data['room']     ?? '');
 
-    if (!$sectionId || (!$offeredId && !$subjectId)) {
+    if (!$sectionId || !$offeredId && !$subjectId) {
         echo json_encode(['success' => false, 'message' => 'section_id and subject_id are required']);
         return;
     }
@@ -260,15 +277,27 @@ function handleAddSubject() {
         return;
     }
 
-    // Instructor role: verify the offering was actually assigned to them by the dean
+    // Instructor role: verify the offering belongs to them; reactivate if cancelled
     if (Auth::role() === 'instructor' && $offeredId) {
         $owns = db()->fetchOne(
-            "SELECT subject_offered_id FROM subject_offered WHERE subject_offered_id = ? AND user_teacher_id = ?",
+            "SELECT subject_offered_id, status FROM subject_offered WHERE subject_offered_id = ? AND user_teacher_id = ?",
             [$offeredId, Auth::id()]
         );
         if (!$owns) {
             echo json_encode(['success' => false, 'message' => 'You can only add subjects assigned to you by the dean']);
             return;
+        }
+        // If the offering was previously cancelled (e.g., by old auto-cancel logic),
+        // reactivate it so it can be added to a section again.
+        if ($owns['status'] === 'cancelled') {
+            try {
+                pdo()->prepare("UPDATE subject_offered SET status = 'open', updated_at = NOW() WHERE subject_offered_id = ?")
+                    ->execute([$offeredId]);
+            } catch (Exception $e) {
+                error_log('Reactivate offering on add: ' . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to reactivate subject offering']);
+                return;
+            }
         }
     }
 
@@ -392,26 +421,13 @@ function handleRemoveSubject() {
 
     try {
         $pdo = pdo();
-        $offeredId = (int)$row['subject_offered_id'];
 
         $pdo->prepare("DELETE FROM section_subject WHERE section_subject_id = ?")->execute([$sectionSubjectId]);
 
-        // If offering is now in no other active section AND has no enrolled students,
-        // cancel it so it no longer appears in My Classes
-        $stillInSection = db()->fetchOne(
-            "SELECT COUNT(*) AS c FROM section_subject WHERE subject_offered_id = ? AND status = 'active'",
-            [$offeredId]
-        )['c'] ?? 1;
-
-        $hasStudents = db()->fetchOne(
-            "SELECT COUNT(*) AS c FROM student_subject WHERE subject_offered_id = ? AND status = 'enrolled'",
-            [$offeredId]
-        )['c'] ?? 1;
-
-        if ((int)$stillInSection === 0 && (int)$hasStudents === 0) {
-            $pdo->prepare("UPDATE subject_offered SET status = 'cancelled', updated_at = NOW() WHERE subject_offered_id = ?")
-                ->execute([$offeredId]);
-        }
+        // NOTE: We intentionally do NOT cancel the subject_offered row here.
+        // Cancellation is handled explicitly by the instructor via "Remove from My Classes"
+        // (handleRemoveClass). Auto-cancelling here would prevent the instructor from
+        // re-adding the subject to another (or the same) section in the same semester.
 
         echo json_encode(['success' => true, 'message' => 'Subject removed from section']);
     } catch (Exception $e) {
@@ -502,7 +518,7 @@ function handleBulkAddSubjects() {
     $subjectIds = array_map('intval', $data['subject_ids']        ?? []);
     $offeredIds = array_map('intval', $data['subject_offered_ids'] ?? []);
 
-    if (!$sectionId || (empty($subjectIds) && empty($offeredIds))) {
+    if (!$sectionId || empty($subjectIds) && empty($offeredIds)) {
         echo json_encode(['success' => false, 'message' => 'Invalid data']);
         return;
     }
@@ -750,8 +766,61 @@ function handleInstructorAssignedSubjects() {
         return;
     }
 
+    // ── Heal cancelled offerings for this instructor in the active semester ─────
+    // Reactivate any 'cancelled' offering ONLY when there is no other 'open'
+    // offering for the same subject (prevents creating duplicates).
+    $cancelledRows = db()->fetchAll(
+        "SELECT so.subject_offered_id, so.subject_id
+         FROM subject_offered so
+         WHERE so.user_teacher_id = ? AND so.semester_id = ? AND so.status = 'cancelled'",
+        [$userId, $semId]
+    );
+    foreach ($cancelledRows as $cr) {
+        $hasOpen = db()->fetchOne(
+            "SELECT subject_offered_id FROM subject_offered
+              WHERE subject_id = ? AND semester_id = ? AND user_teacher_id = ? AND status = 'open' LIMIT 1",
+            [$cr['subject_id'], $semId, $userId]
+        );
+        if (!$hasOpen) {
+            db()->execute(
+                "UPDATE subject_offered SET status = 'open', updated_at = NOW() WHERE subject_offered_id = ?",
+                [$cr['subject_offered_id']]
+            );
+        }
+    }
+
+    // ── Deduplicate: cancel extra orphaned open offerings ─────────────────────
+    // If the instructor has >1 open offering for the same subject in this semester,
+    // keep only the one that is in a section (or the newest if none are).
+    $allOpen = db()->fetchAll(
+        "SELECT so.subject_offered_id, so.subject_id,
+                (SELECT COUNT(*) FROM section_subject ss WHERE ss.subject_offered_id = so.subject_offered_id AND ss.status = 'active') AS in_section
+         FROM subject_offered so
+         WHERE so.user_teacher_id = ? AND so.semester_id = ? AND so.status = 'open'
+         ORDER BY so.subject_id, in_section DESC, so.subject_offered_id DESC",
+        [$userId, $semId]
+    );
+    $seenSubjects = [];
+    foreach ($allOpen as $row) {
+        $sid = $row['subject_id'];
+        if (!isset($seenSubjects[$sid])) {
+            $seenSubjects[$sid] = true; // keep this one (first = best)
+        } else {
+            // Duplicate — cancel the extra orphaned offering
+            if ((int)$row['in_section'] === 0) {
+                db()->execute(
+                    "UPDATE subject_offered SET status = 'cancelled', updated_at = NOW() WHERE subject_offered_id = ?",
+                    [$row['subject_offered_id']]
+                );
+            }
+        }
+    }
+
+    // ── Return one row per subject (deduplicate with GROUP BY) ────────────────
+    // Use MAX(so.subject_offered_id) so we pick the most recently created
+    // offering when multiple rows exist for the same subject.
     $subjects = db()->fetchAll(
-        "SELECT so.subject_offered_id,
+        "SELECT MAX(so.subject_offered_id) AS subject_offered_id,
                 s.subject_id, s.subject_code, s.subject_name, s.units,
                 s.year_level, s.semester AS curriculum_semester,
                 p.program_id, p.program_code, p.program_name
@@ -760,14 +829,19 @@ function handleInstructorAssignedSubjects() {
          JOIN program p ON p.program_id  = s.program_id
          WHERE so.user_teacher_id = ?
            AND so.semester_id     = ?
-           AND so.status = 'open'
-           AND s.status  = 'active'
+           AND so.status          = 'open'
+           AND s.status           = 'active'
            AND ($sectionId = 0 OR NOT EXISTS (
                SELECT 1 FROM section_subject ss
-               WHERE ss.subject_offered_id = so.subject_offered_id
-                 AND ss.section_id = $sectionId
-                 AND ss.status = 'active'
+               JOIN subject_offered so2 ON so2.subject_offered_id = ss.subject_offered_id
+               WHERE so2.subject_id      = s.subject_id
+                 AND so2.user_teacher_id = $userId
+                 AND ss.section_id       = $sectionId
+                 AND ss.status           = 'active'
            ))
+         GROUP BY s.subject_id, s.subject_code, s.subject_name, s.units,
+                  s.year_level, s.semester,
+                  p.program_id, p.program_code, p.program_name
          ORDER BY p.program_code, s.year_level, s.semester, s.subject_code",
         [$userId, $semId]
     );

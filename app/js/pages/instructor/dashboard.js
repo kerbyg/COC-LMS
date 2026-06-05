@@ -8,7 +8,10 @@ import { Auth } from '../../auth.js';
 export async function render(container) {
     container.innerHTML = '<div style="display:flex;justify-content:center;padding:60px"><div style="width:40px;height:40px;border:3px solid #e8e4d9;border-top-color:#1B4D3E;border-radius:50%;animation:spin .8s linear infinite"></div></div>';
 
-    const res = await Api.get('/DashboardAPI.php?action=instructor');
+    const [res, semRes] = await Promise.all([
+        Api.get('/DashboardAPI.php?action=instructor'),
+        Api.get('/SemesterAPI.php?action=list')
+    ]);
     const data = res.success ? res.data : {};
     const stats    = data.stats             || {};
     const classes  = data.classes           || [];
@@ -16,6 +19,12 @@ export async function render(container) {
     const quizPerf = data.quiz_performance  || [];
     const atRisk   = data.at_risk_students  || [];
     const user     = Auth.user();
+
+    // Active semester
+    const semesters   = semRes.success ? semRes.data : [];
+    const activeSem   = semesters.find(s => s.status === 'active') || null;
+    const semLabel    = activeSem ? `${activeSem.semester_name} · AY ${activeSem.academic_year}` : null;
+    const upcomingSem = !activeSem ? semesters.find(s => s.status === 'upcoming') : null;
 
     const hour     = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
@@ -42,10 +51,25 @@ export async function render(container) {
             .id-banner-inner { position:relative; z-index:1; }
             .id-banner h2 { font-size:24px; font-weight:800; margin:0 0 5px; letter-spacing:-0.3px; }
             .id-banner p  { margin:0; opacity:0.65; font-size:13px; font-weight:400; }
+            .id-banner-pills { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; align-items:center; }
             .id-banner-rule {
-                display:inline-block; margin-top:14px;
+                display:inline-flex; align-items:center; gap:6px;
                 background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18);
-                border-radius:20px; padding:4px 14px; font-size:12px; font-weight:500; opacity:0.9;
+                border-radius:20px; padding:5px 14px; font-size:12px; font-weight:500; opacity:0.9;
+            }
+            .id-banner-sem {
+                display:inline-flex; align-items:center; gap:7px;
+                background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.3);
+                border-radius:20px; padding:5px 16px; font-size:12px; font-weight:700;
+            }
+            .id-banner-sem-dot {
+                width:7px; height:7px; border-radius:50%; background:#4ade80;
+                box-shadow:0 0 6px rgba(74,222,128,.7); flex-shrink:0;
+            }
+            .id-banner-sem-warn {
+                display:inline-flex; align-items:center; gap:7px;
+                background:rgba(251,191,36,0.2); border:1px solid rgba(251,191,36,0.4);
+                border-radius:20px; padding:5px 16px; font-size:12px; font-weight:600; color:#fef3c7;
             }
 
             /* ── Stat cards ──────────────────────────── */
@@ -204,7 +228,23 @@ export async function render(container) {
             <div class="id-banner-inner">
                 <h2>${greeting}, ${esc(user.first_name)}</h2>
                 <p>Here's your teaching overview for today.</p>
-                <span class="id-banner-rule">${today}</span>
+                <div class="id-banner-pills">
+                    <span class="id-banner-rule">
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        ${today}
+                    </span>
+                    ${activeSem
+                        ? `<span class="id-banner-sem">
+                               <span class="id-banner-sem-dot"></span>
+                               📅 ${esc(semLabel)}
+                           </span>`
+                        : upcomingSem
+                            ? `<span class="id-banner-sem-warn">
+                                   ⏳ Upcoming: ${esc(upcomingSem.semester_name)} · AY ${esc(upcomingSem.academic_year)}
+                               </span>`
+                            : `<span class="id-banner-sem-warn">⚠️ No active semester set</span>`
+                    }
+                </div>
             </div>
         </div>
 

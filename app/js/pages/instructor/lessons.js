@@ -51,9 +51,9 @@ async function renderList(container, filterSubject = '') {
             .subj-name { font-size:16px; font-weight:700; color:#111827; }
 
             /* Fixed: Removed overflow:hidden so dropdowns aren't clipped */
-            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,.07); position:relative; }
-            .data-table th { text-align:left; padding:12px 16px; font-size:12px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; background:#fafbfc; border-bottom:1px solid #f1f5f9; }
-            .data-table td { padding:13px 16px; border-bottom:1px solid #f8fafc; font-size:14px; }
+            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; border:2px solid #1B4D3E; position:relative; }
+            .data-table th { text-align:left; padding:10px 14px; font-size:12px; font-weight:700; color:#404040; background:#f7f7f7; border-bottom:1px solid #ccc; }
+            .data-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; }
             .data-table tr:hover td { background:#f9fffe; }
 
             /* Round top corners of the table manually since overflow is visible */

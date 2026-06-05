@@ -42,11 +42,11 @@ async function renderList(container, search = '', deptId = '', progId = '', semI
             .filters select { padding:9px 14px; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; min-width:200px; background:#fff; }
             .filters .clear-btn { color:#00461B; font-size:13px; cursor:pointer; text-decoration:underline; }
 
-            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:1px solid #e8e8e8; }
-            .data-table th { text-align:left; padding:14px 16px; font-size:12px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
-            .data-table td { padding:14px 16px; border-bottom:1px solid #f5f5f5; font-size:14px; }
+            .data-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; border:2px solid #1B4D3E; }
+            .data-table th { text-align:left; padding:10px 14px; font-size:12px; font-weight:700; color:#404040; background:#f7f7f7; border-bottom:1px solid #ccc; }
+            .data-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; }
             .data-table tr:last-child td { border-bottom:none; }
-            .data-table tr:hover td { background:#fafafa; }
+            .data-table tr:hover td { background:#f9fffe; }
 
             .subj-code { background:#E8F5E9; color:#1B4D3E; padding:4px 10px; border-radius:6px; font-family:monospace; font-weight:600; font-size:13px; }
             .subj-name { font-weight:600; color:#262626; }

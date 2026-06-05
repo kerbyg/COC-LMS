@@ -130,9 +130,9 @@ export async function render(container) {
             .col-chart-wrap { overflow-x:auto; padding:4px 0 0; }
 
             /* Subject breakdown */
-            .data-table { width:100%; border-collapse:collapse; }
-            .data-table th { text-align:left; padding:11px 16px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9; background:#fafbfc; }
-            .data-table td { padding:13px 16px; border-bottom:1px solid #f8fafc; font-size:13px; vertical-align:middle; }
+            .data-table { width:100%; border-collapse:collapse; border-radius:10px; overflow:hidden; border:2px solid #1B4D3E; }
+            .data-table th { text-align:left; padding:10px 14px; font-size:12px; font-weight:700; color:#404040; background:#f7f7f7; border-bottom:1px solid #ccc; }
+            .data-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; vertical-align:middle; }
             .data-table tr:last-child td { border-bottom:none; }
             .data-table tr:hover td { background:#f9fffe; }
             .subj-tag { background:#E8F5E9; color:#1B4D3E; padding:3px 8px; border-radius:6px; font-family:monospace; font-size:12px; font-weight:700; }

@@ -177,28 +177,28 @@ async function renderPage(container, filterSubject = '', searchVal = '') {
 
             /* ── Student table ── */
             .gb-table-wrap {
-                background:#fff; border:1px solid #e8e8e8; border-radius:0 0 12px 12px;
-                overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06);
+                background:#fff; border:2px solid #1B4D3E; border-radius:0 0 12px 12px;
+                overflow:hidden;
             }
             .gb-table { width:100%; border-collapse:collapse; }
             .gb-table thead tr {
-                background:#fafbfc; border-bottom:1px solid #e8e8e8;
+                background:#f7f7f7; border-bottom:1px solid #ccc;
             }
             .gb-table th {
-                padding:11px 16px; font-size:11px; font-weight:600; color:#9ca3af;
-                text-transform:uppercase; letter-spacing:.5px; text-align:left;
+                padding:10px 14px; font-size:12px; font-weight:700; color:#404040;
+                text-align:left;
             }
             .gb-table th:not(:first-child) { text-align:center; }
 
             /* Student row */
             .gb-student-row {
                 cursor:pointer; transition:background .12s;
-                border-bottom:1px solid #f3f4f6;
+                border-bottom:1px solid #f0f0f0;
             }
             .gb-student-row:hover { background:#f9fffe; }
             .gb-student-row:last-of-type { border-bottom:none; }
             .gb-student-row td {
-                padding:13px 16px; font-size:13px; vertical-align:middle;
+                padding:10px 14px; font-size:13px; vertical-align:middle;
             }
             .gb-student-row td:not(:first-child) { text-align:center; }
 
@@ -586,15 +586,22 @@ function buildContent(container, scoreResults, searchVal) {
                 const passed = st.attempts.some(a => a.passed == 1);
                 const gradeClass = pct >= 90 ? 'a' : pct >= 80 ? 'b' : pct >= 70 ? 'c' : pct >= 60 ? 'd' : 'f';
                 const gradeLabel = pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
-                const detailId = `detail-${q.quiz_id}-${rowIdx++}`;
-                const nameLower = (st.first_name + ' ' + st.last_name).toLowerCase();
+                const detailId   = `detail-${q.quiz_id}-${rowIdx++}`;
+                const nameLower  = (st.first_name + ' ' + st.last_name).toLowerCase();
+                const totalSwitches = st.attempts.reduce((s, a) => s + parseInt(a.tab_switch_count || 0), 0);
 
                 html += `
                 <tr class="gb-student-row grade-${gradeClass}" data-name="${nameLower}" data-target="${detailId}">
                     <td>
                         <span class="gb-expand-arrow">▶</span>
                         <div>
-                            <div class="gb-student-name">${esc(st.first_name)} ${esc(st.last_name)}</div>
+                            <div class="gb-student-name" style="display:flex;align-items:center;gap:8px;">
+                                ${esc(st.first_name)} ${esc(st.last_name)}
+                                ${totalSwitches > 0 ? `<span title="${totalSwitches} tab switch${totalSwitches>1?'es':''} detected across all attempts"
+                                    style="display:inline-flex;align-items:center;gap:3px;background:#FEE2E2;color:#b91c1c;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;cursor:default;">
+                                    🚨 ${totalSwitches} switch${totalSwitches>1?'es':''}
+                                </span>` : ''}
+                            </div>
                             ${st.student_id ? `<div class="gb-student-id">${esc(st.student_id)}</div>` : ''}
                         </div>
                     </td>
@@ -619,19 +626,24 @@ function buildContent(container, scoreResults, searchVal) {
                     <td colspan="6" style="padding:0;border-bottom:1px solid #f3f4f6">
                         <div class="gb-detail-inner">
                             <table class="gb-detail-table">
-                                <thead><tr><th>#</th><th>Score</th><th>Percentage</th><th>Status</th><th>Date & Time</th></tr></thead>
+                                <thead><tr><th>#</th><th>Score</th><th>Percentage</th><th>Status</th><th>Date & Time</th><th>Integrity</th></tr></thead>
                                 <tbody>
                                     ${st.attempts.map((a, idx) => {
-                                        const ap   = parseFloat(a.percentage || 0);
-                                        const aCls = ap >= 90 ? 'a' : ap >= 80 ? 'b' : ap >= 70 ? 'c' : ap >= 60 ? 'd' : 'f';
-                                        const aLbl = ap >= 90 ? 'A' : ap >= 80 ? 'B' : ap >= 70 ? 'C' : ap >= 60 ? 'D' : 'F';
-                                        const isBest = a === best;
+                                        const ap      = parseFloat(a.percentage || 0);
+                                        const aCls    = ap >= 90 ? 'a' : ap >= 80 ? 'b' : ap >= 70 ? 'c' : ap >= 60 ? 'd' : 'f';
+                                        const aLbl    = ap >= 90 ? 'A' : ap >= 80 ? 'B' : ap >= 70 ? 'C' : ap >= 60 ? 'D' : 'F';
+                                        const isBest  = a === best;
+                                        const sw      = parseInt(a.tab_switch_count || 0);
                                         return `<tr>
                                             <td style="color:#9ca3af">Attempt ${a.attempt_number || idx + 1}${isBest ? '<span class="attempt-best">★ Best</span>' : ''}</td>
                                             <td style="font-weight:600">${a.earned_points}/${a.total_points}</td>
                                             <td><span class="grade-pill ${aCls}" style="font-size:10px">${aLbl} ${ap.toFixed(1)}%</span></td>
                                             <td><span class="status-badge ${a.passed == 1 ? 'passed' : 'failed'}" style="font-size:10px">${a.passed == 1 ? '✓ Passed' : '✕ Failed'}</span></td>
                                             <td style="color:#9ca3af">${a.completed_at ? new Date(a.completed_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}</td>
+                                            <td>${sw > 0
+                                                ? `<span title="${sw} tab switch${sw>1?'es':''}" style="display:inline-flex;align-items:center;gap:3px;background:#FEE2E2;color:#b91c1c;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">🚨 ${sw} switch${sw>1?'es':''}</span>`
+                                                : `<span style="color:#d1d5db;font-size:11px;">—</span>`
+                                            }</td>
                                         </tr>`;
                                     }).join('')}
                                 </tbody>

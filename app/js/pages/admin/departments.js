@@ -24,17 +24,22 @@ async function renderList(container) {
             .btn-primary { background:linear-gradient(135deg,#00461B,#006428); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; transition:all .2s; }
             .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,70,27,.3); }
 
-            .table-wrap { border:1px solid #e8e8e8; border-radius:12px; overflow:hidden; background:#fff; }
+            .table-wrap { border:2px solid #1B4D3E; border-radius:12px; overflow:hidden; background:#fff; }
             .data-table { width:100%; border-collapse:collapse; background:#fff; }
-            .data-table th { text-align:left; padding:14px 16px; font-size:12px; font-weight:600; color:#737373; text-transform:uppercase; letter-spacing:.5px; background:#fafafa; border-bottom:1px solid #e8e8e8; }
-            .data-table td { padding:14px 16px; border-bottom:1px solid #f5f5f5; font-size:14px; }
+            .data-table th { text-align:left; padding:10px 14px; font-size:12px; font-weight:700; color:#404040; background:#f7f7f7; border-bottom:1px solid #ccc; }
+            .data-table td { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; }
             .data-table tr:last-child td { border-bottom:none; }
-            .data-table tr:hover td { background:#fafafa; }
+            .data-table tr:hover td { background:#f9fffe; }
 
             .dept-code { background:#E8F5E9; color:#1B4D3E; padding:4px 10px; border-radius:6px; font-family:monospace; font-weight:600; font-size:13px; letter-spacing:.5px; }
             .dept-name { font-weight:600; color:#262626; }
             .dept-desc { font-size:12px; color:#737373; margin-top:2px; }
             .program-badge { background:#DBEAFE; color:#1E40AF; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+            .dean-cell { display:flex; align-items:center; gap:9px; }
+            .dean-avatar { flex-shrink:0; width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#1B4D3E,#2D6A4F); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+            .dean-name-text { font-size:13px; font-weight:600; color:#262626; }
+            .dean-email-text { font-size:11.5px; color:#9ca3af; }
+            .dean-unassigned { font-size:12.5px; color:#9ca3af; font-style:italic; }
             .badge { padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; text-transform:capitalize; }
             .badge-active { background:#E8F5E9; color:#1B4D3E; }
             .badge-inactive { background:#FEE2E2; color:#b91c1c; }
@@ -81,18 +86,33 @@ async function renderList(container) {
                     <th>Code</th>
                     <th>Department</th>
                     <th>Campus</th>
+                    <th>Dean</th>
                     <th>Programs</th>
                     <th>Status</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                ${depts.length === 0 ? '<tr><td colspan="6"><div class="empty-state-sm">No departments found</div></td></tr>' :
-                  depts.map(d => `
+                ${depts.length === 0 ? '<tr><td colspan="7"><div class="empty-state-sm">No departments found</div></td></tr>' :
+                  depts.map(d => {
+                    const initials = d.dean_name
+                        ? d.dean_name.trim().split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+                        : '';
+                    const deanCell = d.dean_name
+                        ? `<div class="dean-cell">
+                               <div class="dean-avatar">${initials}</div>
+                               <div>
+                                   <div class="dean-name-text">${esc(d.dean_name)}</div>
+                                   <div class="dean-email-text">${esc(d.dean_email || '')}</div>
+                               </div>
+                           </div>`
+                        : `<span class="dean-unassigned">No dean assigned</span>`;
+                    return `
                     <tr>
                         <td><span class="dept-code">${esc(d.department_code)}</span></td>
                         <td><div class="dept-name">${esc(d.department_name)}</div>${d.description ? `<div class="dept-desc">${esc(d.description)}</div>` : ''}</td>
                         <td>${esc(d.campus_name || '—')}</td>
+                        <td>${deanCell}</td>
                         <td><a class="program-badge" href="#admin/programs?department_id=${d.department_id}" style="cursor:pointer;text-decoration:none;">${d.program_count} programs</a></td>
                         <td><span class="badge badge-${d.status}">${d.status}</span></td>
                         <td class="actions-cell">
@@ -106,7 +126,7 @@ async function renderList(container) {
                             </div>
                         </td>
                     </tr>
-                  `).join('')}
+                  `; }).join('')}
             </tbody>
         </table></div>
     `;

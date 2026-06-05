@@ -1,189 +1,115 @@
 /**
  * Student Grades Page
- * View quiz scores grouped by subject
+ * Clean subject-picker layout — one subject at a time via dropdown
  */
 import { Api } from '../../api.js';
 
 export async function render(container) {
     container.innerHTML = `<div style="display:flex;justify-content:center;padding:60px">
         <div style="width:36px;height:36px;border:3px solid #e8e8e8;border-top-color:#1B4D3E;border-radius:50%;animation:spin .8s linear infinite"></div>
+        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
     </div>`;
 
-    const res = await Api.get('/ProgressAPI.php?action=grades');
+    const res      = await Api.get('/ProgressAPI.php?action=grades');
     const subjects = res.success ? res.data : [];
 
-    // Overall stats
-    let totalQuizzes = 0, totalPassed = 0, totalFailed = 0, allScores = [];
+    /* ── Overall stats ─────────────────────────────────────────────── */
+    let totalQuizzes = 0, totalPassed = 0, allScores = [];
     subjects.forEach(s => {
         s.quizzes.forEach(q => {
             totalQuizzes++;
             if (q.best_score !== null) allScores.push(parseFloat(q.best_score));
             if (q.passed == 1) totalPassed++;
-            else if (q.best_score !== null) totalFailed++;
         });
     });
     const overallAvg = allScores.length > 0
         ? (allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(1)
         : null;
+    const avgColor = overallAvg !== null ? (overallAvg >= 60 ? '#15803D' : '#B91C1C') : '#9CA3AF';
+    const avgBg    = overallAvg !== null ? (overallAvg >= 60 ? '#E8F5E9'  : '#FEE2E2') : '#f1f5f9';
 
-    const avgColor = overallAvg >= 60 ? '#15803D' : '#B91C1C';
-    const avgBg    = overallAvg >= 60 ? '#E8F5E9'  : '#FEE2E2';
-
+    /* ── Shell ─────────────────────────────────────────────────────── */
     container.innerHTML = `
         <style>
-            /* ── Banner ── */
-            .gr-banner {
-                background: linear-gradient(135deg, #1B4D3E 0%, #2D6A4F 60%, #40916C 100%);
-                border-radius: 16px; padding: 24px 28px; margin-bottom: 24px;
-                display: flex; align-items: center; justify-content: space-between;
-                flex-wrap: wrap; gap: 16px; position: relative; overflow: hidden;
-            }
-            .gr-banner::before {
-                content: ''; position: absolute; right: -30px; top: -30px;
-                width: 160px; height: 160px; border-radius: 50%;
-                background: rgba(255,255,255,.05);
-            }
-            .gr-banner::after {
-                content: ''; position: absolute; right: 80px; bottom: -40px;
-                width: 100px; height: 100px; border-radius: 50%;
-                background: rgba(255,255,255,.04);
-            }
-            .gr-banner-left { position: relative; z-index: 1; }
-            .gr-banner-left h2 { font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 4px; }
-            .gr-banner-left p  { font-size: 13px; color: rgba(255,255,255,.7); margin: 0; }
-            .gr-banner-right {
-                display: flex; gap: 8px; position: relative; z-index: 1; flex-wrap: wrap;
-            }
-            .gr-banner-btn {
-                display: inline-flex; align-items: center; gap: 6px;
-                padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
-                text-decoration: none; transition: all .15s; white-space: nowrap;
-                background: rgba(255,255,255,.15); color: #fff;
-                border: 1px solid rgba(255,255,255,.25);
-            }
-            .gr-banner-btn:hover { background: rgba(255,255,255,.25); }
+            /* Banner */
+            .gr-banner { background:linear-gradient(135deg,#1B4D3E 0%,#2D6A4F 60%,#40916C 100%); border-radius:16px; padding:24px 28px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; position:relative; overflow:hidden; }
+            .gr-banner::before { content:''; position:absolute; right:-30px; top:-30px; width:160px; height:160px; border-radius:50%; background:rgba(255,255,255,.05); }
+            .gr-banner-left { position:relative; z-index:1; }
+            .gr-banner-left h2 { font-size:22px; font-weight:800; color:#fff; margin:0 0 4px; }
+            .gr-banner-left p  { font-size:13px; color:rgba(255,255,255,.7); margin:0; }
+            .gr-banner-right { position:relative; z-index:1; }
+            .gr-banner-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:9px; font-size:13px; font-weight:600; text-decoration:none; background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); transition:all .15s; }
+            .gr-banner-btn:hover { background:rgba(255,255,255,.25); }
 
-            /* ── Summary cards ── */
-            .gr-summary { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 28px; }
-            .gr-sum-card {
-                background: #fff; border: 1px solid #f1f5f9; border-radius: 14px;
-                box-shadow: 0 1px 3px rgba(0,0,0,.07);
-                padding: 20px; display: flex; align-items: center; gap: 16px;
-                transition: box-shadow .2s, transform .2s;
-            }
-            .gr-sum-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.09); transform: translateY(-1px); }
-            .gr-sum-icon {
-                width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
-                display: flex; align-items: center; justify-content: center;
-            }
-            .gr-sum-val { font-size: 26px; font-weight: 800; color: #111827; line-height: 1; }
-            .gr-sum-lbl { font-size: 12px; color: #9CA3AF; margin-top: 3px; font-weight: 500; }
+            /* Summary cards */
+            .gr-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+            .gr-sum-card { background:#fff; border:1px solid #f1f5f9; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.07); padding:18px 20px; display:flex; align-items:center; gap:14px; }
+            .gr-sum-icon { width:44px; height:44px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+            .gr-sum-val { font-size:24px; font-weight:800; color:#111827; line-height:1; }
+            .gr-sum-lbl { font-size:12px; color:#9CA3AF; margin-top:3px; font-weight:500; }
 
-            /* ── Subject group card ── */
-            .gr-group { margin-bottom: 20px; }
-            .gr-group-card {
-                background: #fff; border: 1px solid #f1f5f9; border-radius: 16px;
-                box-shadow: 0 1px 3px rgba(0,0,0,.07);
-                overflow: hidden;
-            }
-            .gr-group-head {
-                display: flex; align-items: center; gap: 12px;
-                padding: 16px 20px;
-                background: #fafafa;
-                border-bottom: 1px solid #f1f5f9;
-                flex-wrap: wrap;
-            }
-            .gr-group-code {
-                background: #E8F5E9; color: #1B4D3E;
-                padding: 4px 12px; border-radius: 6px;
-                font-size: 12px; font-weight: 800; font-family: monospace; letter-spacing: .5px;
-                flex-shrink: 0;
-            }
-            .gr-group-name { font-size: 15px; font-weight: 700; color: #111827; flex: 1; }
-            .gr-group-avg {
-                font-size: 12px; font-weight: 700; padding: 4px 12px;
-                border-radius: 20px; white-space: nowrap; flex-shrink: 0;
-            }
+            /* Subject selector bar */
+            .gr-selector-bar { background:#fff; border:1px solid #e8e8e8; border-radius:14px; padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; gap:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+            .gr-selector-label { font-size:13px; font-weight:700; color:#374151; white-space:nowrap; }
+            .gr-selector-wrap { position:relative; flex:1; max-width:380px; }
+            .gr-selector-wrap svg.gr-chevron { position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:#6b7280; }
+            .gr-subject-select { width:100%; padding:10px 38px 10px 14px; border:1.5px solid #e5e7eb; border-radius:10px; font-size:14px; font-weight:600; color:#111827; background:#fff; appearance:none; -webkit-appearance:none; cursor:pointer; outline:none; transition:border-color .15s; }
+            .gr-subject-select:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,.08); }
+            .gr-selector-info { margin-left:auto; display:flex; align-items:center; gap:8px; }
+            .gr-sel-avg-badge { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:700; }
 
-            /* ── Table ── */
-            .gr-table { width: 100%; border-collapse: collapse; }
-            .gr-table thead tr { background: #fff; }
-            .gr-table th {
-                text-align: left; padding: 10px 20px;
-                font-size: 10.5px; font-weight: 700; color: #9CA3AF;
-                text-transform: uppercase; letter-spacing: .6px;
-                border-bottom: 1px solid #f1f5f9;
-            }
-            .gr-table tbody tr { border-bottom: 1px solid #f8fafc; transition: background .12s; }
-            .gr-table tbody tr:last-child { border-bottom: none; }
-            .gr-table tbody tr:hover { background: #fafafa; }
-            .gr-table td { padding: 14px 20px; font-size: 14px; vertical-align: middle; }
+            /* Quiz panel */
+            .gr-panel { background:#fff; border:1px solid #e8e8e8; border-radius:16px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+            .gr-panel-head { padding:16px 22px; background:linear-gradient(90deg,#f9fafb,#fff); border-bottom:1px solid #f1f5f9; display:flex; align-items:center; gap:12px; }
+            .gr-panel-code { background:#E8F5E9; color:#1B4D3E; padding:4px 12px; border-radius:6px; font-size:12px; font-weight:800; font-family:monospace; letter-spacing:.5px; }
+            .gr-panel-name { font-size:15px; font-weight:700; color:#111827; }
+            .gr-panel-count { margin-left:auto; font-size:12px; color:#9CA3AF; font-weight:600; }
 
-            /* quiz title cell */
-            .gr-quiz-name { font-weight: 600; color: #111827; font-size: 14px; }
+            /* Table */
+            .gr-table { width:100%; border-collapse:collapse; }
+            .gr-table thead tr { background:#fafafa; }
+            .gr-table th { text-align:left; padding:11px 20px; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9; }
+            .gr-table tbody tr { border-bottom:1px solid #f7f7f7; transition:background .12s; }
+            .gr-table tbody tr:last-child { border-bottom:none; }
+            .gr-table tbody tr:hover { background:#f9fffe; }
+            .gr-table td { padding:13px 20px; font-size:13px; vertical-align:middle; }
 
-            /* type badge */
-            .gr-type {
-                display: inline-block; padding: 3px 9px; border-radius: 20px;
-                font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
-            }
-            .gr-type.quiz { background: #f1f5f9; color: #475569; }
-            .gr-type.pre  { background: #DBEAFE; color: #1E40AF; }
-            .gr-type.post { background: #EDE9FE; color: #6D28D9; }
+            .gr-quiz-name { font-weight:600; color:#111827; font-size:14px; }
+            .gr-type { display:inline-block; padding:3px 9px; border-radius:20px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+            .gr-type.quiz { background:#f1f5f9; color:#475569; }
+            .gr-type.pre  { background:#DBEAFE; color:#1E40AF; }
+            .gr-type.post { background:#EDE9FE; color:#6D28D9; }
 
-            /* score cell */
-            .gr-score-cell { display: flex; align-items: center; gap: 10px; }
-            .gr-score-track {
-                flex: 1; max-width: 90px; height: 6px;
-                background: #f1f5f9; border-radius: 99px; overflow: hidden;
-            }
-            .gr-score-fill  { height: 100%; border-radius: 99px; transition: width .6s ease; }
-            .gr-score-num   { font-size: 14px; font-weight: 800; white-space: nowrap; }
-            .gr-score-none  { font-size: 13px; color: #9CA3AF; }
+            .gr-score-cell { display:flex; align-items:center; gap:10px; }
+            .gr-score-track { flex:1; max-width:110px; height:7px; background:#f1f5f9; border-radius:99px; overflow:hidden; }
+            .gr-score-fill  { height:100%; border-radius:99px; }
+            .gr-score-num   { font-size:14px; font-weight:800; white-space:nowrap; min-width:48px; }
+            .gr-score-none  { font-size:13px; color:#9CA3AF; }
 
-            /* status badge */
-            .gr-status {
-                display: inline-flex; align-items: center; gap: 5px;
-                padding: 4px 11px; border-radius: 20px;
-                font-size: 11px; font-weight: 700;
-            }
-            .gr-status.passed   { background: #DCFCE7; color: #15803D; }
-            .gr-status.failed   { background: #FEE2E2; color: #B91C1C; }
-            .gr-status.nottaken { background: #f1f5f9; color: #9CA3AF; }
+            .gr-status { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700; }
+            .gr-status.passed   { background:#DCFCE7; color:#15803D; }
+            .gr-status.failed   { background:#FEE2E2; color:#B91C1C; }
+            .gr-status.nottaken { background:#f1f5f9; color:#9CA3AF; }
 
-            /* attempts */
-            .gr-attempts {
-                display: inline-flex; align-items: center; justify-content: center;
-                width: 28px; height: 28px; border-radius: 8px;
-                background: #f8fafc; color: #64748b;
-                font-size: 13px; font-weight: 700;
-            }
+            .gr-attempts { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; padding:0 8px; border-radius:8px; background:#f8fafc; color:#64748b; font-size:13px; font-weight:700; }
 
-            /* no quizzes */
-            .gr-no-quizzes {
-                padding: 28px 20px; text-align: center; font-size: 13px; color: #9CA3AF;
-            }
+            /* No quizzes */
+            .gr-no-quizzes { padding:48px 20px; text-align:center; }
+            .gr-no-quizzes-icon { width:52px; height:52px; background:#f3f4f6; border-radius:14px; display:flex; align-items:center; justify-content:center; margin:0 auto 14px; font-size:24px; }
+            .gr-no-quizzes p { font-size:13px; color:#9CA3AF; margin:0; }
 
-            /* empty state */
-            .gr-empty {
-                display: flex; flex-direction: column; align-items: center;
-                justify-content: center; min-height: 260px; text-align: center;
-                background: #fff; border-radius: 16px; border: 2px dashed #e2e8f0;
-                color: #9CA3AF; padding: 40px;
-            }
-            .gr-empty-icon {
-                width: 56px; height: 56px; background: #f1f5f9;
-                border-radius: 16px; display: flex; align-items: center;
-                justify-content: center; margin-bottom: 16px;
-            }
-            .gr-empty h3 { font-size: 16px; font-weight: 700; color: #374151; margin: 0 0 6px; }
-            .gr-empty p  { font-size: 13px; margin: 0; }
+            /* Empty state */
+            .gr-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:260px; text-align:center; background:#fff; border-radius:16px; border:2px dashed #e2e8f0; color:#9CA3AF; padding:40px; }
 
-            @media(max-width: 900px) { .gr-summary { grid-template-columns: 1fr 1fr; } }
-            @media(max-width: 640px) {
-                .gr-summary { grid-template-columns: 1fr 1fr; }
-                .gr-score-track { display: none; }
-                .gr-table th:last-child, .gr-table td:last-child { display: none; }
+            @keyframes gr-fadein { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+            .gr-panel { animation:gr-fadein .2s ease; }
+
+            @media(max-width:900px) { .gr-summary { grid-template-columns:1fr 1fr; } }
+            @media(max-width:640px) {
+                .gr-summary { grid-template-columns:1fr 1fr; }
+                .gr-score-track { display:none; }
+                .gr-selector-bar { flex-wrap:wrap; }
+                .gr-selector-info { margin-left:0; }
             }
         </style>
 
@@ -201,7 +127,7 @@ export async function render(container) {
             </div>
         </div>
 
-        <!-- Summary -->
+        <!-- Summary cards -->
         <div class="gr-summary">
             <div class="gr-sum-card">
                 <div class="gr-sum-icon" style="background:#E8F5E9;color:#1B4D3E">
@@ -222,100 +148,141 @@ export async function render(container) {
                 <div><div class="gr-sum-val" style="color:#15803D">${totalPassed}</div><div class="gr-sum-lbl">Passed</div></div>
             </div>
             <div class="gr-sum-card">
-                <div class="gr-sum-icon" style="background:${overallAvg ? avgBg : '#f1f5f9'};color:${overallAvg ? avgColor : '#9CA3AF'}">
+                <div class="gr-sum-icon" style="background:${avgBg};color:${avgColor}">
                     <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
                 </div>
                 <div>
-                    <div class="gr-sum-val" style="color:${overallAvg ? avgColor : '#9CA3AF'}">${overallAvg ? overallAvg + '%' : '—'}</div>
+                    <div class="gr-sum-val" style="color:${avgColor}">${overallAvg !== null ? overallAvg + '%' : '—'}</div>
                     <div class="gr-sum-lbl">Overall Average</div>
                 </div>
             </div>
         </div>
 
-        <!-- Subject groups -->
-        ${subjects.length === 0 ? `
-            <div class="gr-empty">
-                <div class="gr-empty-icon">
-                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#9CA3AF" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
-                </div>
-                <h3>No grades yet</h3>
-                <p>Enroll in subjects and take quizzes to see your scores here.</p>
-            </div>
-        ` : subjects.map(s => {
-            const avg       = s.avg_score !== null ? parseFloat(s.avg_score) : null;
-            const avgTxtClr = avg >= 60 ? '#15803D' : avg !== null ? '#B91C1C' : '#9CA3AF';
-            const avgBgClr  = avg >= 60 ? '#DCFCE7' : avg !== null ? '#FEE2E2' : '#f1f5f9';
+        ${subjects.length === 0
+            ? `<div class="gr-empty">
+                <div style="font-size:36px;margin-bottom:14px">📋</div>
+                <h3 style="font-size:16px;font-weight:700;color:#374151;margin:0 0 6px">No grades yet</h3>
+                <p style="font-size:13px;margin:0">Enroll in subjects and take quizzes to see your scores here.</p>
+               </div>`
+            : `<!-- Subject selector bar -->
+               <div class="gr-selector-bar">
+                   <span class="gr-selector-label">📚 Subject</span>
+                   <div class="gr-selector-wrap">
+                       <select class="gr-subject-select" id="gr-subject-select">
+                           ${subjects.map((s, i) =>
+                               `<option value="${i}">${esc(s.subject_code)} — ${esc(s.subject_name)}</option>`
+                           ).join('')}
+                       </select>
+                       <svg class="gr-chevron" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                   </div>
+                   <div class="gr-selector-info" id="gr-sel-info"></div>
+               </div>
 
-            return `
-            <div class="gr-group">
-                <div class="gr-group-card">
-                    <div class="gr-group-head">
-                        <span class="gr-group-code">${esc(s.subject_code)}</span>
-                        <span class="gr-group-name">${esc(s.subject_name)}</span>
-                        ${avg !== null ? `<span class="gr-group-avg" style="background:${avgBgClr};color:${avgTxtClr}">${avg.toFixed(1)}% avg</span>` : ''}
-                    </div>
-
-                    ${s.quizzes.length === 0
-                        ? `<div class="gr-no-quizzes">No quizzes published yet.</div>`
-                        : `<table class="gr-table">
-                            <thead>
-                                <tr>
-                                    <th>Quiz</th>
-                                    <th>Type</th>
-                                    <th>Score</th>
-                                    <th>Status</th>
-                                    <th style="text-align:right">Attempts</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${s.quizzes.map(q => {
-                                    const score     = q.best_score !== null ? parseFloat(q.best_score) : null;
-                                    const barColor  = score >= 60
-                                        ? 'linear-gradient(90deg,#1B4D3E,#2D6A4F)'
-                                        : 'linear-gradient(90deg,#B91C1C,#DC2626)';
-                                    const numColor  = score >= 60 ? '#15803D' : '#B91C1C';
-                                    const typeKey   = q.quiz_type === 'pre_test' ? 'pre' : q.quiz_type === 'post_test' ? 'post' : 'quiz';
-                                    const typeLabel = q.quiz_type === 'pre_test' ? 'Pre-Test' : q.quiz_type === 'post_test' ? 'Post-Test' : 'Quiz';
-                                    const statusKey   = q.passed == 1 ? 'passed' : score !== null ? 'failed' : 'nottaken';
-                                    const statusLabel = q.passed == 1 ? 'Passed' : score !== null ? 'Failed' : 'Not taken';
-
-                                    return `<tr>
-                                        <td class="gr-quiz-name">${esc(q.quiz_title)}</td>
-                                        <td><span class="gr-type ${typeKey}">${typeLabel}</span></td>
-                                        <td>
-                                            ${score !== null
-                                                ? `<div class="gr-score-cell">
-                                                    <div class="gr-score-track">
-                                                        <div class="gr-score-fill" style="width:${score}%;background:${barColor}"></div>
-                                                    </div>
-                                                    <span class="gr-score-num" style="color:${numColor}">${score.toFixed(1)}%</span>
-                                                   </div>`
-                                                : `<span class="gr-score-none">—</span>`
-                                            }
-                                        </td>
-                                        <td>
-                                            <span class="gr-status ${statusKey}">
-                                                ${statusKey === 'passed'
-                                                    ? `<svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>`
-                                                    : statusKey === 'failed'
-                                                        ? `<svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`
-                                                        : ''
-                                                }
-                                                ${statusLabel}
-                                            </span>
-                                        </td>
-                                        <td style="text-align:right">
-                                            <span class="gr-attempts">${q.attempts || 0}</span>
-                                        </td>
-                                    </tr>`;
-                                }).join('')}
-                            </tbody>
-                          </table>`
-                    }
-                </div>
-            </div>`;
-        }).join('')}
+               <!-- Quiz panel (swapped by JS) -->
+               <div id="gr-panel-wrap"></div>`
+        }
     `;
+
+    if (subjects.length === 0) return;
+
+    /* ── Render one subject's quiz table ─────────────────────────── */
+    function renderSubject(idx) {
+        const s   = subjects[idx];
+        const avg = s.avg_score !== null ? parseFloat(s.avg_score) : null;
+        const aTxtClr = avg !== null ? (avg >= 60 ? '#15803D' : '#B91C1C') : '#9CA3AF';
+        const aBgClr  = avg !== null ? (avg >= 60 ? '#DCFCE7'  : '#FEE2E2') : '#f1f5f9';
+
+        // Update badge next to dropdown
+        const infoEl = container.querySelector('#gr-sel-info');
+        if (infoEl) {
+            infoEl.innerHTML = avg !== null
+                ? `<span class="gr-sel-avg-badge" style="background:${aBgClr};color:${aTxtClr}">${avg.toFixed(1)}% avg</span>`
+                : `<span class="gr-sel-avg-badge" style="background:#f1f5f9;color:#9CA3AF">No data yet</span>`;
+        }
+
+        const wrap = container.querySelector('#gr-panel-wrap');
+        if (!wrap) return;
+
+        if (s.quizzes.length === 0) {
+            wrap.innerHTML = `
+                <div class="gr-panel">
+                    <div class="gr-panel-head">
+                        <span class="gr-panel-code">${esc(s.subject_code)}</span>
+                        <span class="gr-panel-name">${esc(s.subject_name)}</span>
+                    </div>
+                    <div class="gr-no-quizzes">
+                        <div class="gr-no-quizzes-icon">📝</div>
+                        <p>No quizzes published for this subject yet.</p>
+                    </div>
+                </div>`;
+            return;
+        }
+
+        const rows = s.quizzes.map(q => {
+            const score     = q.best_score !== null ? parseFloat(q.best_score) : null;
+            const barColor  = score !== null && score >= 60
+                ? 'linear-gradient(90deg,#1B4D3E,#2D6A4F)'
+                : 'linear-gradient(90deg,#B91C1C,#DC2626)';
+            const numColor  = score !== null && score >= 60 ? '#15803D' : '#B91C1C';
+            const typeKey   = q.quiz_type === 'pre_test' ? 'pre' : q.quiz_type === 'post_test' ? 'post' : 'quiz';
+            const typeLabel = q.quiz_type === 'pre_test' ? 'Pre-Test' : q.quiz_type === 'post_test' ? 'Post-Test' : 'Quiz';
+            const statusKey   = q.passed == 1 ? 'passed' : score !== null ? 'failed' : 'nottaken';
+            const statusLabel = q.passed == 1 ? 'Passed'  : score !== null ? 'Failed'  : 'Not Taken';
+            const statusIcon  = statusKey === 'passed'
+                ? `<svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>`
+                : statusKey === 'failed'
+                    ? `<svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`
+                    : '';
+
+            return `<tr>
+                <td class="gr-quiz-name">${esc(q.quiz_title)}</td>
+                <td><span class="gr-type ${typeKey}">${typeLabel}</span></td>
+                <td>
+                    ${score !== null
+                        ? `<div class="gr-score-cell">
+                               <div class="gr-score-track">
+                                   <div class="gr-score-fill" style="width:${score}%;background:${barColor}"></div>
+                               </div>
+                               <span class="gr-score-num" style="color:${numColor}">${score.toFixed(1)}%</span>
+                           </div>`
+                        : `<span class="gr-score-none">—</span>`
+                    }
+                </td>
+                <td><span class="gr-status ${statusKey}">${statusIcon} ${statusLabel}</span></td>
+                <td style="text-align:right">
+                    <span class="gr-attempts">${q.attempts || 0}</span>
+                </td>
+            </tr>`;
+        }).join('');
+
+        wrap.innerHTML = `
+            <div class="gr-panel">
+                <div class="gr-panel-head">
+                    <span class="gr-panel-code">${esc(s.subject_code)}</span>
+                    <span class="gr-panel-name">${esc(s.subject_name)}</span>
+                    <span class="gr-panel-count">${s.quizzes.length} quiz${s.quizzes.length !== 1 ? 'zes' : ''}</span>
+                </div>
+                <table class="gr-table">
+                    <thead>
+                        <tr>
+                            <th>Quiz</th>
+                            <th>Type</th>
+                            <th>Best Score</th>
+                            <th>Status</th>
+                            <th style="text-align:right">Attempts</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+    }
+
+    // Initial render — first subject
+    renderSubject(0);
+
+    // Dropdown change
+    const sel = container.querySelector('#gr-subject-select');
+    sel.addEventListener('change', () => renderSubject(parseInt(sel.value)));
 }
 
 function esc(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }

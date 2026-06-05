@@ -17,11 +17,12 @@ if (!Auth::check()) {
 $action = $_GET['action'] ?? '';
 
 switch ($action) {
-    case 'instructor-list': getInstructorAnnouncements(); break;
-    case 'create': createAnnouncement(); break;
-    case 'update': updateAnnouncement(); break;
-    case 'delete': deleteAnnouncement(); break;
-    case 'student-list': getStudentAnnouncements(); break;
+    case 'instructor-list':   getInstructorAnnouncements(); break;
+    case 'create':            createAnnouncement();         break;
+    case 'update':            updateAnnouncement();         break;
+    case 'delete':            deleteAnnouncement();         break;
+    case 'student-list':      getStudentAnnouncements();    break;
+    case 'new-announcements': getNewAnnouncements();        break;
     default:
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
@@ -54,7 +55,7 @@ function getInstructorAnnouncements() {
         echo json_encode(['success' => true, 'data' => $data]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Database error']);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
 }
 
@@ -76,9 +77,9 @@ function createAnnouncement() {
         $subjectOfferedId = null;
         if ($subjectId) {
             $offering = db()->fetchOne(
-                "SELECT so.subject_offered_id FROM subject_offered so
-                 JOIN section sec ON sec.subject_offered_id = so.subject_offered_id
-                 WHERE so.subject_id = ? AND sec.instructor_id = ? AND so.status = 'open'
+                "SELECT so.subject_offered_id
+                 FROM subject_offered so
+                 WHERE so.subject_id = ? AND so.user_teacher_id = ?
                  LIMIT 1",
                 [$subjectId, $userId]
             );
@@ -173,5 +174,61 @@ function getStudentAnnouncements() {
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Database error']);
+    }
+}
+
+/**
+ * Returns recent announcements visible to the current user (last 30 days).
+ * The frontend uses localStorage to determine which ones are "new".
+ */
+function getNewAnnouncements() {
+    $userId = Auth::id();
+    $role   = Auth::role();
+    $cutoff = date('Y-m-d H:i:s', strtotime('-30 days'));
+
+    try {
+        if ($role === 'student') {
+            // Student sees: global + their enrolled-subject announcements
+            $data = db()->fetchAll(
+                "SELECT a.announcement_id, a.title, a.announcement_type,
+                        a.is_pinned, a.created_at,
+                        s.subject_code,
+                        CONCAT(u.first_name, ' ', u.last_name) AS author_name
+                 FROM announcement a
+                 LEFT JOIN subject_offered so ON a.subject_offered_id = so.subject_offered_id
+                 LEFT JOIN subject s ON so.subject_id = s.subject_id
+                 JOIN users u ON a.user_id = u.users_id
+                 WHERE a.status = 'published'
+                   AND a.created_at > ?
+                   AND (a.subject_offered_id IS NULL
+                        OR a.subject_offered_id IN (
+                            SELECT ss.subject_offered_id FROM student_subject ss
+                            WHERE ss.user_student_id = ? AND ss.status = 'enrolled'
+                        ))
+                 ORDER BY a.created_at DESC
+                 LIMIT 20",
+                [$cutoff, $userId]
+            );
+        } else {
+            // Instructors / dean / admin — only global announcements not posted by themselves
+            $data = db()->fetchAll(
+                "SELECT a.announcement_id, a.title, a.announcement_type,
+                        a.is_pinned, a.created_at,
+                        NULL AS subject_code,
+                        CONCAT(u.first_name, ' ', u.last_name) AS author_name
+                 FROM announcement a
+                 JOIN users u ON a.user_id = u.users_id
+                 WHERE a.status = 'published'
+                   AND a.subject_offered_id IS NULL
+                   AND a.created_at > ?
+                   AND a.user_id != ?
+                 ORDER BY a.created_at DESC
+                 LIMIT 20",
+                [$cutoff, $userId]
+            );
+        }
+        echo json_encode(['success' => true, 'data' => $data]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => true, 'data' => []]);
     }
 }

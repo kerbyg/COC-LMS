@@ -49,6 +49,7 @@ const PAGE_PERMISSIONS = {
     'student/quizzes':           'quizzes.view',
     'student/grades':            'grades.view',
     'student/messages':          null,
+    'student/announcements':     null,
     // Instructor — messaging
     'instructor/messages':       null,
 };
@@ -78,7 +79,7 @@ const PAGE_ALIASES = {
     'dean/rbac':                    'admin/rbac',
     'dean/settings':                'admin/settings',
     // Student accessing shared modules if granted
-    'student/announcements':        'instructor/announcements',
+    // (student/announcements has its own page — no alias needed)
 };
 
 // Page registry - maps route names to page modules

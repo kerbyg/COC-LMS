@@ -22,10 +22,6 @@ const menus = {
             { icon: '🏢', text: 'Departments',         page: 'departments',         permission: null },
             { icon: '🎓', text: 'Programs',            page: 'programs',            permission: null },
         ]},
-        { section: 'User Management', items: [
-            { icon: '👤', text: 'Users',               page: 'users',               permission: null },
-            { icon: '🔐', text: 'Roles & Permissions', page: 'rbac',                permission: null },
-        ]},
         { section: 'System', items: [
             { icon: '⚙️', text: 'Settings',            page: 'settings',            permission: null },
         ]},
@@ -62,7 +58,6 @@ const menus = {
             { icon: '🏦', text: 'Content Bank',page: 'content-bank', permission: 'lessons.view' },
         ]},
         { section: 'Assessment', items: [
-            { icon: '📝', text: 'Quizzes',     page: 'quizzes',      permission: 'quizzes.view' },
             { icon: '📋', text: 'Gradebook',   page: 'gradebook',    permission: 'grades.view' },
         ]},
         { section: 'Communication', items: [
@@ -104,8 +99,8 @@ const menus = {
  * Render sidebar into the given element
  */
 export function renderSidebar(container) {
-    const user     = Auth.user();
-    const role     = user.role;
+    const user = Auth.user();
+    const role = user.role;
     const roleMenu = menus[role] || [];
     const currentPage = (window.location.hash.replace('#', '').split('/')[1] || 'dashboard').split('?')[0];
 
@@ -155,16 +150,6 @@ export function renderSidebar(container) {
                 </a>
             </div>
         </nav>
-
-        <div class="sidebar-footer">
-            <div class="user-card">
-                <div class="user-avatar">${Auth.initials()}</div>
-                <div class="user-info">
-                    <span class="user-name">${escapeHtml(user.name || (user.first_name + ' ' + user.last_name))}</span>
-                    <span class="user-role">${Auth.roleName(role)}</span>
-                </div>
-            </div>
-        </div>
     `;
 
     container.innerHTML = html;

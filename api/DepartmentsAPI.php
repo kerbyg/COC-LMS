@@ -45,9 +45,15 @@ switch ($action) {
 function handleList() {
     $depts = db()->fetchAll(
         "SELECT d.*, c.campus_name,
-            (SELECT COUNT(*) FROM department_program dp WHERE dp.department_id = d.department_id) as program_count
+            (SELECT COUNT(*) FROM department_program dp WHERE dp.department_id = d.department_id) as program_count,
+            u.users_id  AS dean_id,
+            CONCAT(u.first_name, ' ', u.last_name) AS dean_name,
+            u.email     AS dean_email
          FROM department d
          LEFT JOIN campus c ON d.campus_id = c.campus_id
+         LEFT JOIN users  u ON u.department_id = d.department_id
+                            AND u.role = 'dean'
+                            AND u.status = 'active'
          ORDER BY d.department_name"
     );
     echo json_encode(['success' => true, 'data' => $depts]);

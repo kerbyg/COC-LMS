@@ -107,7 +107,7 @@ export async function render(container) {
             .fa-year-header { padding:10px 20px 6px; font-size:12px; font-weight:700; color:#737373; text-transform:uppercase; letter-spacing:.7px; background:#fafafa; border-bottom:1px solid #f0f0f0; }
             .fa-sem-header  { padding:8px 20px 6px; font-size:12px; font-weight:600; color:#6b7280; background:#fff; border-bottom:1px solid #f5f5f5; display:flex; align-items:center; gap:10px; }
             .fa-sem-badge   { background:#DBEAFE; color:#1E40AF; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
-            .fa-item { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #f5f5f5; transition:background .12s; }
+            .fa-item { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #f5f5f5; transition:background .12s; flex-wrap:wrap; }
             .fa-item:last-child { border-bottom:none; }
             .fa-item:hover { background:#fafafa; }
             .fa-item.saving { opacity:.5; pointer-events:none; }
@@ -119,6 +119,16 @@ export async function render(container) {
             .fa-status-pill { padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; flex-shrink:0; white-space:nowrap; }
             .fa-ok   { background:#E8F5E9; color:#1B4D3E; }
             .fa-warn { background:#FEF3C7; color:#B45309; }
+
+            /* ── Multi-instructor chips (By Subject view) ── */
+            .fa-instr-tags { display:flex; flex-wrap:wrap; align-items:center; gap:6px; flex:1; min-width:200px; }
+            .fa-instr-chip { display:inline-flex; align-items:center; gap:5px; background:#E8F5E9; color:#1B4D3E; padding:3px 6px 3px 10px; border-radius:20px; font-size:12px; font-weight:600; white-space:nowrap; }
+            .fa-chip-remove { background:none; border:none; cursor:pointer; color:#1B4D3E; padding:0 2px; line-height:1; font-size:12px; opacity:.55; transition:opacity .12s, color .12s; border-radius:50%; }
+            .fa-chip-remove:hover { opacity:1; color:#b91c1c; }
+            .fa-chip-remove:disabled { opacity:.3; cursor:default; }
+            .fa-add-instr { padding:3px 10px; border:1.5px dashed #1B4D3E; border-radius:20px; font-size:12px; color:#1B4D3E; background:#fff; cursor:pointer; max-width:200px; }
+            .fa-add-instr:focus { outline:none; border-style:solid; }
+            .fa-add-instr:disabled { opacity:.4; cursor:default; }
 
             /* ── Manage modal ── */
             .mm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:900; }
@@ -332,16 +342,30 @@ export async function render(container) {
 
         content.innerHTML = '<div class="fa-empty"><p>Loading…</p></div>';
 
-        const selectedInstr = instructors.find(i => String(i.users_id) === String(instrId));
+        // ── By Subject tab — uses list-multi (all instructors per subject) ──
+        if (activeTab === 'subject') {
+            let url = `/SubjectOfferingsAPI.php?action=list-multi&semester_id=${semId}`;
+            if (progId) url += `&program_id=${progId}`;
+            const res = await Api.get(url);
+            const subjects = res.success ? res.data : [];
+            if (!subjects.length) {
+                content.innerHTML = `<div class="fa-empty">
+                    <strong>No subjects found</strong>
+                    <p>No curriculum subjects found for this semester and program.</p>
+                </div>`;
+                return;
+            }
+            renderSubjectView(content, subjects, instructors, parseInt(semId));
+            return;
+        }
 
-        // For By Instructor: load offerings filtered to the instructor's program
-        const loadProgId = activeTab === 'instructor'
-            ? (selectedInstr?.program_id || progId || '')
-            : progId;
+        // ── By Instructor tab — uses list (LIMIT 1, with is_assigned_to_instructor) ──
+        const selectedInstr = instructors.find(i => String(i.users_id) === String(instrId));
+        const loadProgId    = selectedInstr?.program_id || progId || '';
 
         let url = `/SubjectOfferingsAPI.php?action=list&semester_id=${semId}`;
         if (loadProgId) url += `&program_id=${loadProgId}`;
-        if (activeTab === 'instructor' && instrId) url += `&instructor_id=${instrId}`;
+        url += `&instructor_id=${instrId}`;
 
         let res = await Api.get(url);
         let offerings = res.success ? res.data : [];
@@ -365,11 +389,7 @@ export async function render(container) {
             return;
         }
 
-        if (activeTab === 'instructor') {
-            renderSingleInstructorView(content, selectedInstr, offerings, parseInt(semId));
-        } else {
-            renderSubjectView(content, offerings, instructors);
-        }
+        renderSingleInstructorView(content, selectedInstr, offerings, parseInt(semId));
     }
 
     if (activeSem) loadContent();
@@ -654,66 +674,76 @@ export async function render(container) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // VIEW B — BY SUBJECT (original tree view)
+    // VIEW B — BY SUBJECT (multi-instructor chips)
+    // subjects = list-multi format: each item has .instructors[] array
     // ═══════════════════════════════════════════════════════════════════════
 
-    function renderSubjectView(wrap, offerings, instructors) {
-        const instrOpts = instructors.map(i =>
-            `<option value="${i.users_id}">${esc(i.last_name + ', ' + i.first_name)}</option>`
-        ).join('');
+    function renderSubjectView(wrap, subjects, instructors, semId) {
 
         // Group: Program → Year → Curriculum Semester
         const byProg = new Map();
-        offerings.forEach(o => {
-            const pk = o.program_code || 'No Program';
-            const yk = Number(o.year_level)      || 0;
-            const sk = Number(o.subject_semester) || 0;
+        subjects.forEach(s => {
+            const pk = s.program_code || 'No Program';
+            const yk = Number(s.year_level)       || 0;
+            const sk = Number(s.subject_semester) || 0;
             if (!byProg.has(pk)) byProg.set(pk, new Map());
             const byYear = byProg.get(pk);
             if (!byYear.has(yk)) byYear.set(yk, new Map());
             const bySem = byYear.get(yk);
             if (!bySem.has(sk)) bySem.set(sk, []);
-            bySem.get(sk).push(o);
+            bySem.get(sk).push(s);
         });
 
         let html = '<div class="fa-panel">';
         for (const [progCode, byYear] of byProg) {
             html += `<div class="fa-prog-header">${esc(progCode)}</div>`;
-            for (const yearKey of [...byYear.keys()].sort((a,b) => a-b)) {
+            for (const yearKey of [...byYear.keys()].sort((a, b) => a - b)) {
                 html += `<div class="fa-year-header">${YEAR_LBL[yearKey] || 'Year ' + yearKey}</div>`;
                 const bySem = byYear.get(yearKey);
-                for (const semKey of [...bySem.keys()].sort((a,b) => a-b)) {
-                    const items  = bySem.get(semKey);
-                    const acYear = items[0]?.academic_year || '';
-                    html += `<div class="fa-sem-header">
-                        ${SEM_LBL[semKey] || 'Semester ' + semKey}
-                        ${acYear ? `<span class="fa-sem-badge">${esc(acYear)}</span>` : ''}
-                    </div>`;
-                    items.forEach(o => {
-                        const hasOff   = !!o.subject_offered_id;
-                        const assigned = !!o.user_teacher_id;
-                        const secCount = parseInt(o.section_count) || 0;
+                for (const semKey of [...bySem.keys()].sort((a, b) => a - b)) {
+                    html += `<div class="fa-sem-header">${SEM_LBL[semKey] || 'Semester ' + semKey}</div>`;
+                    bySem.get(semKey).forEach(s => {
+                        const assignedIds   = new Set(s.instructors.map(i => String(i.user_teacher_id)));
+                        const totalSections = s.instructors.reduce((n, i) => n + (i.section_count || 0), 0);
+                        const count         = s.instructors.length;
 
-                        const selHtml = hasOff
-                            ? `<select class="fa-instr-sel"
-                                data-offered-id="${o.subject_offered_id}"
-                                data-orig="${o.user_teacher_id || ''}">
-                                <option value="">— Unassigned —</option>
-                                ${instrOpts}
+                        // Instructor chips (one per assigned instructor)
+                        const chips = s.instructors.map(i => `
+                            <span class="fa-instr-chip">
+                                ${esc(i.instructor_name)}
+                                <button class="fa-chip-remove"
+                                    data-subject-id="${s.subject_id}"
+                                    data-instructor-id="${i.user_teacher_id}"
+                                    data-instructor-name="${esc(i.instructor_name)}"
+                                    title="Remove ${esc(i.instructor_name)}">✕</button>
+                            </span>`).join('');
+
+                        // "Add instructor" dropdown — only lists instructors not yet assigned
+                        const availOpts = instructors
+                            .filter(i => !assignedIds.has(String(i.users_id)))
+                            .map(i => `<option value="${i.users_id}">${esc(i.last_name + ', ' + i.first_name)}</option>`)
+                            .join('');
+                        const addCtrl = availOpts
+                            ? `<select class="fa-add-instr" data-subject-id="${s.subject_id}">
+                                   <option value="">+ Add instructor…</option>
+                                   ${availOpts}
                                </select>`
-                            : `<span style="font-size:12px;color:#9ca3af;padding:6px 10px;flex-shrink:0;">—</span>`;
+                            : `<span style="font-size:12px;color:#9ca3af;font-style:italic;">All instructors assigned</span>`;
 
-                        const pill = hasOff
-                            ? `<span class="fa-status-pill ${assigned ? 'fa-ok' : 'fa-warn'}">${assigned ? '✓ ' + esc(o.instructor_name || 'Assigned') : '⚠ Unassigned'}</span>`
-                            : '';
+                        const statusPill = count > 0
+                            ? `<span class="fa-status-pill fa-ok" style="align-self:flex-start;margin-top:2px;">✓ ${count} Instructor${count > 1 ? 's' : ''}</span>`
+                            : `<span class="fa-status-pill fa-warn" style="align-self:flex-start;margin-top:2px;">⚠ Unassigned</span>`;
 
                         html += `
-                        <div class="fa-item">
-                            <span class="fa-code-tag">${esc(o.subject_code)}</span>
-                            <span class="fa-subj-name">${esc(o.subject_name)}</span>
-                            ${secCount > 0 ? `<span class="fa-sec-pill">${secCount} section${secCount > 1 ? 's' : ''}</span>` : ''}
-                            ${selHtml}
-                            ${pill}
+                        <div class="fa-item" data-subject-id="${s.subject_id}">
+                            <span class="fa-code-tag">${esc(s.subject_code)}</span>
+                            <span class="fa-subj-name">${esc(s.subject_name)}</span>
+                            ${totalSections > 0 ? `<span class="fa-sec-pill">${totalSections} sec</span>` : ''}
+                            <div class="fa-instr-tags">
+                                ${chips}
+                                ${addCtrl}
+                            </div>
+                            ${statusPill}
                         </div>`;
                     });
                 }
@@ -722,26 +752,49 @@ export async function render(container) {
         html += '</div>';
         wrap.innerHTML = html;
 
-        // Pre-select + auto-save
-        wrap.querySelectorAll('.fa-instr-sel').forEach(sel => {
-            if (sel.dataset.orig) sel.value = sel.dataset.orig;
-            sel.addEventListener('change', async function() {
-                const offId  = parseInt(this.dataset.offeredId);
-                const uid    = this.value ? parseInt(this.value) : null;
-                const item   = this.closest('.fa-item');
-                const pill   = item?.querySelector('.fa-status-pill');
-                this.disabled = true; item?.classList.add('saving');
-                const r = await Api.post('/SubjectOfferingsAPI.php?action=assign', {
-                    subject_offered_id: offId, user_teacher_id: uid
+        // ── Add instructor ──────────────────────────────────────────────────
+        wrap.querySelectorAll('.fa-add-instr').forEach(sel => {
+            sel.addEventListener('change', async function () {
+                if (!this.value) return;
+                const subjectId    = parseInt(this.dataset.subjectId);
+                const instructorId = parseInt(this.value);
+                this.disabled = true;
+                const r = await Api.post('/SubjectOfferingsAPI.php?action=bulk-assign', {
+                    instructor_id:        instructorId,
+                    semester_id:          semId,
+                    assign_subject_ids:   [subjectId],
+                    unassign_subject_ids: []
                 });
-                this.disabled = false; item?.classList.remove('saving');
                 if (r.success) {
-                    this.dataset.orig = uid || '';
-                    if (pill) {
-                        pill.textContent = uid ? '✓ Assigned' : '⚠ Unassigned';
-                        pill.className   = 'fa-status-pill ' + (uid ? 'fa-ok' : 'fa-warn');
-                    }
-                } else { this.value = this.dataset.orig || ''; alert(r.message || 'Failed'); }
+                    loadContent();
+                } else {
+                    this.disabled = false;
+                    this.value    = '';
+                    alert(r.message || 'Failed to assign instructor');
+                }
+            });
+        });
+
+        // ── Remove instructor ───────────────────────────────────────────────
+        wrap.querySelectorAll('.fa-chip-remove').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const subjectId    = parseInt(this.dataset.subjectId);
+                const instructorId = parseInt(this.dataset.instructorId);
+                const name         = this.dataset.instructorName || 'this instructor';
+                if (!confirm(`Remove ${name} from this subject?`)) return;
+                this.disabled = true;
+                const r = await Api.post('/SubjectOfferingsAPI.php?action=bulk-assign', {
+                    instructor_id:        instructorId,
+                    semester_id:          semId,
+                    assign_subject_ids:   [],
+                    unassign_subject_ids: [subjectId]
+                });
+                if (r.success) {
+                    loadContent();
+                } else {
+                    this.disabled = false;
+                    alert(r.message || 'Failed to remove instructor');
+                }
             });
         });
     }

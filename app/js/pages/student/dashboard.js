@@ -7,10 +7,18 @@ import { Auth } from '../../auth.js';
 export async function render(container) {
     container.innerHTML = '<div style="display:flex;justify-content:center;padding:60px"><div style="width:40px;height:40px;border:3px solid #e8e4d9;border-top-color:#1B4D3E;border-radius:50%;animation:spin .8s linear infinite"></div></div>';
 
-    const res  = await Api.get('/DashboardAPI.php?action=student');
+    const [res, semRes] = await Promise.all([
+        Api.get('/DashboardAPI.php?action=student'),
+        Api.get('/SemesterAPI.php?action=list')
+    ]);
     const data = res.success ? res.data : {};
     const stats          = data.stats           || {};
     const subjects       = data.subjects        || [];
+
+    // Active semester
+    const semesters   = semRes.success ? semRes.data : [];
+    const activeSem   = semesters.find(s => s.status === 'active') || null;
+    const upcomingSem = !activeSem ? semesters.find(s => s.status === 'upcoming') : null;
     const pendingQuizzes = data.pending_quizzes || [];
     const user           = Auth.user();
 
@@ -99,10 +107,11 @@ export async function render(container) {
             .sd-banner-inner { position:relative; z-index:1; }
             .sd-banner h2 { font-size:24px; font-weight:800; margin:0 0 5px; letter-spacing:-.3px; }
             .sd-banner p  { margin:0; opacity:.65; font-size:13px; }
+            .sd-banner-pills { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; align-items:center; }
             .sd-banner-rule {
-                display:inline-block; margin-top:14px;
+                display:inline-flex; align-items:center; gap:6px;
                 background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18);
-                border-radius:20px; padding:4px 14px; font-size:12px; font-weight:500; opacity:.9;
+                border-radius:20px; padding:5px 14px; font-size:12px; font-weight:500; opacity:.9;
             }
 
             /* ── Stats ──────────────────────────────────── */
@@ -242,7 +251,23 @@ export async function render(container) {
             <div class="sd-banner-inner">
                 <h2>${greeting}, ${esc(user.first_name)}</h2>
                 <p>Here's your learning overview for today.</p>
-                <span class="sd-banner-rule">${today}</span>
+                <div class="sd-banner-pills">
+                    <span class="sd-banner-rule">
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        ${today}
+                    </span>
+                    ${activeSem
+                        ? `<span style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:5px 16px;font-size:12px;font-weight:700;">
+                               <span style="width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.7);flex-shrink:0;"></span>
+                               📅 ${esc(activeSem.semester_name)} · AY ${esc(activeSem.academic_year)}
+                           </span>`
+                        : upcomingSem
+                            ? `<span style="display:inline-flex;align-items:center;gap:7px;background:rgba(251,191,36,0.2);border:1px solid rgba(251,191,36,0.4);border-radius:20px;padding:5px 16px;font-size:12px;font-weight:600;color:#fef3c7;">
+                                   ⏳ Upcoming: ${esc(upcomingSem.semester_name)} · AY ${esc(upcomingSem.academic_year)}
+                               </span>`
+                            : `<span style="display:inline-flex;align-items:center;gap:7px;background:rgba(251,191,36,0.2);border:1px solid rgba(251,191,36,0.4);border-radius:20px;padding:5px 16px;font-size:12px;font-weight:600;color:#fef3c7;">⚠️ No active semester</span>`
+                    }
+                </div>
             </div>
         </div>
 

@@ -43,7 +43,7 @@ function previewCode() {
     }
 
     $section = db()->fetchOne(
-        "SELECT section_id, section_name, max_students,
+        "SELECT section_id, section_name, max_students, program_id,
                 (SELECT COUNT(DISTINCT user_student_id) FROM student_subject
                  WHERE section_id = section.section_id AND status = 'enrolled') AS current_enrollment
          FROM section WHERE enrollment_code = ? AND status = 'active'",
@@ -53,6 +53,16 @@ function previewCode() {
     if (!$section) {
         echo json_encode(['success' => false, 'message' => 'Invalid or inactive enrollment code']);
         return;
+    }
+
+    // Block cross-program enrollment
+    if ($section['program_id']) {
+        $student = db()->fetchOne("SELECT program_id FROM users WHERE users_id = ?", [$userId]);
+        $studentProgramId = $student['program_id'] ?? null;
+        if ($studentProgramId && (int)$section['program_id'] !== (int)$studentProgramId) {
+            echo json_encode(['success' => false, 'message' => 'This enrollment code is for a different program. Please use a code from your own program.']);
+            return;
+        }
     }
 
     $rawSubjects = db()->fetchAll(
@@ -127,7 +137,7 @@ function enrollByCode() {
     try {
         // Find section
         $section = db()->fetchOne(
-            "SELECT section_id, section_name, max_students,
+            "SELECT section_id, section_name, max_students, program_id,
                     (SELECT COUNT(DISTINCT user_student_id) FROM student_subject
                      WHERE section_id = section.section_id AND status = 'enrolled') AS current_enrollment
              FROM section WHERE enrollment_code = ? AND status = 'active'",
@@ -137,6 +147,16 @@ function enrollByCode() {
         if (!$section) {
             echo json_encode(['success' => false, 'message' => 'Invalid enrollment code']);
             return;
+        }
+
+        // Block cross-program enrollment
+        if ($section['program_id']) {
+            $student = db()->fetchOne("SELECT program_id FROM users WHERE users_id = ?", [$userId]);
+            $studentProgramId = $student['program_id'] ?? null;
+            if ($studentProgramId && (int)$section['program_id'] !== (int)$studentProgramId) {
+                echo json_encode(['success' => false, 'message' => 'This enrollment code is for a different program. Please use a code from your own program.']);
+                return;
+            }
         }
 
         // Check capacity
