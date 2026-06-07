@@ -15,15 +15,18 @@ if (!defined('BASE_URL')) {
     // APPLICATION SETTINGS
     // ============================================================
     
+    // Auto-detect environment: localhost = development, anything else = production
+    $_host    = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'cli')[0]);
+    $_isLocal = in_array($_host, ['localhost', '127.0.0.1', '::1']);
+    define('IS_PRODUCTION', !$_isLocal);
+
     /**
      * Base URL of the application
-     * Change this to match your server setup
-     * Examples:
-     *   - Local XAMPP: '/cit-lms'
-     *   - Subdomain: ''
-     *   - Subfolder: '/myapp/cit-lms'
+     *   - Local XAMPP:  '/COC-LMS'
+     *   - InfinityFree root deployment: '' (auto-set in production)
+     *   - Subfolder on live server: set IS_PRODUCTION to false and change manually
      */
-    define('BASE_URL', '/COC-LMS');
+    define('BASE_URL', IS_PRODUCTION ? '' : '/COC-LMS');
     
     /**
      * Application Information
@@ -322,10 +325,10 @@ if (!defined('BASE_URL')) {
     // ============================================================
     
     /**
-     * Debug mode - set to false in production!
+     * Debug mode — automatically off in production
      */
-    define('DEBUG_MODE', true);
-    
+    define('DEBUG_MODE', !IS_PRODUCTION);
+
     if (DEBUG_MODE) {
         error_reporting(E_ALL);
         ini_set('display_errors', 1);

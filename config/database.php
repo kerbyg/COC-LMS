@@ -16,11 +16,19 @@
  */
 
 // Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'cit_lms');
-define('DB_USER', 'root');
-define('DB_PASS', '');  // Change this in production!
-define('DB_CHARSET', 'utf8mb4');
+// On the live server: copy config/db.config.example.php → config/db.config.php
+// and fill in your InfinityFree/cPanel MySQL credentials there.
+// That file is gitignored so your passwords are never committed.
+$_dbConfig = __DIR__ . '/db.config.php';
+if (file_exists($_dbConfig)) {
+    require_once $_dbConfig;
+} else {
+    define('DB_HOST', 'localhost');
+    define('DB_NAME', 'cit_lms');
+    define('DB_USER', 'root');
+    define('DB_PASS', '');
+    define('DB_CHARSET', 'utf8mb4');
+}
 
 /**
  * Database Class

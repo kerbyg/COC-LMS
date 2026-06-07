@@ -3,6 +3,9 @@
 /.idea
 /.env
 
+# Production DB credentials — never commit
+/config/db.config.php
+
 # Ignore database dumps
 /database/*.sql
 

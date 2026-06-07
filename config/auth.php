@@ -25,7 +25,7 @@ if (session_status() === PHP_SESSION_NONE) {
     // Session configuration
     ini_set('session.cookie_httponly', 1);      // Prevent JavaScript access to session cookie
     ini_set('session.use_only_cookies', 1);     // Only use cookies for sessions
-    ini_set('session.cookie_secure', 0);        // Set to 1 in production with HTTPS
+    ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 1 : 0);
     ini_set('session.gc_maxlifetime', 7200);    // Session lifetime: 2 hours
     
     session_start();
