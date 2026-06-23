@@ -57,48 +57,57 @@ class EmailHelper {
     }
 
     public static function notificationTemplate($firstName, $headline, $bodyHtml, $ctaUrl = null) {
-        $name = htmlspecialchars(trim($firstName) ?: 'Student', ENT_QUOTES, 'UTF-8');
-        $title = htmlspecialchars($headline, ENT_QUOTES, 'UTF-8');
-        $logo = self::logoCidSrc();
+        $name   = htmlspecialchars(trim($firstName) ?: 'Student', ENT_QUOTES, 'UTF-8');
+        $title  = htmlspecialchars($headline, ENT_QUOTES, 'UTF-8');
+        $logo   = self::logoCidSrc();
         $school = htmlspecialchars(SCHOOL_NAME, ENT_QUOTES, 'UTF-8');
-        $year = date('Y');
-        $cta = '';
+        $year   = date('Y');
+        $cta    = '';
         if ($ctaUrl) {
             $href = htmlspecialchars($ctaUrl, ENT_QUOTES, 'UTF-8');
-            $cta = '<div style="text-align:center;margin:24px 0 8px;">'
-                . '<a href="' . $href . '" style="display:inline-block;background:#00461B;color:#fff;text-decoration:none;'
-                . 'padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">Open in COC-LMS</a>'
-                . '</div>';
+            $cta  = '<div style="text-align:center;margin:28px 0 8px;">'
+                  . '<a href="' . $href . '" style="display:inline-block;background:#00461B;color:#ffffff;text-decoration:none;'
+                  . 'padding:13px 32px;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:0.2px;">Open in COC-LMS</a>'
+                  . '</div>';
         }
 
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f6f5;font-family:'Segoe UI',Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f5;padding:32px 16px;">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:40px 16px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,70,27,0.10);">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+        <!-- Logo header -->
         <tr>
-          <td style="background:linear-gradient(135deg,#00461B 0%,#1B4D3E 100%);padding:24px 32px;text-align:center;">
-            <img src="{$logo}" alt="PHINMA Cagayan de Oro College" width="64" height="64" style="display:block;margin:0 auto 12px;border-radius:12px;background:#fff;padding:6px;">
-            <div style="color:#fff;font-size:17px;font-weight:700;">PHINMA COC-LMS</div>
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;margin-top:4px;">{$school}</div>
+          <td style="padding:32px 40px 24px;text-align:center;border-bottom:1px solid #f0f0f0;">
+            <img src="{$logo}" alt="PHINMA COC" width="48" height="48" style="display:inline-block;vertical-align:middle;border-radius:8px;margin-right:10px;">
+            <span style="font-size:18px;font-weight:700;color:#111827;vertical-align:middle;">COC-LMS</span>
           </td>
         </tr>
+
+        <!-- Body -->
         <tr>
-          <td style="padding:28px 32px;">
-            <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#1B4D3E;text-transform:uppercase;letter-spacing:0.5px;">{$title}</p>
-            <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hello <strong>{$name}</strong>,</p>
-            {$bodyHtml}
+          <td style="padding:32px 40px;">
+            <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;text-align:center;">{$title}</h2>
+            <p style="margin:0 0 20px;font-size:14px;color:#6b7280;text-align:center;">Hello, <strong style="color:#374151;">{$name}</strong></p>
+            <div style="font-size:14px;line-height:1.7;color:#4b5563;">{$bodyHtml}</div>
             {$cta}
           </td>
         </tr>
+
+        <!-- Footer -->
         <tr>
-          <td style="padding:16px 32px 24px;border-top:1px solid #f0f0f0;">
-            <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">&copy; {$year} {$school} — automated notification</p>
+          <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+              If you did not expect this notification, please disregard this email.<br>
+              &copy; {$year} {$school}
+            </p>
           </td>
         </tr>
+
       </table>
     </td></tr>
   </table>
@@ -108,66 +117,67 @@ HTML;
     }
 
     public static function passwordOtpTemplate($firstName, $otp, $validFor = '1 minute') {
-        $name = htmlspecialchars(trim($firstName) ?: 'User', ENT_QUOTES, 'UTF-8');
-        $code = htmlspecialchars($otp, ENT_QUOTES, 'UTF-8');
-        $valid = htmlspecialchars($validFor, ENT_QUOTES, 'UTF-8');
-        $logo = self::logoCidSrc();
+        $name   = htmlspecialchars(trim($firstName) ?: 'User', ENT_QUOTES, 'UTF-8');
+        $code   = htmlspecialchars($otp, ENT_QUOTES, 'UTF-8');
+        $valid  = htmlspecialchars($validFor, ENT_QUOTES, 'UTF-8');
+        $logo   = self::logoCidSrc();
         $school = htmlspecialchars(SCHOOL_NAME, ENT_QUOTES, 'UTF-8');
-        $app = htmlspecialchars(APP_FULL_NAME, ENT_QUOTES, 'UTF-8');
-        $year = date('Y');
+        $year   = date('Y');
 
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Password Verification</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Verify your COC-LMS sign-up</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f6f5;font-family:'Segoe UI',Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f5;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,70,27,0.10);">
-          <tr>
-            <td style="background:linear-gradient(135deg,#00461B 0%,#1B4D3E 100%);padding:28px 32px;text-align:center;">
-              <img src="{$logo}" alt="PHINMA Cagayan de Oro College" width="72" height="72" style="display:block;margin:0 auto 14px;border-radius:12px;background:#fff;padding:6px;">
-              <div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:0.3px;">PHINMA COC-LMS</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;margin-top:6px;">{$school}</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px 32px 8px;">
-              <p style="margin:0 0 12px;font-size:15px;color:#374151;">Hello <strong>{$name}</strong>,</p>
-              <p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#4b5563;">
-                You requested to change your password on the <strong>{$app}</strong>.
-                Use the verification code below to confirm your new password. This code is valid for <strong>{$valid}</strong>.
-              </p>
-              <div style="text-align:center;margin:28px 0;">
-                <div style="display:inline-block;background:#E8F5E9;border:2px dashed #1B4D3E;border-radius:12px;padding:18px 36px;">
-                  <div style="font-size:11px;font-weight:700;color:#1B4D3E;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Verification Code</div>
-                  <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#00461B;font-family:Consolas,monospace;">{$code}</div>
-                </div>
-              </div>
-              <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6b7280;">
-                Enter this code on the password change screen to complete the update.
-              </p>
-              <p style="margin:0;font-size:13px;line-height:1.6;color:#9ca3af;">
-                If you did not request a password change, you can safely ignore this email. Your password will remain unchanged.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px 28px;border-top:1px solid #f0f0f0;">
-              <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;line-height:1.5;">
-                &copy; {$year} {$school} &mdash; Learning Management System<br>
-                This is an automated message. Please do not reply.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+        <!-- Logo header -->
+        <tr>
+          <td style="padding:32px 40px 24px;text-align:center;border-bottom:1px solid #f0f0f0;">
+            <img src="{$logo}" alt="PHINMA COC" width="48" height="48" style="display:inline-block;vertical-align:middle;border-radius:8px;margin-right:10px;">
+            <span style="font-size:18px;font-weight:700;color:#111827;vertical-align:middle;">COC-LMS</span>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px 28px;text-align:center;">
+            <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#111827;">Verify your password change</h2>
+            <p style="margin:0 0 28px;font-size:14px;line-height:1.65;color:#6b7280;">
+              We received a request to change the password for <strong style="color:#374151;">{$name}</strong>.
+              Please enter the code below in the browser window where you started the request.
+            </p>
+
+            <!-- OTP Code Box -->
+            <div style="background:#f3f4f6;border-radius:10px;padding:24px 40px;display:inline-block;margin:0 auto 28px;">
+              <div style="font-size:38px;font-weight:800;letter-spacing:10px;color:#111827;font-family:Consolas,'Courier New',monospace;">{$code}</div>
+            </div>
+
+            <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+              This code will remain active for <strong style="color:#6b7280;">{$valid}</strong>.<br>
+              If you did not attempt this, please disregard this email.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+              &copy; {$year} {$school} &mdash; Learning Management System<br>
+              This is an automated message. Please do not reply.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
   </table>
 </body>
 </html>

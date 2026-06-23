@@ -11,6 +11,13 @@
 # Ignore database dumps
 /database/*.sql
 
+# Ignore one-time setup/seed scripts that may contain secrets
+/setup_*.php
+/seed_*.php
+/database/migrations/add_*_key.sql
+/database/migrations/add_*_api*.sql
+/tools/student-login.json
+
 # Ignore logs & cache
 *.log
 /tmp
